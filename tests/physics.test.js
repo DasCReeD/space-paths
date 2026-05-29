@@ -88,28 +88,28 @@ describe('PhysicsEngine Unit Tests', () => {
 
   it('should consume fuel and oxygen as ship flies forward', () => {
     physics.velocity.z = -10.0; // flying forward along negative Z
-    physics.update(0.1, keyboard, mockLevelInfo);
+    physics.update(0.05, keyboard, mockLevelInfo);
     
     expect(physics.fuel).toBeLessThan(5000);
-    expect(physics.oxygen).toBe(99.0); // 100 - 0.1 * 10
+    expect(physics.oxygen).toBe(99.95); // 100 - 0.05 * 1.0
   });
 
   it('should trigger death when fuel or oxygen runs out', () => {
     physics.fuel = 0;
-    physics.update(0.1, keyboard, mockLevelInfo);
+    physics.update(0.05, keyboard, mockLevelInfo);
     expect(physics.isDead).toBe(true);
     expect(physics.deathReason).toBe('OUT OF FUEL');
 
     physics.reset(100, 100);
     physics.oxygen = 0;
-    physics.update(0.1, keyboard, mockLevelInfo);
+    physics.update(0.05, keyboard, mockLevelInfo);
     expect(physics.isDead).toBe(true);
     expect(physics.deathReason).toBe('OUT OF OXYGEN');
   });
 
   it('should accelerate forward when pressing W / Forward key', () => {
     keyboard.forward = true;
-    physics.update(0.1, keyboard, mockLevelInfo);
+    physics.update(0.05, keyboard, mockLevelInfo);
     
     // Z speed should decrease (moving in negative Z direction)
     expect(physics.velocity.z).toBeLessThan(0);
@@ -118,7 +118,7 @@ describe('PhysicsEngine Unit Tests', () => {
 
   it('should apply natural rolling drag when W is released', () => {
     physics.velocity.z = -20.0;
-    physics.update(0.1, keyboard, mockLevelInfo);
+    physics.update(0.05, keyboard, mockLevelInfo);
     
     // Natural drag should decrease speed (make it closer to 0)
     expect(physics.velocity.z).toBeGreaterThan(-20.0);
@@ -126,36 +126,44 @@ describe('PhysicsEngine Unit Tests', () => {
 
   it('should steer left and right with correct velocity changes', () => {
     keyboard.left = true;
-    physics.update(0.1, keyboard, mockLevelInfo);
+    physics.update(0.05, keyboard, mockLevelInfo);
     expect(physics.velocity.x).toBeLessThan(0);
 
     physics.reset(100, 100);
     keyboard.left = false;
     keyboard.right = true;
-    physics.update(0.1, keyboard, mockLevelInfo);
+    physics.update(0.05, keyboard, mockLevelInfo);
     expect(physics.velocity.x).toBeGreaterThan(0);
   });
 
   it('should drift without steering friction when slippery effect is active', () => {
-    physics.activeEffects.slippery = true;
+    // Put a mock slippery tile intersecting with the ship
+    mockLevelInfo.specialTiles = [{
+      boundingBox: {
+        minX: -5.0, maxX: 5.0,
+        minY: -1.0, maxY: 2.0,
+        minZ: -5.0, maxZ: 5.0
+      },
+      behavior: 'slippery'
+    }];
+    
     physics.velocity.x = 5.0;
     
     // Update without keyboard input
-    physics.update(0.1, keyboard, mockLevelInfo);
+    physics.update(0.05, keyboard, mockLevelInfo);
     
-    // Side drift velocity should dampen very slowly (close to 5.0)
-    expect(physics.velocity.x).toBeLessThan(5.0);
-    expect(physics.velocity.x).toBeGreaterThan(4.5);
+    // Side drift velocity should dampen very slowly (dampens by 1.0 * 0.05 = 0.05)
+    expect(physics.velocity.x).toBe(4.95);
   });
 
   it('should jump and pull ship down with gravity', () => {
     keyboard.jump = true;
     physics.onGround = true;
     
-    physics.update(0.1, keyboard, mockLevelInfo);
+    physics.update(0.05, keyboard, mockLevelInfo);
     
     expect(physics.onGround).toBe(false);
-    expect(physics.velocity.y).toBe(physics.jumpImpulse - mockLevelInfo.gravity * 0.1);
+    expect(physics.velocity.y).toBe(physics.jumpImpulse - mockLevelInfo.gravity * 0.05);
     expect(physics.position.y).toBeGreaterThan(0.2);
   });
 
