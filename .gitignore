@@ -1,0 +1,16 @@
+# Caches & Antigravity Sandbox Caches
+.gemini/
+.system_generated/
+scratch/
+logs/
+
+# Local Node Modules
+node_modules/
+
+# Production Builds
+dist/
+
+# OS/Editor Caches
+.DS_Store
+Thumbs.db
+*.log

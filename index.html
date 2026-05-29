@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkyRoads WebGL - Modern 3D Remake</title>
+  <link rel="stylesheet" href="./index.css">
+  <!-- Google Fonts for retro-futuristic look -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+  
+  <!-- Standard Import Map for zero-dependency CDN module loading -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- Container for the 3D viewport -->
+  <div id="canvas-container"></div>
+
+  <!-- HUD overlay shown during gameplay -->
+  <div id="hud" class="hud-container hidden">
+    <div class="hud-top">
+      <div class="hud-stat-box">
+        <div class="hud-label">SPEED</div>
+        <div class="hud-value-container">
+          <span id="hud-speed-text">000</span>
+          <span class="hud-unit">km/h</span>
+        </div>
+        <div class="hud-bar-bg">
+          <div id="hud-speed-bar" class="hud-bar-fill speed-glow" style="width: 0%;"></div>
+        </div>
+      </div>
+      <div class="hud-stat-box">
+        <div class="hud-label">OXYGEN</div>
+        <div id="hud-oxygen-text" class="hud-value">100</div>
+        <div class="hud-bar-bg">
+          <div id="hud-oxygen-bar" class="hud-bar-fill oxygen-glow" style="width: 100%;"></div>
+        </div>
+      </div>
+      <div class="hud-stat-box">
+        <div class="hud-label">FUEL</div>
+        <div id="hud-fuel-text" class="hud-value">10000</div>
+        <div class="hud-bar-bg">
+          <div id="hud-fuel-bar" class="hud-bar-fill fuel-glow" style="width: 100%;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="hud-bottom">
+      <div class="hud-label">PROGRESS</div>
+      <div class="hud-bar-bg progress-bar-bg">
+        <div id="hud-progress-bar" class="hud-bar-fill progress-glow" style="width: 0%;"></div>
+        <div id="hud-progress-marker" class="progress-marker"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screens Overlay (Menus, Death Screen, Success Screen) -->
+  <div id="ui-overlay" class="overlay-container">
+    
+    <!-- MAIN MENU SCREEN -->
+    <div id="menu-screen" class="overlay-screen active glass-card">
+      <h1 class="logo-text">SKYROADS</h1>
+      <h2 class="subtitle-text">MODERN WEBGL REMAKE</h2>
+      
+      <div class="menu-buttons">
+        <button id="btn-play-standard" class="btn btn-primary btn-glow">PLAY STANDARD PACK</button>
+        <button id="btn-play-xmas" class="btn btn-secondary btn-glow">PLAY XMAS SPECIAL</button>
+        <button id="btn-how-to" class="btn btn-info">HOW TO PLAY</button>
+      </div>
+
+      <div class="credits">
+        Inspired by the 1993 classic. Recreated using Three.js.
+      </div>
+    </div>
+
+    <!-- LEVEL SELECTION SCREEN -->
+    <div id="level-screen" class="overlay-screen hidden glass-card">
+      <div class="overlay-header">
+        <button id="btn-level-back" class="btn-icon">&larr; BACK</button>
+        <h2 id="level-pack-title" class="screen-title">SELECT A ROAD</h2>
+      </div>
+
+      <div id="level-grid" class="level-grid-container">
+        <!-- Dynamically populated level list -->
+      </div>
+    </div>
+
+    <!-- DEATH SCREEN -->
+    <div id="death-screen" class="overlay-screen hidden glass-card status-card">
+      <h2 class="status-title text-danger">OUT OF ROADS</h2>
+      <p id="death-reason" class="status-msg">Your ship exploded in a spectacular burst of sparks.</p>
+      
+      <div class="menu-buttons">
+        <button id="btn-death-retry" class="btn btn-primary btn-glow">TRY AGAIN</button>
+        <button id="btn-death-menu" class="btn btn-secondary">BACK TO MENU</button>
+      </div>
+    </div>
+
+    <!-- SUCCESS SCREEN -->
+    <div id="success-screen" class="overlay-screen hidden glass-card status-card">
+      <h2 class="status-title text-success">ROAD COMPLETED!</h2>
+      <p class="status-msg">Flawless landing. You reached the spaceport safely.</p>
+      
+      <div class="menu-buttons">
+        <button id="btn-success-next" class="btn btn-primary btn-glow">NEXT ROAD</button>
+        <button id="btn-success-menu" class="btn btn-secondary">BACK TO MENU</button>
+      </div>
+    </div>
+
+    <!-- HOW TO PLAY SCREEN -->
+    <div id="how-to-screen" class="overlay-screen hidden glass-card">
+      <h2 class="screen-title">HOW TO PLAY</h2>
+      <div class="how-to-content">
+        <div class="control-row">
+          <span class="key-badge">&#8592;</span> <span class="key-badge">&#8594;</span>
+          <span class="control-desc">STEER LEFT & RIGHT</span>
+        </div>
+        <div class="control-row">
+          <span class="key-badge">&#8593;</span>
+          <span class="control-desc">ACCELERATE</span>
+        </div>
+        <div class="control-row">
+          <span class="key-badge">&#8595;</span>
+          <span class="control-desc">BRAKE / DECELERATE</span>
+        </div>
+        <div class="control-row">
+          <span class="key-badge">SPACEBAR</span>
+          <span class="control-desc">JUMP</span>
+        </div>
+
+        <h3 class="colors-title">SPECIAL TILE COLORS</h3>
+        <div class="colors-grid">
+          <div class="color-item"><span class="color-swatch bg-refill"></span> <span><strong>Blue:</strong> Supplies (Refill Fuel & Oxygen)</span></div>
+          <div class="color-item"><span class="color-swatch bg-boost"></span> <span><strong>Light Green:</strong> Boost Speed</span></div>
+          <div class="color-item"><span class="color-swatch bg-sticky"></span> <span><strong>Dark Green:</strong> Sticky (Slows Down)</span></div>
+          <div class="color-item"><span class="color-swatch bg-slippery"></span> <span><strong>Dark Gray:</strong> Slippery (No Control)</span></div>
+          <div class="color-item"><span class="color-swatch bg-burning"></span> <span><strong>Light Red:</strong> Burning (Explodes!)</span></div>
+        </div>
+      </div>
+      <button id="btn-how-to-back" class="btn btn-primary btn-glow">UNDERSTOOD</button>
+    </div>
+
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
