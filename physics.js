@@ -8,7 +8,7 @@ export const TILE_LENGTH = 4.0;
 export const TOTAL_ROAD_WIDTH = TILE_WIDTH * ROAD_WIDTH_LANES;
 
 // Ship dimensions
-export const SHIP_WIDTH = 1.0;
+export const SHIP_WIDTH = 0.6;
 export const SHIP_HEIGHT = 0.4;
 export const SHIP_LENGTH = 1.8;
 
@@ -37,6 +37,10 @@ export class PhysicsEngine {
     this.isDead = false;
     this.deathReason = '';
     
+    // Classic landing bounce (rebound) parameters
+    this.isRebounding = false;
+    this.reboundTimer = 0.0;
+    
     // Active special behaviors
     this.activeEffects = {
       boost: false,
@@ -56,6 +60,8 @@ export class PhysicsEngine {
     this.groundHeight = 0;
     this.isDead = false;
     this.deathReason = '';
+    this.isRebounding = false;
+    this.reboundTimer = 0.0;
     this.fuel = startFuel * 50; // Map original DOS fuel scale
     this.oxygen = startOxygen;
     
@@ -65,6 +71,10 @@ export class PhysicsEngine {
       slippery: false,
       burning: false
     };
+
+    this.triggerRefillAudio = false;
+    this.triggerWallCollisionAudio = false;
+    this.triggerLandingReboundAudio = false;
   }
 
   update(dt, keyboard, levelInfo) {
@@ -140,31 +150,71 @@ export class PhysicsEngine {
       steeringDrag = 1.0; // minimal friction, drift!
     }
 
-    if (keyboard.left) {
-      this.velocity.x -= this.steerAccel * dt;
-      if (this.velocity.x < -this.maxSteerSpeed) this.velocity.x = -this.maxSteerSpeed;
-    } else if (keyboard.right) {
-      this.velocity.x += this.steerAccel * dt;
-      if (this.velocity.x > this.maxSteerSpeed) this.velocity.x = this.maxSteerSpeed;
+    if (keyboard.mouseControlsEnabled) {
+      let steerVal = 0;
+      if (keyboard.steerAmount !== undefined && keyboard.steerAmount !== 0) {
+        steerVal = keyboard.steerAmount;
+      } else if (keyboard.left) {
+        steerVal = -1;
+      } else if (keyboard.right) {
+        steerVal = 1;
+      }
+
+      // Smoothly interpolate (lerp) towards target analogue steer speed
+      const targetSteerSpeed = steerVal * this.maxSteerSpeed;
+      this.velocity.x += (targetSteerSpeed - this.velocity.x) * 15.0 * dt;
     } else {
-      // Bring steering velocity back to 0
-      if (this.velocity.x > 0) {
-        this.velocity.x = Math.max(0, this.velocity.x - steeringDrag * dt);
-      } else if (this.velocity.x < 0) {
-        this.velocity.x = Math.min(0, this.velocity.x + steeringDrag * dt);
+      if (keyboard.left) {
+        this.velocity.x -= this.steerAccel * dt;
+        if (this.velocity.x < -this.maxSteerSpeed) this.velocity.x = -this.maxSteerSpeed;
+      } else if (keyboard.right) {
+        this.velocity.x += this.steerAccel * dt;
+        if (this.velocity.x > this.maxSteerSpeed) this.velocity.x = this.maxSteerSpeed;
+      } else {
+        // Bring steering velocity back to 0
+        if (this.velocity.x > 0) {
+          this.velocity.x = Math.max(0, this.velocity.x - steeringDrag * dt);
+        } else if (this.velocity.x < 0) {
+          this.velocity.x = Math.min(0, this.velocity.x + steeringDrag * dt);
+        }
+      }
+    }
+
+    // Update active landing rebound state timer
+    if (this.isRebounding) {
+      this.reboundTimer -= dt;
+      if (this.reboundTimer <= 0) {
+        this.isRebounding = false;
       }
     }
 
     // 5. Jump & Gravity
-    if (keyboard.jump && this.onGround) {
+    // Coyote time / Near-ground jump buffer (allows jumping when falling within 0.25 units of a valid ground block)
+    const isNearGround = this.velocity.y < 0 && this.groundHeight > -5.0 && (this.position.y - this.groundHeight) <= 0.25;
+    if (keyboard.jump && (this.onGround || this.isRebounding || isNearGround)) {
       this.velocity.y = this.jumpImpulse;
       this.onGround = false;
+      this.isRebounding = false;
       keyboard.resetJump(); // Avoid double jumping immediately
     }
 
     if (!this.onGround) {
+      let gravityForce = levelInfo.gravity;
+      
+      // If falling down, apply asymmetric falling gravity to make the jump snappy and less floaty
+      if (this.velocity.y < 0) {
+        gravityForce *= 1.45;
+      }
+
+      if (this.velocity.y > 0) {
+        const isSpaceHeld = keyboard.spacePressed !== undefined ? keyboard.spacePressed : true;
+        if (!isSpaceHeld) {
+          // Cut upward velocity (variable jump height)
+          this.velocity.y *= 0.82;
+        }
+      }
       // Pull ship down using level's specific gravity scale
-      this.velocity.y -= levelInfo.gravity * dt;
+      this.velocity.y -= gravityForce * dt;
     }
 
     // 6. Update Position
@@ -188,22 +238,47 @@ export class PhysicsEngine {
       if (xOverlap && zOverlap) {
         // We have X/Z intersection! Let's check Y height
         if (block.isObstacle) {
-          // If Z overlap is deep, check if it's a side crash
-          // A side crash happens if the ship's bottom is below the block's top height (block.maxY)
-          // and we hit it horizontally
+          // If Y overlap exists, check for horizontal collision
           const isBelowTop = shipBox.minY < block.maxY - 0.15;
           const isAboveBottom = shipBox.maxY > block.minY;
 
           if (isBelowTop && isAboveBottom) {
-            // Check if we hit the block from the front
-            // Moving in negative Z, front of ship is minZ. Back of block is maxZ.
-            const hitFront = shipBox.minZ < block.maxZ && shipBox.maxZ > block.maxZ;
-            
-            if (hitFront) {
+            // Calculate overlap depths in X and Z
+            const overlapZ = Math.min(shipBox.maxZ, block.maxZ) - Math.max(shipBox.minZ, block.minZ);
+            const overlapX = Math.min(shipBox.maxX, block.maxX) - Math.max(shipBox.minX, block.minX);
+
+            // A side collision occurs if the back of the ship has already crossed the front of the block,
+            // OR if the horizontal overlap is shallow while the vertical longitudinal overlap is deep.
+            const isSideCollision = (shipBox.maxZ <= block.maxZ + 0.15) || (overlapX < 0.35 && overlapZ > 0.5);
+
+            if (!isSideCollision) {
+              // Front collision -> Crash!
               this.isDead = true;
               this.deathReason = 'COLLIDED WITH BLOCK';
               this.velocity.set(0, 0, 0);
               return;
+            } else {
+              // Side wall collision -> Push ship out of the block and slide!
+              const halfW = SHIP_WIDTH / 2;
+              const shipCenterX = this.position.x;
+              const blockCenterX = (block.minX + block.maxX) / 2;
+
+              if (shipCenterX > blockCenterX) {
+                // Push to the right of the block
+                this.position.x = block.maxX + halfW + 0.01;
+              } else {
+                // Push to the left of the block
+                this.position.x = block.minX - halfW - 0.01;
+              }
+              // Stop lateral steering velocity
+              this.velocity.x = 0;
+
+              // Trigger side scrape sound!
+              this.triggerWallCollisionAudio = true;
+
+              // Update the ship's bounding box for subsequent collision checks in this frame
+              shipBox.minX = this.position.x - halfW;
+              shipBox.maxX = this.position.x + halfW;
             }
           }
         }
@@ -213,10 +288,19 @@ export class PhysicsEngine {
         const aboveBlockTop = shipBox.minY >= block.maxY - 0.25;
 
         if (fallingDown && aboveBlockTop) {
-          this.onGround = true;
-          this.groundHeight = block.maxY;
           this.position.y = block.maxY;
-          this.velocity.y = 0;
+          this.groundHeight = block.maxY;
+
+          if (this.velocity.y < -3.0) {
+            this.isRebounding = true;
+            this.reboundTimer = 0.12;
+            this.velocity.y = 4.2; // Classic bounce upwards
+            this.onGround = false;
+            this.triggerLandingReboundAudio = true;
+          } else {
+            this.onGround = true;
+            this.velocity.y = 0;
+          }
         }
       }
     }
@@ -229,25 +313,24 @@ export class PhysicsEngine {
       const maxRight = TOTAL_ROAD_WIDTH / 2;
       const withinTrackWidth = this.position.x >= maxLeft && this.position.x <= maxRight;
 
-      // Check if we landed on standard flat ground
-      if (withinTrackWidth && !this.onGround && this.position.y <= 0.0) {
-        // Let's verify we aren't falling in a gap!
-        // We check if the block directly below us is active
-        const rIdx = Math.floor(absoluteZ / TILE_LENGTH);
-        const cIdx = Math.floor((this.position.x - maxLeft) / TILE_WIDTH);
-        
-        if (rIdx >= 0 && rIdx < levelInfo.roadMeshes.length && levelInfo.roadMeshes) {
-          // Verify if there is a tile in this row/column
-          const rowData = levelInfo.roadMeshes; // Just a placeholder, we verify direct tile existence
-          const currentLevelRows = levelInfo.collidables; // Standard level loader collidables
-          
-          // Let's check if there is an empty tile space (gap) in our lane
-          // If we are touching the flat ground (y=0), but there is NO flat tile under us, we fall!
-          const tileExists = this.checkTileExists(this.position.x, this.position.z, levelInfo);
-          if (tileExists) {
+      // Check if we landed on standard flat ground.
+      // Only snap when ship is CLOSE to ground level (within 0.5 units),
+      // not when it has already fallen deep below the road.
+      if (withinTrackWidth && !this.onGround && this.position.y <= 0.0 && this.position.y > -0.5) {
+        // Verify we aren't falling through a gap in the road
+        const tileExists = this.checkTileExists(this.position.x, this.position.z);
+        if (tileExists) {
+          this.position.y = 0.0;
+          this.groundHeight = 0.0;
+
+          if (this.velocity.y < -3.0) {
+            this.isRebounding = true;
+            this.reboundTimer = 0.12;
+            this.velocity.y = 4.2; // Classic bounce upwards
+            this.onGround = false;
+            this.triggerLandingReboundAudio = true;
+          } else {
             this.onGround = true;
-            this.groundHeight = 0.0;
-            this.position.y = 0.0;
             this.velocity.y = 0.0;
           }
         }
@@ -258,12 +341,12 @@ export class PhysicsEngine {
     if (this.position.y < -4.0) {
       this.isDead = true;
       this.deathReason = 'FELL OFF ROAD';
-      this.velocity.set(0, -15, 0); // plummet down
+      this.velocity.set(0, -15, 0);
     }
   }
 
-  // Check if a tile exists at a specific coordinates on the track
-  checkTileExists(x, z, levelInfo) {
+  // Check if a tile exists at specific world coordinates on the track
+  checkTileExists(x, z) {
     const maxLeft = -TOTAL_ROAD_WIDTH / 2;
     const absZ = -z;
     const rIdx = Math.floor(absZ / TILE_LENGTH);
@@ -272,21 +355,13 @@ export class PhysicsEngine {
     // If out of bounds of track, no tile
     if (rIdx < 0 || cIdx < 0 || cIdx >= ROAD_WIDTH_LANES) return false;
 
-    // Check level structure
-    // Since rows contain parsed blocks, let's see if this lane's tile is active
-    // We can do this by checking if the coordinate falls inside any flat road bounding box,
-    // OR checking the raw row structure!
-    // The easiest way is checking the raw level rows:
-    const activePack = window.currentGamePack || 'standard';
-    const activeLevelIdx = window.currentLevelIndex || 0;
-    
-    // We get the original level rows from the window/global state
+    // Check the original level row data via window global
     const originalLevelData = window.currentLevelData;
     if (originalLevelData && originalLevelData.rows[rIdx]) {
       const tile = originalLevelData.rows[rIdx][cIdx];
       return tile !== null;
     }
-    return true; // Fallback
+    return true; // Fallback: assume tile exists if data unavailable
   }
 
   // Ship bounding box
@@ -345,7 +420,7 @@ export class PhysicsEngine {
   }
 }
 
-// Simple Keyboard controller class
+// Simple Keyboard controller class with optional mouse play support
 export class KeyboardController {
   constructor() {
     this.forward = false;
@@ -353,18 +428,109 @@ export class KeyboardController {
     this.left = false;
     this.right = false;
     this.jump = false;
+    this.spacePressed = false;
+    this.steerAmount = 0; // Proportional steer amount (-1 to 1) like an analogue stick
 
-    window.addEventListener('keydown', (e) => this.handleKey(e, true));
-    window.addEventListener('keyup', (e) => this.handleKey(e, false));
+    // Separate keyboard and mouse state tracking to allow seamless combinations
+    this.keys = {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+      jump: false
+    };
+
+    this.mouse = {
+      forward: false,
+      left: false,
+      right: false,
+      jump: false
+    };
+
+    this.mouseControlsEnabled = false;
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', (e) => this.handleKey(e, true));
+      window.addEventListener('keyup', (e) => this.handleKey(e, false));
+
+      window.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+      window.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+      window.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+      window.addEventListener('contextmenu', (e) => {
+        if (this.mouseControlsEnabled) {
+          e.preventDefault();
+        }
+      });
+    }
   }
 
   handleKey(e, isDown) {
     const code = e.code;
-    if (code === 'ArrowUp' || code === 'KeyW') this.forward = isDown;
-    if (code === 'ArrowDown' || code === 'KeyS') this.backward = isDown;
-    if (code === 'ArrowLeft' || code === 'KeyA') this.left = isDown;
-    if (code === 'ArrowRight' || code === 'KeyD') this.right = isDown;
-    if (code === 'Space') this.jump = isDown;
+    if (code === 'ArrowUp' || code === 'KeyW') this.keys.forward = isDown;
+    if (code === 'ArrowDown' || code === 'KeyS') this.keys.backward = isDown;
+    if (code === 'ArrowLeft' || code === 'KeyA') this.keys.left = isDown;
+    if (code === 'ArrowRight' || code === 'KeyD') this.keys.right = isDown;
+    if (code === 'Space') {
+      this.keys.jump = isDown;
+    }
+    this.updateCombinedState();
+  }
+
+  handleMouseDown(e) {
+    if (!this.mouseControlsEnabled) return;
+    if (e.button === 0) { // Left Click -> Jump
+      this.mouse.jump = true;
+    } else if (e.button === 2) { // Right Click -> Accelerate
+      this.mouse.forward = true;
+    }
+    this.updateCombinedState();
+  }
+
+  handleMouseUp(e) {
+    if (!this.mouseControlsEnabled) return;
+    if (e.button === 0) {
+      this.mouse.jump = false;
+    } else if (e.button === 2) {
+      this.mouse.forward = false;
+    }
+    this.updateCombinedState();
+  }
+
+  handleMouseMove(e) {
+    if (!this.mouseControlsEnabled) {
+      this.mouse.left = false;
+      this.mouse.right = false;
+      this.steerAmount = 0;
+      this.updateCombinedState();
+      return;
+    }
+    // Proportional analogue-style steering with central deadzone
+    const centerX = window.innerWidth / 2;
+    const diff = e.clientX - centerX;
+    const deadzone = window.innerWidth * 0.05; // Tight, premium 5% deadzone
+    const maxRange = window.innerWidth * 0.40; // Full steering achieved at 40% width from center
+
+    if (Math.abs(diff) < deadzone) {
+      this.steerAmount = 0;
+      this.mouse.left = false;
+      this.mouse.right = false;
+    } else {
+      const sign = diff < 0 ? -1 : 1;
+      const val = (Math.abs(diff) - deadzone) / (maxRange - deadzone);
+      this.steerAmount = Math.max(-1, Math.min(1, val * sign));
+      this.mouse.left = this.steerAmount < 0;
+      this.mouse.right = this.steerAmount > 0;
+    }
+    this.updateCombinedState();
+  }
+
+  updateCombinedState() {
+    this.forward = this.keys.forward || (this.mouseControlsEnabled && this.mouse.forward);
+    this.backward = this.keys.backward;
+    this.left = this.keys.left || (this.mouseControlsEnabled && this.mouse.left);
+    this.right = this.keys.right || (this.mouseControlsEnabled && this.mouse.right);
+    this.jump = this.keys.jump || (this.mouseControlsEnabled && this.mouse.jump);
+    this.spacePressed = this.keys.jump || (this.mouseControlsEnabled && this.mouse.jump);
   }
 
   resetJump() {

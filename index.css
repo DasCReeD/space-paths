@@ -365,128 +365,505 @@ body, html {
 .bg-slippery { background-color: hsl(0, 0%, 30%); }
 .bg-burning { background-color: hsl(355, 100%, 55%); box-shadow: 0 0 8px rgba(255, 0, 50, 0.5); }
 
-/* HUD Design System */
+/* Cockpit Dashboard HUD Design System */
 .hud-container {
   position: absolute;
   left: 0;
-  top: 0;
+  bottom: 0;
   width: 100%;
-  height: 100%;
+  height: auto;
   z-index: 5;
   pointer-events: none;
   display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 0 20px 0 20px;
+}
+
+.cockpit-panel {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 820px;
+  height: 140px;
+  background: linear-gradient(180deg, #3a3b40 0%, #1c1d20 100%);
+  border-top: 3px solid #5a5c64;
+  border-left: 2px solid #2f3035;
+  border-right: 2px solid #2f3035;
+  border-bottom: none;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 
+    0 -10px 30px rgba(0, 0, 0, 0.5), 
+    inset 0 2px 3px rgba(255, 255, 255, 0.15),
+    inset 0 -2px 10px rgba(0, 0, 0, 0.4);
+  display: grid;
+  grid-template-columns: 60px 145px 185px 145px 160px;
+  padding: 15px 25px 5px 25px;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  position: relative;
+  overflow: visible;
+}
+
+/* Progress Column */
+.cockpit-progress-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.cockpit-sublabel {
+  font-family: var(--font-display);
+  font-size: 0.52rem;
+  color: #737680;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.progress-tube-track {
+  width: 14px;
+  height: 90px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid #2d2e33;
+  border-top-color: #121315;
+  border-left-color: #121315;
+  border-radius: 7px;
+  position: relative;
+  overflow: visible;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8);
+}
+
+.progress-tube-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 0%;
+  background: linear-gradient(180deg, #ff00cc 0%, #990066 100%);
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 0 10px rgba(255, 0, 204, 0.6);
+  transition: height 0.1s ease-out;
+}
+
+.progress-rocket-marker {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translate(-50%, 4px) rotate(0deg);
+  font-size: 0.65rem;
+  color: #ffffff;
+  text-shadow: 0 0 5px #ff00cc;
+  transition: bottom 0.1s ease-out;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Cockpit LCD Block Casing */
+.cockpit-block {
+  background: linear-gradient(135deg, #28292d 0%, #151618 100%);
+  border: 2px solid #0c0d0e;
+  border-top-color: #4c4d54;
+  border-left-color: #4c4d54;
+  border-radius: 10px;
+  height: 105px;
+  display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 30px;
+  align-items: center;
+  padding: 8px 10px;
+  position: relative;
+  box-shadow: 
+    0 4px 8px rgba(0, 0, 0, 0.4), 
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-.hud-top {
-  display: flex;
-  justify-content: space-between;
+/* Retro LCD Glass Bezel Screen */
+.lcd-screen-container {
   width: 100%;
-}
-
-.hud-stat-box {
-  background: rgba(10, 5, 25, 0.65);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 15px 25px;
-  min-width: 180px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-}
-
-.hud-label {
-  font-family: var(--font-display);
-  font-size: 0.75rem;
-  letter-spacing: 2px;
-  color: var(--color-text-muted);
-  margin-bottom: 5px;
-}
-
-.hud-value-container {
+  height: 48px;
+  background: radial-gradient(circle, #bce3eb 0%, #a2d2db 100%);
+  border: 1.5px solid #4a5c63;
+  border-top-color: #2e3b3f;
+  border-left-color: #2e3b3f;
+  border-radius: 5px;
   display: flex;
-  align-items: baseline;
+  justify-content: center;
+  align-items: center;
+  margin-top: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 
+    inset 0 3px 6px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
-#hud-speed-text, .hud-value {
-  font-family: var(--font-display);
-  font-size: 1.8rem;
+/* CRT Scanline overlay effect */
+.lcd-screen-container::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.08) 50%, transparent 50%),
+    radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, transparent 80%);
+  background-size: 100% 3px, 100% 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.lcd-value {
+  font-family: 'Orbitron', monospace;
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #0b1c20;
+  text-shadow: 0.5px 0.5px 1px rgba(0, 0, 0, 0.2);
+  letter-spacing: 0.5px;
+  z-index: 3;
+  text-align: center;
+}
+
+.block-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.56rem;
+  color: #8c8f99;
   font-weight: 700;
   letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 4px;
+  text-align: center;
 }
 
-.hud-unit {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  margin-left: 5px;
+/* Bezel LED lights */
+.led-light {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #00ff66;
+  border: 1px solid #004411;
+  box-shadow: 0 0 6px #00ff66, 0 0 2px #00ff66;
+  z-index: 4;
 }
 
-/* Neon fillable bars */
-.hud-bar-bg {
+.led-topleft {
+  top: 6px;
+  left: 8px;
+}
+
+.led-topright {
+  top: 6px;
+  right: 8px;
+}
+
+/* Speedometer Center Dial */
+.cockpit-center {
+  position: relative;
+  width: 185px;
+  height: 185px;
+  margin-top: -38px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #42444c 0%, #18191b 100%);
+  border: 4px solid #0d0e0f;
+  box-shadow: 
+    0 8px 20px rgba(0, 0, 0, 0.6), 
+    inset 0 2px 4px rgba(255, 255, 255, 0.2);
+}
+
+.gauges-svg {
   width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.gauge-bg-circle {
+  fill: none;
+  stroke: #090a0b;
+  stroke-width: 10;
+}
+
+.gauge-inner-bg {
+  fill: #0c0d0f;
+}
+
+.gauge-ticks line {
+  stroke: #00ffcc;
+  stroke-width: 1.5;
+  opacity: 0.5;
+}
+
+.gauge-speed {
+  fill: none;
+  stroke: #00ffcc;
+  stroke-width: 6;
+  stroke-dasharray: 565.48; /* Circumference = 2 * PI * 90 */
+  stroke-dashoffset: 565.48;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.15s ease-out;
+  filter: drop-shadow(0 0 4px rgba(0, 255, 204, 0.6));
+}
+
+.gauge-oxygen {
+  fill: none;
+  stroke: #00ff66;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 194.78; /* Semicircular length = PI * 62 */
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.15s ease-out;
+  filter: drop-shadow(0 0 3px rgba(0, 255, 102, 0.4));
+}
+
+.gauge-fuel {
+  fill: none;
+  stroke: #ff00cc;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 194.78;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.15s ease-out;
+  filter: drop-shadow(0 0 3px rgba(255, 0, 204, 0.4));
+}
+
+.gauge-arc-track {
+  stroke: rgba(255, 255, 255, 0.05);
+}
+
+/* Glass specular lens overlay */
+.gauge-glass-lens {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  background: 
+    linear-gradient(135deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, 0.4) 100%),
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.18) 0%, transparent 60%);
+  box-shadow: 
+    inset 0 4px 6px rgba(255, 255, 255, 0.25), 
+    inset 0 -4px 6px rgba(0, 0, 0, 0.5);
+  z-index: 15;
+  pointer-events: none;
+}
+
+/* Digital overlay centered inside speedometer */
+.center-gauge-overlay {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  z-index: 12;
+}
+
+.oxy-label-text {
+  position: absolute;
+  top: 40px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.58rem;
+  font-weight: 900;
+  color: #00ff66;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 4px rgba(0, 255, 102, 0.4);
+}
+
+.fuel-label-text {
+  position: absolute;
+  bottom: 40px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.58rem;
+  font-weight: 900;
+  color: #ff00cc;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 4px rgba(255, 0, 204, 0.4);
+}
+
+.digital-speed-readout {
+  margin-top: 6px;
+}
+
+#hud-speed-text {
+  font-family: 'Orbitron', monospace;
+  font-size: 2.1rem;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 
+    0 0 10px rgba(0, 255, 204, 0.8),
+    0 0 2px rgba(255, 255, 255, 0.8);
+  letter-spacing: 0.5px;
+}
+
+.speed-label-text {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.54rem;
+  color: #8c8f99;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  margin-top: -2px;
+}
+
+/* Cybernetic Telemetry / Right Column */
+.cockpit-telemetry-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 110px;
+  gap: 6px;
+}
+
+.telemetry-box {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.telemetry-info {
+  display: flex;
+  flex-direction: column;
+}
+
+#hud-pack-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.5rem;
+  color: #737680;
+  text-transform: uppercase;
+}
+
+#hud-road-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: #00ffcc;
+  text-shadow: 0 0 5px rgba(0, 255, 204, 0.4);
+}
+
+.camera-info-row {
+  display: flex;
+  gap: 8px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.5rem;
+  color: #8c8f99;
+}
+
+#hud-camera-mode {
+  color: #00ff66;
+  font-weight: 700;
+}
+
+#hud-camera-zoom {
+  color: #ff00cc;
+  font-weight: 700;
+}
+
+#hud-camera-height {
+  color: #ffff33;
+  font-weight: 700;
+}
+
+.status-lights-row {
+  display: flex;
+  gap: 5px;
+}
+
+.status-indicator {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.15);
+  text-align: center;
+  min-width: 32px;
+  transition: all 0.15s ease;
+}
+
+#status-boost.active {
+  color: #00ff66;
+  border-color: #00ff66;
+  background: rgba(0, 255, 102, 0.15);
+  box-shadow: 0 0 6px rgba(0, 255, 102, 0.3);
+  animation: blink-indicator 0.8s infinite alternate;
+}
+
+#status-sticky.active {
+  color: #ff3333;
+  border-color: #ff3333;
+  background: rgba(255, 51, 51, 0.15);
+  box-shadow: 0 0 6px rgba(255, 51, 51, 0.3);
+  animation: blink-indicator 0.8s infinite alternate;
+}
+
+#status-slippery.active {
+  color: #00ccff;
+  border-color: #00ccff;
+  background: rgba(0, 204, 255, 0.15);
+  box-shadow: 0 0 6px rgba(0, 204, 255, 0.3);
+}
+
+@keyframes blink-indicator {
+  0% { opacity: 0.7; }
+  100% { opacity: 1.0; }
+}
+
+/* Loading Screen */
+.loading-spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top: 4px solid var(--color-secondary);
+  border-right: 4px solid var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 25px;
+  box-shadow: 0 0 20px var(--color-secondary-glow);
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.text-loading {
+  color: var(--color-secondary);
+  text-shadow: 0 0 15px var(--color-secondary-glow);
+}
+
+.loading-progress-bg {
+  width: 100%;
+  max-width: 300px;
   height: 6px;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
-  margin-top: 8px;
+  margin-top: 15px;
   overflow: hidden;
 }
 
-.hud-bar-fill {
+.loading-progress-fill {
   height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--color-secondary), var(--color-primary));
   border-radius: 3px;
-  transition: width 0.15s ease-out;
-}
-
-.speed-glow {
-  background: var(--color-secondary);
   box-shadow: 0 0 10px var(--color-secondary);
-}
-
-.oxygen-glow {
-  background: hsl(200, 100%, 60%);
-  box-shadow: 0 0 10px hsl(200, 100%, 60%);
-}
-
-.fuel-glow {
-  background: hsl(45, 100%, 55%);
-  box-shadow: 0 0 10px hsl(45, 100%, 55%);
-}
-
-.hud-bottom {
-  background: rgba(10, 5, 25, 0.65);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 15px 25px;
-  width: 100%;
-  max-width: 500px;
-  margin: 0 auto;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-}
-
-.progress-bar-bg {
-  position: relative;
-  height: 8px;
-}
-
-.progress-glow {
-  background: var(--color-primary);
-  box-shadow: 0 0 10px var(--color-primary);
-}
-
-.progress-marker {
-  position: absolute;
-  top: 50%;
-  left: 0%;
-  width: 14px;
-  height: 14px;
-  background: var(--color-text);
-  border: 2px solid var(--color-primary);
-  box-shadow: 0 0 8px var(--color-primary);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  transition: left 0.15s ease-out;
+  transition: width 0.1s ease-out;
 }
 
 .credits {
@@ -512,3 +889,331 @@ body, html {
     font-size: 2.5rem;
   }
 }
+
+/* Keyboard Menu Navigation Focus Indicators */
+.btn.keyboard-focused, .level-item.keyboard-focused {
+  outline: none;
+  transform: translateY(-3px) scale(1.02);
+}
+
+.btn-primary.keyboard-focused {
+  box-shadow: 0 8px 25px rgba(255, 0, 150, 0.65), 0 0 20px rgba(255, 0, 150, 0.45);
+  background: linear-gradient(135deg, hsl(320, 100%, 55%) 0%, hsl(340, 100%, 60%) 100%) !important;
+}
+
+.btn-secondary.keyboard-focused {
+  box-shadow: 0 8px 25px rgba(0, 200, 255, 0.65), 0 0 20px rgba(0, 200, 255, 0.45);
+  background: linear-gradient(135deg, hsl(180, 100%, 45%) 0%, hsl(200, 100%, 50%) 100%) !important;
+}
+
+.btn-info.keyboard-focused {
+  background: rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.level-item.keyboard-focused {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: var(--color-secondary) !important;
+  box-shadow: var(--shadow-neon-sec), 0 0 15px rgba(0, 255, 204, 0.3) !important;
+}
+
+/* Spaceship Garage / Ship Picker Layout styling */
+#ship-picker-screen {
+  max-width: 820px;
+  width: 95%;
+}
+
+.ship-picker-container {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 20px;
+  width: 100%;
+  height: 380px;
+  margin-bottom: 25px;
+}
+
+#ship-preview-container {
+  width: 100%;
+  height: 100%;
+  background: #07040d;
+  border: 2px solid #20133c;
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 
+    0 12px 36px rgba(0, 0, 0, 0.6),
+    inset 0 0 24px rgba(255, 0, 204, 0.05);
+}
+
+#ship-preview-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ship-skins-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: 100%;
+  padding-right: 5px;
+}
+
+.ship-skins-sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.ship-skins-sidebar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.01);
+  border-radius: 3px;
+}
+
+.ship-skins-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 0, 204, 0.3);
+  border-radius: 3px;
+}
+
+.skin-option {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+  box-sizing: border-box;
+}
+
+.skin-option:hover {
+  transform: scale(1.15) translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 5px 12px rgba(255, 0, 204, 0.25);
+}
+
+.skin-option.active {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 14px rgba(255, 0, 204, 0.6) !important;
+  transform: scale(1.1);
+}
+
+.skin-option.keyboard-focused {
+  outline: none;
+  border-color: var(--color-secondary) !important;
+  box-shadow: 0 0 14px rgba(0, 255, 204, 0.6) !important;
+  transform: scale(1.15) translateY(-2px);
+}
+
+.skin-info-display {
+  margin-top: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 0, 204, 0.12);
+  border-radius: 10px;
+  padding: 10px 14px;
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: inset 0 0 10px rgba(255, 0, 204, 0.03);
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.skin-info-name {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  text-shadow: 0 0 5px rgba(255, 0, 204, 0.4);
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+.skin-info-desc {
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  line-height: 1.3;
+}
+
+#btn-picker-select {
+  width: 100%;
+  max-width: 320px;
+}
+
+/* Adjustments for Ship Garage in smaller views */
+@media (max-width: 768px) {
+  .ship-picker-container {
+    grid-template-columns: 1fr;
+    grid-template-rows: 200px 180px;
+    height: 380px;
+    gap: 15px;
+  }
+}
+
+/* Premium Model & Skin Sidebar Sections */
+.sidebar-section-title {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--color-secondary);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  text-align: left;
+  border-bottom: 1px dashed rgba(0, 255, 204, 0.15);
+  padding-bottom: 4px;
+}
+
+.ship-models-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.ship-skins-list {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 4px;
+}
+
+.model-option {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+}
+
+.model-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.model-option.active {
+  background: rgba(0, 255, 204, 0.05) !important;
+  border-color: var(--color-secondary) !important;
+  box-shadow: 0 0 10px rgba(0, 255, 204, 0.12);
+}
+
+.model-option.keyboard-focused {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 10px rgba(255, 0, 204, 0.2) !important;
+  transform: translateY(-2px);
+}
+
+.model-name {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  transition: color 0.2s ease;
+}
+
+.model-option.active .model-name {
+  color: var(--color-secondary);
+  text-shadow: 0 0 5px rgba(0, 255, 204, 0.4);
+}
+
+.model-option.keyboard-focused .model-name {
+  color: var(--color-text);
+}
+
+/* Premium Preset & Custom Color Picker styles */
+.color-preset-option {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
+}
+
+.color-preset-option:hover {
+  transform: scale(1.22) translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 6px 14px rgba(0, 255, 204, 0.3);
+}
+
+.color-preset-option.active {
+  border-color: #ffffff !important;
+  box-shadow: 
+    0 0 14px rgba(255, 255, 255, 0.6),
+    inset 0 0 4px rgba(255, 255, 255, 0.4) !important;
+  transform: scale(1.15);
+}
+
+.color-preset-option.keyboard-focused {
+  outline: none;
+  border-color: var(--color-secondary) !important;
+  box-shadow: 0 0 14px rgba(0, 255, 204, 0.7) !important;
+  transform: scale(1.22) translateY(-2px);
+}
+
+.color-picker-input-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.color-picker-label {
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 800;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+#ship-color-picker {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 36px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  padding: 0;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+#ship-color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+#ship-color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+#ship-color-picker:hover {
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 10px rgba(0, 255, 204, 0.2);
+}
+
+#ship-color-picker.keyboard-focused {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 10px var(--color-primary);
+}
+
+
