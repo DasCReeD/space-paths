@@ -42,6 +42,7 @@ export class PhysicsEngine {
     // Classic landing bounce (rebound) parameters
     this.isRebounding = false;
     this.reboundTimer = 0.0;
+    this.justRebounded = false;
     
     // Active special behaviors
     this.activeEffects = {
@@ -93,6 +94,7 @@ export class PhysicsEngine {
     this.isTransitioning = false;
     this.isRebounding = false;
     this.reboundTimer = 0.0;
+    this.justRebounded = false;
     this.fuel = startFuel * 50; // Map original DOS fuel scale
     this.oxygen = startOxygen;
     
@@ -256,6 +258,7 @@ export class PhysicsEngine {
       this.velocity.y = this.jumpImpulse * (this.settings.jumpFactor !== undefined ? this.settings.jumpFactor : 1.0);
       this.onGround = false;
       this.isRebounding = false;
+      this.justRebounded = false;
       keyboard.resetJump(); // Avoid double jumping immediately
     }
 
@@ -360,22 +363,24 @@ export class PhysicsEngine {
 
         // Check if we are landing on top of the tile
         const fallingDown = this.velocity.y <= 0;
-        const aboveBlockTop = shipBox.minY >= block.maxY - 0.25;
+        const aboveBlockTop = shipBox.minY >= block.maxY - 0.25 && shipBox.minY <= block.maxY + 0.15;
 
         if (fallingDown && aboveBlockTop) {
           this.position.y = block.maxY;
           this.groundHeight = block.maxY;
 
           const isJumpHeld = keyboard.spacePressed !== undefined ? keyboard.spacePressed : false;
-          if (this.velocity.y < -3.0 && !isJumpHeld) {
+          if (this.velocity.y < -3.0 && !isJumpHeld && !this.justRebounded) {
             this.isRebounding = true;
             this.reboundTimer = 0.12;
             this.velocity.y = 4.2 * (this.settings.bounceFactor !== undefined ? this.settings.bounceFactor : 1.0); // Classic bounce upwards
             this.onGround = false;
+            this.justRebounded = true;
             this.triggerLandingReboundAudio = true;
           } else {
             this.onGround = true;
             this.velocity.y = 0;
+            this.justRebounded = false;
           }
         }
       }
@@ -392,7 +397,7 @@ export class PhysicsEngine {
       // Check if we landed on standard flat ground.
       // Only snap when ship is CLOSE to ground level (within 0.5 units),
       // not when it has already fallen deep below the road.
-      if (withinTrackWidth && !this.onGround && this.position.y <= 0.0 && this.position.y > -0.5) {
+      if (withinTrackWidth && !this.onGround && this.velocity.y <= 0.0 && this.position.y <= 0.0 && this.position.y > -0.5) {
         // Verify we aren't falling through a gap in the road
         const tileExists = this.checkTileExists(this.position.x, this.position.z);
         if (tileExists) {
@@ -400,15 +405,17 @@ export class PhysicsEngine {
           this.groundHeight = 0.0;
 
           const isJumpHeld = keyboard.spacePressed !== undefined ? keyboard.spacePressed : false;
-          if (this.velocity.y < -3.0 && !isJumpHeld) {
+          if (this.velocity.y < -3.0 && !isJumpHeld && !this.justRebounded) {
             this.isRebounding = true;
             this.reboundTimer = 0.12;
             this.velocity.y = 4.2 * (this.settings.bounceFactor !== undefined ? this.settings.bounceFactor : 1.0); // Classic bounce upwards
             this.onGround = false;
+            this.justRebounded = true;
             this.triggerLandingReboundAudio = true;
           } else {
             this.onGround = true;
             this.velocity.y = 0.0;
+            this.justRebounded = false;
           }
         }
       }

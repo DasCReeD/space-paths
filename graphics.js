@@ -1353,8 +1353,8 @@ export class GraphicsEngine {
     const targetRoll = -physics.velocity.x * 0.05; // banking angle
     this.shipMesh.rotation.z += (targetRoll - this.shipMesh.rotation.z) * 0.15;
     
-    // Slight pitch up/down while jumping/falling
-    const targetPitch = physics.velocity.y * 0.025;
+    // Pitch forward (nose down) when rising to keep the road visible; pitch back (nose up, flare) when falling
+    const targetPitch = -physics.velocity.y * 0.015;
     this.shipMesh.rotation.x += (targetPitch - this.shipMesh.rotation.x) * 0.15;
 
     // 2. Smooth Chase Camera (with distance scaling and multiple camera modes)
@@ -1402,9 +1402,14 @@ export class GraphicsEngine {
     }
 
     if (this.cameraMode === 'cockpit') {
-      // Zero lag tracking inside the cockpit to prevent jitter
-      this.camera.position.copy(idealCamPos);
-      this.camera.lookAt(idealCamTarget);
+      // Smooth tracking inside the cockpit to prevent jarring camera jerks on landing/takeoff
+      this.camera.position.lerp(idealCamPos, 0.25);
+      if (!this.camLookTarget) {
+        this.camLookTarget = idealCamTarget.clone();
+      } else {
+        this.camLookTarget.lerp(idealCamTarget, 0.25);
+      }
+      this.camera.lookAt(this.camLookTarget);
     } else {
       // Interpolate camera position for buttery-smooth movements
       this.camera.position.lerp(idealCamPos, 0.1);

@@ -1303,4 +1303,115 @@ describe('PhysicsEngine', () => {
       expect(physics.onGround).toBe(false);
     });
   });
+
+  // ── Consecutive Rebound Prevention ─────────────────────────────────────
+
+  describe('Consecutive rebound prevention', () => {
+    it('should NOT trigger a consecutive rebound when landing from a previous rebound', () => {
+      // 1. Setup ship falling fast onto standard flat road
+      physics.position.set(0, 0.05, -30);
+      physics.velocity.set(0, -6.0, -10.0);
+      physics.onGround = false;
+      physics.justRebounded = false;
+      
+      window.currentLevelData = {
+        rows: Array.from({ length: 100 }, () => [{}, {}, {}, {}, {}, {}, {}])
+      };
+      
+      physics.update(0.016, keyboard, levelInfo);
+      
+      // First landing: should trigger rebound
+      expect(physics.isRebounding).toBe(true);
+      expect(physics.justRebounded).toBe(true);
+      expect(physics.velocity.y).toBe(4.2);
+      
+      // Let the ship travel up and fall down again, simulating landing from this rebound
+      physics.isRebounding = false; // reset for test
+      physics.onGround = false;
+      physics.position.set(0, 0.05, -30);
+      physics.velocity.set(0, -6.0, -10.0); // fell back down fast
+      
+      physics.update(0.016, keyboard, levelInfo);
+      
+      // Second landing: since justRebounded was true, it should land FLAT and reset justRebounded
+      expect(physics.isRebounding).toBe(false);
+      expect(physics.justRebounded).toBe(false);
+      expect(physics.onGround).toBe(true);
+      expect(physics.velocity.y).toBe(0.0);
+      
+      window.currentLevelData = null; // Cleanup
+    });
+  });
+
+  // ── Proximity Landing Boundaries and Flight Safety Check ────────────────
+
+  describe('Proximity landing boundaries and flight safety check', () => {
+    it('should NOT snap the ship to elevated block top when falling from high above it', () => {
+      // 1. Place a block at Y = 2.0
+      const block = {
+        minX: -10.0, maxX: 10.0,
+        minZ: -50.0, maxZ: -10.0,
+        minY: 0.0, maxY: 2.0,
+        isObstacle: false,
+        boundingBox: { minX: -10, maxX: 10, minY: 0, maxY: 2.0, minZ: -50, maxZ: -10 }
+      };
+      levelInfo.collidables = [block];
+
+      // 2. Place ship high above the block (Y = 5.0) and falling
+      physics.position.set(0, 5.0, -30);
+      physics.velocity.set(0, -2.0, -10.0);
+      physics.onGround = false;
+
+      physics.update(0.016, keyboard, levelInfo);
+
+      // Ship should NOT snap to 2.0, it should continue falling naturally
+      expect(physics.position.y).toBeCloseTo(5.0 - 2.0 * 0.016 - (24.0 * 1.45) * 0.016 * 0.016, 2);
+      expect(physics.onGround).toBe(false);
+    });
+
+    it('should snap and land the ship on elevated block when it falls within the vertical proximity threshold', () => {
+      const block = {
+        minX: -10.0, maxX: 10.0,
+        minZ: -50.0, maxZ: -10.0,
+        minY: 0.0, maxY: 2.0,
+        isObstacle: false,
+        boundingBox: { minX: -10, maxX: 10, minY: 0, maxY: 2.0, minZ: -50, maxZ: -10 }
+      };
+      levelInfo.collidables = [block];
+
+      // Place ship just above the block top (Y = 2.05) and falling
+      physics.position.set(0, 2.05, -30);
+      physics.velocity.set(0, -2.0, -10.0);
+      physics.onGround = false;
+
+      physics.update(0.016, keyboard, levelInfo);
+
+      // Ship should snap to 2.0 and land
+      expect(physics.position.y).toBe(2.0);
+      expect(physics.onGround).toBe(true);
+      expect(physics.velocity.y).toBe(0.0);
+    });
+
+    it('should NOT trigger standard flat ground landing check when ship is rising (velocity.y > 0)', () => {
+      levelInfo.collidables = [];
+      window.currentLevelData = {
+        rows: Array.from({ length: 100 }, () => [{}, {}, {}, {}, {}, {}, {}])
+      };
+
+      // Place ship at Y = 0.0, but moving up with high positive velocity (rising rebound/jump phase)
+      physics.position.set(0, 0.0, -30);
+      physics.velocity.set(0, 5.0, -10.0);
+      physics.onGround = false;
+
+      physics.update(0.016, keyboard, levelInfo);
+
+      // The standard ground check should be bypassed because it is rising, keeping velocity.y positive and onGround false
+      expect(physics.onGround).toBe(false);
+      expect(physics.velocity.y).toBeCloseTo(5.0 - 24.0 * 0.016, 2);
+      expect(physics.position.y).toBeGreaterThan(0.0);
+
+      window.currentLevelData = null; // Cleanup
+    });
+  });
 });
+
