@@ -161,11 +161,19 @@
 
       <!-- Extreme Right: Navigation Telemetry & Status Lights -->
       <div class="cockpit-telemetry-col">
-        <div class="telemetry-box">
+        <div class="telemetry-box" style="margin-bottom: 5px;">
           <span class="cockpit-sublabel">NAVIGATION</span>
           <div class="telemetry-info">
             <div id="hud-pack-name">STANDARD PACK</div>
             <div id="hud-road-name">DEMO ROAD</div>
+          </div>
+        </div>
+
+        <div class="telemetry-box" style="margin-bottom: 5px; border-color: rgba(255, 0, 255, 0.25);">
+          <span class="cockpit-sublabel" style="color: #ff00ff; text-shadow: 0 0 5px rgba(255, 0, 255, 0.5);">RUN SCORE</span>
+          <div id="hud-score-row" style="font-size: 0.85rem; font-weight: 900; color: #00ffcc; text-shadow: 0 0 6px rgba(0,255,204,0.8); display: flex; justify-content: space-between; align-items: center; width: 100%; font-family: 'Orbitron', sans-serif;">
+            <span style="font-size: 0.58rem; color: #8c8f99; font-weight: bold; letter-spacing: 0.5px;">SCORE:</span>
+            <span id="hud-score-text">000000</span>
           </div>
         </div>
 
@@ -456,11 +464,52 @@
           </div>
         </div>
 
+        <!-- SECTION 4: COCKPIT CAMERA ADJUSTMENTS -->
+        <div class="calibrator-group-card">
+          <div class="group-header">4. COCKPIT CAMERA OFFSET</div>
+          <div class="sliders-list">
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">LATERAL OFFSET (X)</span>
+                <span id="val-cockpitOffsetX" class="slider-value">0.00</span>
+              </div>
+              <input type="range" id="input-cockpitOffsetX" min="-1.00" max="1.00" step="0.05" value="0.00">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">HEIGHT OFFSET (Y)</span>
+                <span id="val-cockpitOffsetY" class="slider-value">0.00</span>
+              </div>
+              <input type="range" id="input-cockpitOffsetY" min="-0.50" max="0.80" step="0.05" value="0.00">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">DEPTH OFFSET (Z)</span>
+                <span id="val-cockpitOffsetZ" class="slider-value">0.00</span>
+              </div>
+              <input type="range" id="input-cockpitOffsetZ" min="-0.50" max="1.50" step="0.05" value="0.00">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">SHOW GLASS BEZEL CASING</span>
+                <span id="val-showCockpitBezel" class="slider-value">ON</span>
+              </div>
+              <input type="range" id="input-showCockpitBezel" min="0" max="1" step="1" value="1">
+            </div>
+
+          </div>
+        </div>
+
       </div>
 
       <!-- Action Buttons -->
       <div class="menu-buttons" style="margin-top: 15px; display: flex; gap: 15px; justify-content: center; width: 100%;">
         <button id="btn-calibrator-reset" class="btn btn-secondary" style="font-size: 0.75rem; padding: 10px 15px; margin: 0; min-width: 180px;">RESET PRESET TO BASE 🔄</button>
+        <button id="btn-calibrator-save-default" class="btn btn-secondary" style="font-size: 0.75rem; padding: 10px 15px; margin: 0; min-width: 180px; border-color: #00ffcc; color: #00ffcc;">SAVE CURRENT AS DEFAULT 💾</button>
         <button id="btn-calibrator-close" class="btn btn-primary btn-glow" style="font-size: 0.75rem; padding: 10px 15px; margin: 0; min-width: 120px;">BACK</button>
       </div>
     </div>
@@ -496,13 +545,68 @@
     </div>
 
     <!-- SUCCESS SCREEN -->
-    <div id="success-screen" class="overlay-screen hidden glass-card status-card">
-      <h2 class="status-title text-success">ROAD COMPLETED!</h2>
-      <p class="status-msg">Flawless landing. You reached the spaceport safely.</p>
+    <div id="success-screen" class="overlay-screen hidden glass-card status-card success-dashboard" style="max-width: 780px; width: 90%; min-height: 480px; padding: 25px 35px;">
+      <h2 class="status-title text-success" style="margin-bottom: 5px; font-size: 1.8rem; text-shadow: 0 0 10px rgba(0,255,102,0.4);">ROAD COMPLETED!</h2>
+      <p class="status-msg" style="margin-bottom: 15px; font-size: 0.85rem;">Flawless landing. You reached the spaceport safely.</p>
       
-      <div class="menu-buttons">
-        <button id="btn-success-next" class="btn btn-primary btn-glow">NEXT ROAD</button>
-        <button id="btn-success-menu" class="btn btn-secondary">BACK TO MENU</button>
+      <div class="success-columns-container" style="display: flex; gap: 25px; width: 100%; text-align: left; margin: 15px 0;">
+        <!-- Left Column: Statistics & Bonuses -->
+        <div class="success-column col-stats" style="flex: 1; background: rgba(18, 20, 24, 0.4); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 15px;">
+          <h3 class="col-title" style="font-size: 0.75rem; color: #ff00ff; border-bottom: 1px solid rgba(255,0,255,0.2); padding-bottom: 6px; margin-bottom: 12px; font-weight: 900; letter-spacing: 1px;">RUN TELEMETRY</h3>
+          <div class="score-stats-grid" style="display: flex; flex-direction: column; gap: 6px; font-size: 0.68rem; font-family: monospace;">
+            <div class="stat-row" style="display: flex; justify-content: space-between;"><span>TIME:</span><span id="score-val-time" style="color: #ffffff; font-weight: bold;">00.00s</span></div>
+            <div class="stat-row" style="display: flex; justify-content: space-between;"><span>AVG SPEED:</span><span id="score-val-speed" style="color: #ffffff; font-weight: bold;">000 km/h</span></div>
+            <div class="stat-row" style="display: flex; justify-content: space-between;"><span>WALL COLLISIONS:</span><span id="score-val-collisions" style="color: #ff3366; font-weight: bold;">0</span></div>
+            <div class="stat-divider" style="height: 1px; background: rgba(255,255,255,0.08); margin: 6px 0;"></div>
+            <div class="stat-row" style="display: flex; justify-content: space-between; color: #8c8f99;"><span>BASE COMPLETION:</span><span>+10,000</span></div>
+            <div class="stat-row" style="display: flex; justify-content: space-between; color: #8c8f99;"><span>SPEED BONUS:</span><span id="score-val-speed-bonus">+0</span></div>
+            <div class="stat-row" style="display: flex; justify-content: space-between; color: #8c8f99;"><span>TIME BONUS:</span><span id="score-val-time-bonus">+0</span></div>
+            <div class="stat-row" style="display: flex; justify-content: space-between; color: #8c8f99;"><span>COLLISION PENALTY:</span><span id="score-val-penalty" style="color: #ff3366;">-0</span></div>
+            <div class="stat-row" id="score-row-perfect-bonus" style="display: none; justify-content: space-between; color: #ffcc00; font-weight: bold; text-shadow: 0 0 5px rgba(255,204,0,0.5);"><span>PERFECT RUN BONUS:</span><span>+5,000</span></div>
+            <div class="stat-divider" style="height: 1px; background: rgba(255,255,255,0.08); margin: 6px 0;"></div>
+            <div class="stat-row final-score-row" style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+              <span style="font-weight: 900; color: #00ffcc; font-size: 0.75rem;">FINAL SCORE:</span>
+              <span id="score-val-final" class="glow-cyan" style="font-size: 1.1rem; font-weight: 900; color: #00ffcc; text-shadow: 0 0 10px rgba(0,255,204,0.8);">000000</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Initials Prompt & Leaderboard -->
+        <div class="success-column col-leaderboard" style="flex: 1.1; background: rgba(18, 20, 24, 0.4); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <h3 class="col-title" style="font-size: 0.75rem; color: #ff00ff; border-bottom: 1px solid rgba(255,0,255,0.2); padding-bottom: 6px; margin-bottom: 12px; font-weight: 900; letter-spacing: 1px;">LEADERBOARD</h3>
+            
+            <!-- Initials Prompt form -->
+            <div id="leaderboard-input-box" class="initials-prompt-box" style="display: flex; flex-direction: column; gap: 6px; background: rgba(0, 255, 204, 0.05); border: 1px dashed rgba(0, 255, 204, 0.25); border-radius: 6px; padding: 10px; margin-bottom: 12px;">
+              <span class="prompt-text" style="font-size: 0.58rem; color: #00ffcc; font-weight: bold; letter-spacing: 0.5px;">SUBMIT YOUR SCORE! ENTER INITIALS:</span>
+              <div class="initials-form-row" style="display: flex; gap: 10px; align-items: center;">
+                <input type="text" id="input-score-initials" maxlength="3" placeholder="AAA" style="flex-grow: 1; background: rgba(18, 20, 24, 0.8); border: 1px solid rgba(0, 255, 204, 0.3); border-radius: 4px; padding: 6px 10px; color: #00ffcc; font-family: monospace; font-size: 0.75rem; font-weight: bold; text-align: center; text-transform: uppercase; outline: none; box-shadow: inset 0 0 5px rgba(0,0,0,0.5);">
+                <button id="btn-score-submit" class="btn btn-primary btn-glow" style="padding: 6px 14px; font-size: 0.65rem; min-width: 90px; margin: 0; border-radius: 4px; border-color: #00ffcc; color: #00ffcc;">SUBMIT</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top-5 High Scores Table -->
+          <div class="leaderboard-table-container" style="flex-grow: 1; max-height: 150px; overflow-y: auto;">
+            <table class="leaderboard-table" style="width: 100%; border-collapse: collapse; font-size: 0.62rem; font-family: monospace; text-align: left;">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.15); color: #8c8f99;">
+                  <th style="padding: 4px 6px;">RANK</th>
+                  <th style="padding: 4px 6px;">INITIALS</th>
+                  <th style="padding: 4px 6px; text-align: right;">SCORE</th>
+                </tr>
+              </thead>
+              <tbody id="leaderboard-table-body">
+                <!-- Dynamically populated rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      
+      <div class="menu-buttons" style="margin-top: 15px; display: flex; gap: 15px; justify-content: center; width: 100%;">
+        <button id="btn-success-next" class="btn btn-primary btn-glow" style="font-size: 0.75rem; padding: 10px 15px; margin: 0; min-width: 140px;">NEXT ROAD</button>
+        <button id="btn-success-menu" class="btn btn-secondary" style="font-size: 0.75rem; padding: 10px 15px; margin: 0; min-width: 140px;">BACK TO MENU</button>
       </div>
     </div>
 
@@ -611,8 +715,63 @@
             </div>
           </div>
 
-          <div class="sidebar-section-title" style="margin-top: 15px;">CUSTOM PAINT GARAGE</div>
+          <div class="sidebar-section-title" style="margin-top: 15px;">BASE SKIN TEXTURES</div>
+          <div class="ship-textures-list">
+            <div class="texture-option active" data-skin="default" title="TECHNICAL UV LAYOUT">
+              <div class="texture-preview texture-uvmap"></div>
+              <div class="texture-name">DEFAULT</div>
+            </div>
+            <div class="texture-option" data-skin="freelancer" title="WEATHERED COPPER FIGHTER">
+              <div class="texture-preview texture-freelancer"></div>
+              <div class="texture-name">FREELANCER</div>
+            </div>
+            <div class="texture-option" data-skin="lordshadow" title="CARBON STEEL PLATING">
+              <div class="texture-preview texture-lordshadow"></div>
+              <div class="texture-name">LORD SHADOW</div>
+            </div>
+            <div class="texture-option" data-skin="psionic" title="HEXAGON ENERGY SHIELDS">
+              <div class="texture-preview texture-psionic"></div>
+              <div class="texture-name">PSIONIC</div>
+            </div>
+            <div class="texture-option" data-skin="shadee" title="STEALTH FOREST CAMO">
+              <div class="texture-preview texture-shadee"></div>
+              <div class="texture-name">SHADEE</div>
+            </div>
+            <div class="texture-option" data-skin="thor" title="HIGH-VOLTAGE GOLD CIRCUITRY">
+              <div class="texture-preview texture-thor"></div>
+              <div class="texture-name">THOR</div>
+            </div>
+            <div class="texture-option" data-skin="spaceship_hull" title="DARK RIVETED METALLIC ARMOR">
+              <div class="texture-preview texture-hull"></div>
+              <div class="texture-name">HULL PLATING</div>
+            </div>
+            <div class="texture-option" data-skin="road_metallic" title="INDUSTRIAL CORRUGATED STEEL">
+              <div class="texture-preview texture-road"></div>
+              <div class="texture-name">ROAD METALLIC</div>
+            </div>
+            <div class="texture-option" data-skin="skin1" title="MAJADROID SPACE PATTERN 1">
+              <div class="texture-preview texture-majadroid1"></div>
+              <div class="texture-name">MAJADROID 1</div>
+            </div>
+            <div class="texture-option" data-skin="skin2" title="MAJADROID SPACE PATTERN 2">
+              <div class="texture-preview texture-majadroid2"></div>
+              <div class="texture-name">MAJADROID 2</div>
+            </div>
+            <div class="texture-option" data-skin="skin3" title="MAJADROID SPACE PATTERN 3">
+              <div class="texture-preview texture-majadroid3"></div>
+              <div class="texture-name">MAJADROID 3</div>
+            </div>
+            <div class="texture-option" data-skin="skin4" title="MAJADROID SPACE PATTERN 4">
+              <div class="texture-preview texture-majadroid4"></div>
+              <div class="texture-name">MAJADROID 4</div>
+            </div>
+          </div>
+
+          <div class="sidebar-section-title" style="margin-top: 15px;">ACCENT PAINT OVERLAY</div>
           <div class="ship-skins-list">
+            <div class="color-preset-option" data-color="#ffffff" style="background: #ffffff; border: 2px dashed #ff007f; position: relative;" title="NO OVERLAY">
+              <span style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; color: #ff0055; font-weight: bold; font-size: 14px; line-height: 1;">&times;</span>
+            </div>
             <div class="color-preset-option active" data-color="#ff007f" style="background: #ff007f;" title="CYBER PINK"></div>
             <div class="color-preset-option" data-color="#00ffff" style="background: #00ffff;" title="NEON CYAN"></div>
             <div class="color-preset-option" data-color="#39ff14" style="background: #39ff14;" title="ELECTRIC LIME"></div>
@@ -622,7 +781,7 @@
           </div>
           
           <div class="color-picker-input-container">
-            <label for="ship-color-picker" class="color-picker-label">CHOOSE CUSTOM COLOR</label>
+            <label for="ship-color-picker" class="color-picker-label">CHOOSE ACCENT COLOR</label>
             <input type="color" id="ship-color-picker" value="#ff007f">
           </div>
         </div>

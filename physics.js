@@ -79,7 +79,13 @@ export class PhysicsEngine {
       // Jumping & Flight dynamics
       fallGravityMultiplier: 1.45,
       variableJumpDampening: 0.82,
-      coyoteTimeBuffer: 0.25
+      coyoteTimeBuffer: 0.25,
+
+      // Configurable Cockpit Camera Offsets
+      cockpitOffsetX: 0.0,
+      cockpitOffsetY: 0.0,
+      cockpitOffsetZ: 0.0,
+      showCockpitBezel: 0.0
     };
     this.boatThrottleEnabled = false;
   }

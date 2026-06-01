@@ -118,6 +118,41 @@ function computeTileGeometry(tile) {
   return { height: 0.45, yPos: -0.225, isObstacle: false };
 }
 
+/**
+ * Adjust texture coordinates (UVs) of BoxGeometry dynamically to prevent
+ * aspect-ratio stretching and squishing on side faces of variable-dimension blocks.
+ * Maps texture at a consistent density of 1 repeat per 2.0 units of space.
+ */
+function adjustBoxUVs(geometry, width, height, length) {
+  const uvAttribute = geometry.attributes.uv;
+  if (!uvAttribute) return;
+  for (let i = 0; i < uvAttribute.count; i++) {
+    let u = uvAttribute.getX(i);
+    let v = uvAttribute.getY(i);
+    
+    // Determine which face this vertex belongs to:
+    // Face order: 0 (+X), 1 (-X), 2 (+Y), 3 (-Y), 4 (+Z), 5 (-Z)
+    const faceIndex = Math.floor(i / 4);
+    
+    let scaleU = 1.0;
+    let scaleV = 1.0;
+    
+    if (faceIndex === 0 || faceIndex === 1) { // Sides (+X, -X): UV maps Z, Y
+      scaleU = length / 2.0;
+      scaleV = height / 2.0;
+    } else if (faceIndex === 2 || faceIndex === 3) { // Top/Bottom (+Y, -Y): UV maps X, Z
+      scaleU = width / 2.0;
+      scaleV = length / 2.0;
+    } else if (faceIndex === 4 || faceIndex === 5) { // Ends (+Z, -Z): UV maps X, Y
+      scaleU = width / 2.0;
+      scaleV = height / 2.0;
+    }
+    
+    uvAttribute.setXY(i, u * scaleU, v * scaleV);
+  }
+  uvAttribute.needsUpdate = true;
+}
+
 const textureCache = new Map();
 
 /**
@@ -170,8 +205,8 @@ function getSeamlessTexture(colorIndex) {
       if (tex) {
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
-        // Increase texture tile size to prevent tiling too small
-        tex.repeat.set(0.5, 1.0);
+        // Set repeat to 1.0, 1.0 as physical scaling is now done dynamically in UV coordinates
+        tex.repeat.set(1.0, 1.0);
         tex.anisotropy = 16;
       }
     });
@@ -621,8 +656,8 @@ function getLoadedTexture(url) {
       if (tex) {
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
-        // Increase texture tile size to prevent tiling too small
-        tex.repeat.set(0.5, 1.0);
+        // Set repeat to 1.0, 1.0 as physical scaling is now done dynamically in UV coordinates
+        tex.repeat.set(1.0, 1.0);
         tex.anisotropy = 16;
       }
     });
@@ -681,9 +716,15 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   if (texture) {
     matParams.map = texture;
   }
+  
+  // Assign themed normalMap if loaded, else fall back to default steel plating normal map for premium bump pop!
+  if (!normalTexture && !isTestEnv) {
+    normalTexture = getLoadedTexture(cpPatternNormalUrl);
+  }
+
   if (normalTexture) {
     matParams.normalMap = normalTexture;
-    matParams.normalScale = new THREE.Vector2(1, 1);
+    matParams.normalScale = new THREE.Vector2(2.5, 2.5); // Highly pronounced bump protrusion scale
   }
 
   if (isGlowing) {
@@ -729,6 +770,7 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
 
   // Main block mesh
   const geom = new THREE.BoxGeometry(TILE_WIDTH, height, TILE_LENGTH);
+  adjustBoxUVs(geom, TILE_WIDTH, height, TILE_LENGTH);
   const mesh = new THREE.Mesh(geom, material);
   mesh.position.set(xPos, yPos, zPos - TILE_LENGTH / 2);
   mesh.receiveShadow = true;
@@ -842,16 +884,19 @@ function buildMergedTunnel(group, r, palette, scene, collidables, roadMeshes, ro
     const height = 0.45;
 
     const leftWallGeom = new THREE.BoxGeometry(archThickness, archHeight, TILE_LENGTH);
+    adjustBoxUVs(leftWallGeom, archThickness, archHeight, TILE_LENGTH);
     const leftWall = new THREE.Mesh(leftWallGeom, tunnelMaterial);
     leftWall.position.set(xPos - TILE_WIDTH / 2 + archThickness / 2, baseY + archHeight / 2, meshZ);
     scene.add(leftWall);
 
     const rightWallGeom = new THREE.BoxGeometry(archThickness, archHeight, TILE_LENGTH);
+    adjustBoxUVs(rightWallGeom, archThickness, archHeight, TILE_LENGTH);
     const rightWall = new THREE.Mesh(rightWallGeom, tunnelMaterial);
     rightWall.position.set(xPos + TILE_WIDTH / 2 - archThickness / 2, baseY + archHeight / 2, meshZ);
     scene.add(rightWall);
 
     const ceilingGeom = new THREE.BoxGeometry(TILE_WIDTH, archThickness, TILE_LENGTH);
+    adjustBoxUVs(ceilingGeom, TILE_WIDTH, archThickness, TILE_LENGTH);
     const ceiling = new THREE.Mesh(ceilingGeom, tunnelMaterial);
     ceiling.position.set(xPos, baseY + archHeight - archThickness / 2, meshZ);
     scene.add(ceiling);
@@ -1019,6 +1064,7 @@ function buildFinishLine(trackLength, scene, roadMeshes, zOffset = 0, isInfinite
 
   // Ground strip
   const finishGeom = new THREE.BoxGeometry(finishWidth, 0.2, 2.0);
+  adjustBoxUVs(finishGeom, finishWidth, 0.2, 2.0);
   const finishLineMesh = new THREE.Mesh(finishGeom, finishMat);
   finishLineMesh.position.set(0, -0.05, finishZ);
   scene.add(finishLineMesh);
@@ -1026,17 +1072,20 @@ function buildFinishLine(trackLength, scene, roadMeshes, zOffset = 0, isInfinite
 
   // Left arch pillar
   const finishArchGeom = new THREE.BoxGeometry(0.3, 8.0, 0.3);
+  adjustBoxUVs(finishArchGeom, 0.3, 8.0, 0.3);
   const leftFin = new THREE.Mesh(finishArchGeom, finishMat);
   leftFin.position.set(-finishWidth / 2, 4.0, finishZ);
   scene.add(leftFin);
 
   // Right arch pillar
   const rightFin = new THREE.Mesh(finishArchGeom, finishMat);
+  leftFin.geometry = finishArchGeom; // Use same adjusted geometry for right pillar
   rightFin.position.set(finishWidth / 2, 4.0, finishZ);
   scene.add(rightFin);
 
   // Top beam
   const topFinGeom = new THREE.BoxGeometry(finishWidth, 0.3, 0.3);
+  adjustBoxUVs(topFinGeom, finishWidth, 0.3, 0.3);
   const topFin = new THREE.Mesh(topFinGeom, finishMat);
   topFin.position.set(0, 8.0, finishZ);
   scene.add(topFin);

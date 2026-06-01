@@ -8,6 +8,7 @@ The project is a web-based clone of the classic DOS game "Sky Roads", built usin
 - **graphics.js**: Rendering engine, Three.js integration, custom procedural galaxy particles and volumetric noise shaders, thruster fire trails, cockpit overlays.
 - **physics.js**: Collision detection, movement updates, gravity, velocity, ship coordinates, game-grid interactions, customizable bounce/gravity factor, and KeyboardController.
 - **levelLoader.js**: LZS/binary file decompression, parsing files like `WORLD0.LZS` to load levels, tracks, oxygen/fuel values, speed indicators, tunnel translations and rounded geometry scales.
+- **preview.js**: High-fidelity 3D WebGL garage editor preview engine with anisotropic filtering, standard sRGB color spaces, and real-time custom texture and accent paint overlays.
 - **audio.js**: Sound effect and music handling, audio contexts, buffer management.
 
 ## Milestones
@@ -20,6 +21,8 @@ The project is a web-based clone of the classic DOS game "Sky Roads", built usin
 | 5 | Pause Menu Overlay | Sleek top-left menu button to pause gameplay, rendering, and physics. Blurred glassmorphic cards with RESUME, RETRY, QUIT TO MAIN MENU | M3 | DONE |
 | 6 | Automated Unit Tests & Verification | Write comprehensive unit and integration tests under `tests/` verifying touch control inputs, run Vitest, and perform final audits | M4, M5 | DONE |
 | 7 | Responsive HUD & Menu Scaling | Design media query styles and CSS scaling factors to guarantee visual perfection on iPad, Android, and orientations | M6 | DONE |
+| 8 | Cockpit 3-Slot Bezel Realignment | Realignment of Dynamic HUD Screens (Speedometer, Telemetry, and Minimap Scanner) directly into the panoramic dashboard bezel console slots | M2 | DONE |
+| 9 | Spaceship Garage Overhaul | Overhaul ship Garage UI with 12 selectable Base Skin Textures, accent color overlays, storage auto-migrations, and high-DPI anisotropic optimizations | M6, M8 | DONE |
 
 ## Interface Contracts
 ### `KeyboardController` Touch API

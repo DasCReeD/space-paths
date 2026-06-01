@@ -178,5 +178,22 @@ describe('CockpitConsole3D', () => {
       expect(cockpit.speedNeedlePivot.rotation.z).toBeCloseTo((Math.PI * 0.75) - 0.5 * Math.PI * 1.5, 2);
       expect(cockpit.o2Dial.scale.y).toBeCloseTo(0.8, 2);
     });
+
+    it('should show/hide casing and border based on showCockpitBezel setting', () => {
+      const mockPhysics = {
+        velocity: new THREE.Vector3(0, 0, 0),
+        activeEffects: {},
+        settings: { showCockpitBezel: 0.0 }
+      };
+
+      cockpit.update(mockPhysics, null, 'cockpit');
+      expect(cockpit.casing.visible).toBe(false);
+      expect(cockpit.border.visible).toBe(false);
+
+      mockPhysics.settings.showCockpitBezel = 1.0;
+      cockpit.update(mockPhysics, null, 'cockpit');
+      expect(cockpit.casing.visible).toBe(true);
+      expect(cockpit.border.visible).toBe(true);
+    });
   });
 });

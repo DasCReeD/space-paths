@@ -445,6 +445,79 @@ describe('GraphicsEngine', () => {
       }
       expect(engine.cameraHeightAdjust).toBe(3.0);
     });
+
+    it('should apply custom cockpit camera offsets from physics settings in cockpit mode', () => {
+      engine.cameraMode = 'cockpit';
+      
+      const physicsDefault = createMockPhysics({
+        position: new THREE.Vector3(0, 0, -30),
+        settings: {
+          cockpitOffsetX: 0.0,
+          cockpitOffsetY: 0.0,
+          cockpitOffsetZ: 0.0
+        }
+      });
+      // Let default camera position fully settle
+      engine.camera.position.set(0, 3, 5);
+      for (let i = 0; i < 20; i++) {
+        engine.update(physicsDefault, 0.016);
+      }
+      const defaultCamPos = engine.camera.position.clone();
+
+      const physicsOffset = createMockPhysics({
+        position: new THREE.Vector3(0, 0, -30),
+        settings: {
+          cockpitOffsetX: 0.5,
+          cockpitOffsetY: 0.2,
+          cockpitOffsetZ: -0.4
+        }
+      });
+      
+      // Let offset camera position fully settle starting from same initial position
+      engine.camera.position.set(0, 3, 5);
+      for (let i = 0; i < 20; i++) {
+        engine.update(physicsOffset, 0.016);
+      }
+      
+      const offsetCamPos = engine.camera.position.clone();
+      
+      // X should shift right (positive X)
+      expect(offsetCamPos.x).toBeGreaterThan(defaultCamPos.x);
+      // Y should shift up (positive Y)
+      expect(offsetCamPos.y).toBeGreaterThan(defaultCamPos.y);
+      // Z should shift forward (negative Z is forward direction for ship pointing -Z)
+      expect(offsetCamPos.z).toBeLessThan(defaultCamPos.z);
+    });
+
+    it('should pull the camera back and focus look-at target on the explosion center when ship is dead', () => {
+      const physicsDead = createMockPhysics({
+        position: new THREE.Vector3(0, 0, -30),
+        isDead: true
+      });
+
+      // Place camera close to the ship
+      engine.camera.position.set(0, 0.4, -30);
+      engine.camLookTarget = new THREE.Vector3(0, 0.4, -35);
+
+      // Perform a few updates to simulate camera transition lerp when dead
+      for (let i = 0; i < 15; i++) {
+        engine.update(physicsDead, 0.016);
+      }
+
+      // Cinematic death camera positions ideal position at:
+      // idealCamPos.y += 3.5; idealCamPos.z += 9.0;
+      // Since physics.position is (0, 0, -30), idealCamPos is (0, 3.5, -21)
+      // Camera position should have pulled back (Z coordinate increased, y coordinate increased)
+      expect(engine.camera.position.z).toBeGreaterThan(-30);
+      expect(engine.camera.position.y).toBeGreaterThan(0.4);
+
+      // Focus should transition toward the center of the explosion (0, 0, -30) from (0, 0.4, -35)
+      expect(engine.camLookTarget.x).toBeCloseTo(0, 2);
+      expect(engine.camLookTarget.y).toBeGreaterThan(0.0);
+      expect(engine.camLookTarget.y).toBeLessThan(0.4);
+      expect(engine.camLookTarget.z).toBeGreaterThan(-35);
+      expect(engine.camLookTarget.z).toBeLessThan(-30);
+    });
   });
 
   // ── triggerExplosion() ───────────────────────────────────────────────────
@@ -865,6 +938,18 @@ describe('GraphicsEngine', () => {
       engine.changeShipSkin('freelancer');
       expect(engine.currentSkinName).toBe('freelancer');
     });
+
+    it('should support dual customizable texture and paint color signature', () => {
+      engine.changeShipSkin('lordshadow', '#ff007f');
+      expect(engine.currentSkinName).toBe('lordshadow');
+      expect(engine.currentSkinColor).toBe('#ff007f');
+    });
+
+    it('should handle legacy hex color single argument gracefully', () => {
+      engine.changeShipSkin('#00ffff');
+      expect(engine.currentSkinName).toBe('default');
+      expect(engine.currentSkinColor).toBe('#00ffff');
+    });
   });
 
   // ── changeShipModel() ────────────────────────────────────────────────────
@@ -880,6 +965,13 @@ describe('GraphicsEngine', () => {
       expect(engine.currentModelName).toBe('ship1');
       expect(engine.currentSkinName).toBe('skin1');
       expect(engine.isObjLoaded).toBe(false);
+    });
+
+    it('should support dual customizable texture and color parameters', () => {
+      engine.changeShipModel('corvette1', 'psionic', '#39ff14');
+      expect(engine.currentModelName).toBe('corvette1');
+      expect(engine.currentSkinName).toBe('psionic');
+      expect(engine.currentSkinColor).toBe('#39ff14');
     });
 
     it('should dispose and remove existing loaded custom model components', () => {

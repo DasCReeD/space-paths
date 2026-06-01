@@ -8,6 +8,8 @@ import lordshadowSkinUrl from './lordshadow.jpg';
 import psionicSkinUrl from './psionic.jpg';
 import shadeeSkinUrl from './shadee.jpg';
 import thorSkinUrl from './thor.jpg';
+import spaceshipHullPlatingUrl from './spaceship_hull_plating.png';
+import roadMetallicUrl from './road_metallic_plate.png';
 
 // Pack A: Battle Corvette & Frigate FBX models
 import corvette1Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Corvette_01.fbx?url';
@@ -55,6 +57,10 @@ export const SHIP_SKINS = {
   psionic: psionicSkinUrl,
   shadee: shadeeSkinUrl,
   thor: thorSkinUrl,
+  
+  // Premium skins
+  spaceship_hull: spaceshipHullPlatingUrl,
+  road_metallic: roadMetallicUrl,
   
   // Majadroid skins
   skin1: `${MAJADROID_BASE}/tex01-512.png`,
@@ -224,6 +230,7 @@ export class ShipPreviewEngine {
     
     this.currentModelName = 'original';
     this.currentSkinName = 'default';
+    this.currentSkinColor = '#ffffff';
     this.skins = SHIP_SKINS;
     
     // Detect test environment
@@ -231,9 +238,10 @@ export class ShipPreviewEngine {
     this.isTestEnv = isTestEnv;
   }
 
-  init(container, initialModelName = 'original', initialSkinName = 'default') {
+  init(container, initialModelName = 'original', initialSkinName = 'default', initialSkinColor = '#ffffff') {
     this.currentModelName = initialModelName;
     this.currentSkinName = initialSkinName;
+    this.currentSkinColor = initialSkinColor;
     
     this.scene = new THREE.Scene();
     
@@ -245,7 +253,7 @@ export class ShipPreviewEngine {
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.shadowMap.enabled = true;
     container.appendChild(this.renderer.domElement);
 
@@ -269,17 +277,56 @@ export class ShipPreviewEngine {
     this.scene.add(topLight);
 
     // Create the ship preview mesh
-    this.createPreviewShip(initialModelName, initialSkinName);
+    this.createPreviewShip(initialModelName, initialSkinName, initialSkinColor);
 
     // Start animation loop
     this.animate();
   }
 
-  loadModelAndTexture(modelName, skinNameOrColor, onComplete) {
+  optimizeShipTexture(texture) {
+    if (!texture) return;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    
+    if (this.renderer && this.renderer.capabilities) {
+      texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    }
+    
+    // Enforce high-fidelity linear mipmap filtering
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    
+    // Set standard sRGB Color Space with robust backward-compatibility fallbacks
+    if (THREE.SRGBColorSpace !== undefined) {
+      texture.colorSpace = THREE.SRGBColorSpace;
+    } else if (THREE.sRGBEncoding !== undefined) {
+      texture.encoding = THREE.sRGBEncoding;
+    }
+    
+    texture.needsUpdate = true;
+  }
+
+  loadModelAndTexture(modelName, skinName, colorHex, onComplete) {
+    if (typeof colorHex === 'function') {
+      onComplete = colorHex;
+      if (skinName && skinName.startsWith('#')) {
+        colorHex = skinName;
+        skinName = 'default';
+      } else {
+        colorHex = '#ffffff';
+      }
+    }
+    if (!skinName) skinName = 'default';
+    if (!colorHex) colorHex = '#ffffff';
+
     const modelUrl = SHIP_MODELS[modelName] || fighterObjUrl;
     const isFbx = modelUrl.toLowerCase().includes('.fbx') || modelUrl.toLowerCase().includes('fbx-files') || modelUrl.toLowerCase().includes('battle');
     
     const applyTextureToModel = (texture, obj) => {
+      if (texture) {
+        this.optimizeShipTexture(texture);
+      }
       const shipMaterial = new THREE.MeshStandardMaterial({
         map: texture || null,
         roughness: 0.4,
@@ -316,20 +363,20 @@ export class ShipPreviewEngine {
       }
     };
 
-    if (skinNameOrColor.startsWith('#')) {
-      const baseTexUrl = BASE_TEXTURES[modelName] || uvMapUrl;
+    const skinUrl = this.skins[skinName] || uvMapUrl;
+
+    if (colorHex && colorHex.toLowerCase() !== '#ffffff') {
       const isPackA = modelName.startsWith('corvette') || modelName.startsWith('frigate');
-      
-      getCachedImage(baseTexUrl, (img) => {
+      getCachedImage(skinUrl, (img) => {
         if (img) {
-          const canvas = swapTextureColor(img, skinNameOrColor, isPackA);
+          const canvas = swapTextureColor(img, colorHex, isPackA);
           const canvasTexture = new THREE.CanvasTexture(canvas);
           canvasTexture.wrapS = THREE.ClampToEdgeWrapping;
           canvasTexture.wrapT = THREE.ClampToEdgeWrapping;
           loadGeometry(canvasTexture);
         } else {
           const texLoader = new THREE.TextureLoader();
-          texLoader.load(baseTexUrl, (tex) => {
+          texLoader.load(skinUrl, (tex) => {
             if (tex) {
               tex.wrapS = THREE.ClampToEdgeWrapping;
               tex.wrapT = THREE.ClampToEdgeWrapping;
@@ -339,7 +386,6 @@ export class ShipPreviewEngine {
         }
       });
     } else {
-      const skinUrl = this.skins[skinNameOrColor] || uvMapUrl;
       const texLoader = new THREE.TextureLoader();
       texLoader.load(skinUrl, (tex) => {
         if (tex) {
@@ -351,15 +397,27 @@ export class ShipPreviewEngine {
     }
   }
 
-  createPreviewShip(modelName, skinName) {
+  createPreviewShip(modelName, skinName, colorHex) {
+    if (colorHex === undefined && typeof skinName === 'string') {
+      if (skinName.startsWith('#')) {
+        colorHex = skinName;
+        skinName = 'default';
+      } else {
+        colorHex = '#ffffff';
+      }
+    }
+    if (!skinName) skinName = 'default';
+    if (!colorHex) colorHex = '#ffffff';
+
     this.currentModelName = modelName;
     this.currentSkinName = skinName;
+    this.currentSkinColor = colorHex;
     
     this.shipMesh = new THREE.Group();
     this.scene.add(this.shipMesh);
 
     try {
-      this.loadModelAndTexture(modelName, skinName, (obj) => {
+      this.loadModelAndTexture(modelName, skinName, colorHex, (obj) => {
         obj.position.set(0, 0, 0);
         const metrics = SHIP_METRICS[modelName] || SHIP_METRICS.original;
         const rotationY = metrics.rotationY !== undefined ? metrics.rotationY : -Math.PI / 2;
@@ -391,7 +449,22 @@ export class ShipPreviewEngine {
     }
   }
 
-  changeModel(modelName, skinNameOrColor) {
+  changeModel(modelName, skinName, colorHex) {
+    if (colorHex === undefined && typeof skinName === 'string') {
+      if (skinName.startsWith('#')) {
+        colorHex = skinName;
+        skinName = 'default';
+      } else {
+        colorHex = '#ffffff';
+      }
+    }
+    if (!skinName) skinName = 'default';
+    if (!colorHex) colorHex = '#ffffff';
+
+    this.currentModelName = modelName;
+    this.currentSkinName = skinName;
+    this.currentSkinColor = colorHex;
+
     if (this.shipMesh) {
       this.scene.remove(this.shipMesh);
       this.shipMesh.traverse((child) => {
@@ -407,14 +480,25 @@ export class ShipPreviewEngine {
       this.shipMesh = null;
     }
 
-    this.createPreviewShip(modelName, skinNameOrColor);
+    this.createPreviewShip(modelName, skinName, colorHex);
   }
 
-  changeSkin(skinNameOrColor) {
-    this.currentSkinName = skinNameOrColor;
+  changeSkin(skinName, colorHex) {
+    if (colorHex === undefined) {
+      if (skinName && skinName.startsWith('#')) {
+        colorHex = skinName;
+        skinName = 'default';
+      } else {
+        colorHex = '#ffffff';
+      }
+    }
+    if (!skinName) skinName = 'default';
+    this.currentSkinName = skinName;
+    this.currentSkinColor = colorHex;
     
     const applyLoadedTexture = (texture) => {
       if (!texture) return;
+      this.optimizeShipTexture(texture);
       if (this.shipMesh) {
         this.shipMesh.traverse((child) => {
           if (child.isMesh && child.material) {
@@ -425,13 +509,14 @@ export class ShipPreviewEngine {
       }
     };
 
-    if (skinNameOrColor.startsWith('#')) {
-      const baseTexUrl = BASE_TEXTURES[this.currentModelName] || uvMapUrl;
+    const skinUrl = this.skins[skinName] || uvMapUrl;
+
+    if (colorHex && colorHex.toLowerCase() !== '#ffffff') {
       const isPackA = this.currentModelName.startsWith('corvette') || this.currentModelName.startsWith('frigate');
       
-      getCachedImage(baseTexUrl, (img) => {
+      getCachedImage(skinUrl, (img) => {
         if (img) {
-          const canvas = swapTextureColor(img, skinNameOrColor, isPackA);
+          const canvas = swapTextureColor(img, colorHex, isPackA);
           const canvasTexture = new THREE.CanvasTexture(canvas);
           canvasTexture.wrapS = THREE.ClampToEdgeWrapping;
           canvasTexture.wrapT = THREE.ClampToEdgeWrapping;
@@ -439,7 +524,6 @@ export class ShipPreviewEngine {
         }
       });
     } else {
-      const skinUrl = this.skins[skinNameOrColor] || uvMapUrl;
       const textureLoader = new THREE.TextureLoader();
       try {
         textureLoader.load(skinUrl, (texture) => {

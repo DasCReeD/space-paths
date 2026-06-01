@@ -146,6 +146,7 @@ function createMinimalDOM() {
       </div>
 
       <button id="btn-calibrator-reset"></button>
+      <button id="btn-calibrator-save-default"></button>
       <button id="btn-calibrator-close"></button>
     </div>
 
@@ -177,6 +178,23 @@ function createMinimalDOM() {
     </div>
 
     <div id="success-screen" class="overlay-screen hidden">
+      <span id="score-val-time"></span>
+      <span id="score-val-speed"></span>
+      <span id="score-val-collisions"></span>
+      <span id="score-val-speed-bonus"></span>
+      <span id="score-val-time-bonus"></span>
+      <span id="score-val-penalty"></span>
+      <div id="score-row-perfect-bonus"></div>
+      <span id="score-val-final"></span>
+
+      <div id="leaderboard-input-box">
+        <input type="text" id="input-score-initials">
+        <button id="btn-score-submit"></button>
+      </div>
+      <table>
+        <tbody id="leaderboard-table-body"></tbody>
+      </table>
+
       <button id="btn-success-next"></button>
       <button id="btn-success-menu"></button>
     </div>
@@ -196,6 +214,7 @@ function createMinimalDOM() {
       <div id="hud-gravity-text">0800</div>
       <div id="hud-pack-name">STANDARD PACK</div>
       <div id="hud-road-name">DEMO ROAD</div>
+      <span id="hud-score-text">000000</span>
       <div id="gauge-speed-ring" style="stroke-dashoffset: 565.48px;"></div>
       <div id="gauge-oxygen-arc" style="stroke-dashoffset: 0px;"></div>
       <div id="gauge-fuel-arc" style="stroke-dashoffset: 0px;"></div>
@@ -837,6 +856,208 @@ describe('GameManager (app.js)', () => {
       
       // Focus should be blurred from the slider (body should get focus)
       expect(document.activeElement).not.toBe(slider);
+    });
+
+    it('should save current tuned active preset as baseline default and isolate from other presets', async () => {
+      localStorage.clear();
+
+      await loadApp();
+
+      // Open the physics calibrator panel
+      await clickAndFlush('btn-settings-physics');
+
+      // Click snappy preset button to select snappy preset
+      await clickAndFlush('preset-btn-snappy');
+
+      // Verify snappy is active. Since maxSpeedNormal is a range input, let's change it.
+      const maxSpeedInput = document.getElementById('input-maxSpeedNormal');
+      expect(maxSpeedInput).not.toBeNull();
+      
+      // Tune the maxSpeedNormal slider to 45.0
+      maxSpeedInput.value = '45';
+      maxSpeedInput.dispatchEvent(new Event('input'));
+      await flushPromises();
+
+      // Ensure the tuned value is stored in snappy's localStorage active configuration
+      const activeSnappyTuned = JSON.parse(localStorage.getItem('skyroads_physics_preset_snappy'));
+      expect(activeSnappyTuned.maxSpeedNormal).toBe(45);
+
+      // Verify the baseline default has not been created yet in localStorage
+      expect(localStorage.getItem('skyroads_physics_preset_baseline_snappy')).toBeNull();
+
+      // Click "SAVE CURRENT AS DEFAULT" button
+      await clickAndFlush('btn-calibrator-save-default');
+
+      // Verify that the baseline default override for snappy is now saved in localStorage
+      const snappyBaseline = JSON.parse(localStorage.getItem('skyroads_physics_preset_baseline_snappy'));
+      expect(snappyBaseline).not.toBeNull();
+      expect(snappyBaseline.maxSpeedNormal).toBe(45);
+
+      // Tune the slider to a different value (e.g. 50) simulating further adjustment
+      maxSpeedInput.value = '50';
+      maxSpeedInput.dispatchEvent(new Event('input'));
+      await flushPromises();
+
+      // Reset the calibrator preset
+      await clickAndFlush('btn-calibrator-reset');
+
+      // It should reset to our custom default (45) instead of the factory default (which is not 45)
+      const snappyResetConfig = JSON.parse(localStorage.getItem('skyroads_physics_preset_snappy'));
+      expect(snappyResetConfig.maxSpeedNormal).toBe(45);
+      expect(maxSpeedInput.value).toBe('45');
+
+      // Now verify preset isolation: check that VGA baseline remains unaffected
+      expect(localStorage.getItem('skyroads_physics_preset_baseline_vga')).toBeNull();
+    });
+  });
+
+  // ── Level Scoring and Leaderboard Tests ───────────────────────────────────
+
+  describe('Level Scoring and Leaderboards', () => {
+    async function startAndGetFrameRunner() {
+      await loadApp();
+      await clickAndFlush('btn-play-standard');
+      const grid = document.getElementById('level-grid');
+      await clickElementAndFlush(grid.querySelector('.level-item'));
+    }
+
+    function runOneFrame() {
+      const lastCall = window.requestAnimationFrame.mock.calls;
+      const rafCallback = lastCall[lastCall.length - 1]?.[0];
+      if (rafCallback) {
+        performance.now.mockReturnValue(16);
+        rafCallback(16);
+      }
+    }
+
+    it('should calculate and display real-time score correctly on updateHUD', async () => {
+      await startAndGetFrameRunner();
+      
+      // Test at standard easy difficulty (multiplier 1.0)
+      mockPhysicsInstance.difficulty = 'easy';
+      mockPhysicsInstance.position.set(0, 0.2, -20);
+      mockPhysicsInstance.isDead = false;
+      
+      const manager = window.gameManagerInstance;
+      manager.wallHits = 1;
+      
+      runOneFrame();
+      
+      // distanceScore = 20 * 100 = 2000
+      // collisionPenalty = 1 * 800 = 800
+      // liveScore = Math.max(0, 2000 * 1.0 - 800) = 1200
+      expect(document.getElementById('hud-score-text').innerText).toBe('001200');
+    });
+
+    it('should scale live score correctly based on difficulty multiplier', async () => {
+      await startAndGetFrameRunner();
+      
+      // Test at normal difficulty (multiplier 1.5)
+      mockPhysicsInstance.difficulty = 'normal';
+      mockPhysicsInstance.position.set(0, 0.2, -30);
+      mockPhysicsInstance.isDead = false;
+      
+      const manager = window.gameManagerInstance;
+      manager.wallHits = 2;
+      
+      runOneFrame();
+      
+      // distanceScore = 30 * 100 = 3000
+      // collisionPenalty = 2 * 800 = 1600
+      // liveScore = Math.max(0, 3000 * 1.5 - 1600) = 4500 - 1600 = 2900
+      expect(document.getElementById('hud-score-text').innerText).toBe('002900');
+    });
+
+    it('should compute accurate score breakdown at level completion', async () => {
+      await loadApp();
+      await clickAndFlush('btn-play-standard');
+      const grid = document.getElementById('level-grid');
+      await clickElementAndFlush(grid.querySelector('.level-item'));
+
+      const manager = window.gameManagerInstance;
+      expect(manager).not.toBeNull();
+
+      // Configure mock level run metrics
+      manager.totalTime = 4.0;
+      manager.speedAccumulator = 300;
+      manager.speedTicks = 10;
+      manager.wallHits = 0;
+      mockPhysicsInstance.difficulty = 'normal'; // multiplier 1.5
+
+      // Call handleSuccess directly to process score calculations and populate DOM
+      manager.handleSuccess();
+
+      // Verify the success screen is active
+      const successScreen = document.getElementById('success-screen');
+      expect(successScreen.classList.contains('active')).toBe(true);
+
+      // Verify exact calculations in the DOM
+      // avgSpeedKmh = 300; speedBonus = 300 * 150 = 45000;
+      // targetTime = 100 / 18 = 5.5555...; timeBonus = (5.5555... - 4) * 300 = 466;
+      // perfectBonus = 5000; raw = 10000 + 45000 + 466 + 5000 = 60466;
+      // final = Math.floor(60466 * 1.5) = 90699;
+      expect(document.getElementById('score-val-time').innerText).toBe('4.00s');
+      expect(document.getElementById('score-val-speed').innerText).toBe('300 km/h');
+      expect(document.getElementById('score-val-collisions').innerText).toBe('0');
+      expect(document.getElementById('score-val-speed-bonus').innerText).toBe('+45,000');
+      expect(document.getElementById('score-val-time-bonus').innerText).toBe('+466');
+      expect(document.getElementById('score-val-penalty').innerText).toBe('-0');
+      expect(document.getElementById('score-row-perfect-bonus').style.display).toBe('flex');
+      expect(document.getElementById('score-val-final').innerText).toBe('090699');
+    });
+
+    it('should save score to leaderboard on submit, sort top 5, highlight entry, and save personal best', async () => {
+      localStorage.clear();
+      await loadApp();
+      await clickAndFlush('btn-play-standard');
+      const grid = document.getElementById('level-grid');
+      await clickElementAndFlush(grid.querySelector('.level-item'));
+
+      const manager = window.gameManagerInstance;
+      manager.totalTime = 10.0;
+      manager.speedAccumulator = 100;
+      manager.speedTicks = 10;
+      manager.wallHits = 1;
+      mockPhysicsInstance.difficulty = 'easy'; // mult 1.0
+
+      // Call handleSuccess directly
+      manager.handleSuccess();
+
+      // base 10000 + speed 15000 + time 0 - penalty 800 + perfect 0 = 24200 * 1.0 = 24200
+      expect(document.getElementById('score-val-final').innerText).toBe('024200');
+
+      // Populate initials
+      const input = document.getElementById('input-score-initials');
+      input.value = 'WIN';
+      
+      // Submit score
+      await clickAndFlush('btn-score-submit');
+
+      // Verify localStorage entries
+      const leaderboardKey = `skyroads_leaderboard_standard_0`;
+      const leaderboard = JSON.parse(localStorage.getItem(leaderboardKey));
+      expect(leaderboard).toHaveLength(1);
+      expect(leaderboard[0].initials).toBe('WIN');
+      expect(leaderboard[0].score).toBe(24200);
+
+      // Verify personal best badge was updated in localStorage
+      const bestScoreKey = `skyroads_best_score_standard_0`;
+      expect(localStorage.getItem(bestScoreKey)).toBe('24200');
+
+      // Submit a lower score to test sorting and top 5 preservation
+      manager.wallHits = 5; // higher penalty -> lower score
+      manager.handleSuccess();
+      
+      input.value = 'LOS';
+      await clickAndFlush('btn-score-submit');
+
+      const updatedLeaderboard = JSON.parse(localStorage.getItem(leaderboardKey));
+      expect(updatedLeaderboard).toHaveLength(2);
+      expect(updatedLeaderboard[0].initials).toBe('WIN'); // Higher score first
+      expect(updatedLeaderboard[1].initials).toBe('LOS'); // Lower score second
+
+      // Personal best should still remain WIN's score since it was higher
+      expect(localStorage.getItem(bestScoreKey)).toBe('24200');
     });
   });
 });

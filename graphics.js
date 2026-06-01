@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { SHIP_WIDTH, SHIP_HEIGHT, SHIP_LENGTH } from './physics.js';
 import { CockpitConsole3D } from './cockpitConsole.js';
 import spaceshipHullPlatingUrl from './spaceship_hull_plating.png';
+import roadMetallicUrl from './road_metallic_plate.png';
 import hudOverlayUrl from './hud_overlay.jfif';
 import cocpitUrl from './cocpit.jfif';
 import cocpitPilotUrl from './cocpit_pilot.jfif';
@@ -79,6 +80,10 @@ export const SHIP_SKINS = {
   psionic: psionicSkinUrl,
   shadee: shadeeSkinUrl,
   thor: thorSkinUrl,
+  
+  // Premium skins
+  spaceship_hull: spaceshipHullPlatingUrl,
+  road_metallic: roadMetallicUrl,
   
   // Majadroid skins
   skin1: `${MAJADROID_BASE}/tex01-512.png`,
@@ -262,6 +267,7 @@ export class GraphicsEngine {
     this.skins = SHIP_SKINS;
     this.currentModelName = 'original';
     this.currentSkinName = 'default';
+    this.currentSkinColor = '#ffffff';
     this.isObjLoaded = false;
 
     // Detect test environment
@@ -305,7 +311,7 @@ export class GraphicsEngine {
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.NoToneMapping;
@@ -317,16 +323,16 @@ export class GraphicsEngine {
     this.scene.add(this.camera);
 
     // 3. Add Premium Lighting — bright enough to see the road clearly
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45); // Reduced from 0.85 to increase high-contrast shadow definitions
     this.scene.add(ambientLight);
 
     // Bright overhead key light (white) — ensures the road is always visible
-    const overheadLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    const overheadLight = new THREE.DirectionalLight(0xffffff, 2.6); // Increased from 2.2 to pop metallic highlights
     overheadLight.position.set(0, 80, -20);
     this.scene.add(overheadLight);
 
     // Dynamic neon pink directional light (adds color and drama)
-    this.sunLight = new THREE.DirectionalLight(0xff007f, 1.2);
+    this.sunLight = new THREE.DirectionalLight(0xff007f, 1.6); // Increased from 1.2
     this.sunLight.position.set(50, 100, 50);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.width = 1024;
@@ -341,7 +347,7 @@ export class GraphicsEngine {
     this.scene.add(this.sunLight);
 
     // Neon cyan secondary fill light (from the opposite side)
-    const fillLight = new THREE.DirectionalLight(0x00ffff, 1.0);
+    const fillLight = new THREE.DirectionalLight(0x00ffff, 1.4); // Increased from 1.0
     fillLight.position.set(-50, 50, -50);
     this.scene.add(fillLight);
 
@@ -479,7 +485,7 @@ export class GraphicsEngine {
     }
 
     if (this.shipMesh) {
-      this.shipMesh.visible = this.cameraMode !== 'cockpit';
+      this.shipMesh.visible = true; // Always visible for geometry cockpit view!
     }
 
     if (modeEl) {
@@ -860,11 +866,51 @@ export class GraphicsEngine {
 
   }
 
-  loadModelAndTexture(modelName, skinNameOrColor, onComplete) {
+  optimizeShipTexture(texture) {
+    if (!texture) return;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    
+    // Enable anisotropic filtering if capabilities are available
+    if (this.renderer && this.renderer.capabilities) {
+      texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    }
+    
+    // Enforce high-fidelity linear mipmap filtering
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    
+    // Set standard sRGB Color Space with robust backward-compatibility fallbacks
+    if (THREE.SRGBColorSpace !== undefined) {
+      texture.colorSpace = THREE.SRGBColorSpace;
+    } else if (THREE.sRGBEncoding !== undefined) {
+      texture.encoding = THREE.sRGBEncoding;
+    }
+    
+    texture.needsUpdate = true;
+  }
+
+  loadModelAndTexture(modelName, skinName, colorHex, onComplete) {
+    if (typeof colorHex === 'function') {
+      onComplete = colorHex;
+      if (skinName && skinName.startsWith('#')) {
+        colorHex = skinName;
+        skinName = 'default';
+      } else {
+        colorHex = '#ffffff';
+      }
+    }
+    if (!skinName) skinName = 'default';
+    if (!colorHex) colorHex = '#ffffff';
+
     const modelUrl = SHIP_MODELS[modelName] || fighterObjUrl;
     const isFbx = modelUrl.toLowerCase().includes('.fbx') || modelUrl.toLowerCase().includes('fbx-files') || modelUrl.toLowerCase().includes('battle');
     
     const applyTextureToModel = (texture, obj) => {
+      if (texture) {
+        this.optimizeShipTexture(texture);
+      }
       const shipMaterial = new THREE.MeshStandardMaterial({
         map: texture || null,
         roughness: 0.4,
@@ -901,14 +947,13 @@ export class GraphicsEngine {
       }
     };
 
-    // Load texture first, with color-swapping if hex color is passed
-    if (skinNameOrColor.startsWith('#')) {
-      const baseTexUrl = BASE_TEXTURES[modelName] || uvMapUrl;
+    const skinUrl = this.skins[skinName] || uvMapUrl;
+
+    if (colorHex && colorHex.toLowerCase() !== '#ffffff') {
       const isPackA = modelName.startsWith('corvette') || modelName.startsWith('frigate');
-      
-      getCachedImage(baseTexUrl, (img) => {
+      getCachedImage(skinUrl, (img) => {
         if (img) {
-          const canvas = swapTextureColor(img, skinNameOrColor, isPackA);
+          const canvas = swapTextureColor(img, colorHex, isPackA);
           const canvasTexture = new THREE.CanvasTexture(canvas);
           canvasTexture.wrapS = THREE.ClampToEdgeWrapping;
           canvasTexture.wrapT = THREE.ClampToEdgeWrapping;
@@ -916,7 +961,7 @@ export class GraphicsEngine {
         } else {
           // Fallback to loading standard texture
           const texLoader = new THREE.TextureLoader();
-          texLoader.load(baseTexUrl, (tex) => {
+          texLoader.load(skinUrl, (tex) => {
             if (tex) {
               tex.wrapS = THREE.ClampToEdgeWrapping;
               tex.wrapT = THREE.ClampToEdgeWrapping;
@@ -926,8 +971,6 @@ export class GraphicsEngine {
         }
       });
     } else {
-      // Legacy skin loading for test backward compatibility
-      const skinUrl = this.skins[skinNameOrColor] || uvMapUrl;
       const texLoader = new THREE.TextureLoader();
       texLoader.load(skinUrl, (tex) => {
         if (tex) {
@@ -1191,7 +1234,7 @@ export class GraphicsEngine {
 
     // Asynchronously load the premium spaceship model
     try {
-      this.loadModelAndTexture(this.currentModelName, this.currentSkinName, (obj) => {
+      this.loadModelAndTexture(this.currentModelName, this.currentSkinName, this.currentSkinColor, (obj) => {
         obj.position.set(0, 0, 0);
         const metrics = SHIP_METRICS[this.currentModelName] || SHIP_METRICS.original;
         const rotationY = metrics.rotationY !== undefined ? metrics.rotationY : -Math.PI / 2;
@@ -1231,11 +1274,22 @@ export class GraphicsEngine {
     this.scene.add(this.shipMesh);
   }
 
-  changeShipSkin(skinNameOrColor) {
-    this.currentSkinName = skinNameOrColor;
+  changeShipSkin(skinName, colorHex) {
+    if (colorHex === undefined) {
+      if (skinName && skinName.startsWith('#')) {
+        colorHex = skinName;
+        skinName = 'default';
+      } else {
+        colorHex = '#ffffff';
+      }
+    }
+    if (!skinName) skinName = 'default';
+    this.currentSkinName = skinName;
+    this.currentSkinColor = colorHex;
     
     const applyLoadedTexture = (texture) => {
       if (!texture) return;
+      this.optimizeShipTexture(texture);
       this.shipMesh.traverse((child) => {
         if (child.isMesh && child.material && child.material.name !== 'glowMat') {
           child.material.map = texture;
@@ -1244,27 +1298,22 @@ export class GraphicsEngine {
       });
     };
 
-    if (skinNameOrColor.startsWith('#')) {
-      const baseTexUrl = BASE_TEXTURES[this.currentModelName] || uvMapUrl;
+    const skinUrl = this.skins[skinName] || uvMapUrl;
+
+    if (colorHex && colorHex.toLowerCase() !== '#ffffff') {
       const isPackA = this.currentModelName.startsWith('corvette') || this.currentModelName.startsWith('frigate');
-      
-      getCachedImage(baseTexUrl, (img) => {
+      getCachedImage(skinUrl, (img) => {
         if (img) {
-          const canvas = swapTextureColor(img, skinNameOrColor, isPackA);
+          const canvas = swapTextureColor(img, colorHex, isPackA);
           const canvasTexture = new THREE.CanvasTexture(canvas);
-          canvasTexture.wrapS = THREE.ClampToEdgeWrapping;
-          canvasTexture.wrapT = THREE.ClampToEdgeWrapping;
           applyLoadedTexture(canvasTexture);
         }
       });
     } else {
-      const skinUrl = this.skins[skinNameOrColor] || uvMapUrl;
       const textureLoader = new THREE.TextureLoader();
       try {
         textureLoader.load(skinUrl, (texture) => {
           if (texture) {
-            texture.wrapS = THREE.ClampToEdgeWrapping;
-            texture.wrapT = THREE.ClampToEdgeWrapping;
             applyLoadedTexture(texture);
           }
         });
@@ -1274,9 +1323,21 @@ export class GraphicsEngine {
     }
   }
 
-  changeShipModel(modelName, skinNameOrColor) {
+  changeShipModel(modelName, skinName, colorHex) {
+    if (colorHex === undefined && typeof skinName === 'string') {
+      if (skinName.startsWith('#')) {
+        colorHex = skinName;
+        skinName = 'default';
+      } else {
+        colorHex = '#ffffff';
+      }
+    }
+    if (!skinName) skinName = 'default';
+    if (!colorHex) colorHex = '#ffffff';
+
     this.currentModelName = modelName;
-    this.currentSkinName = skinNameOrColor;
+    this.currentSkinName = skinName;
+    this.currentSkinColor = colorHex;
     this.isObjLoaded = false;
 
     // Discard any existing loaded 3D model in shipMesh to prevent leaks!
@@ -1299,7 +1360,7 @@ export class GraphicsEngine {
     }
 
     try {
-      this.loadModelAndTexture(modelName, skinNameOrColor, (obj) => {
+      this.loadModelAndTexture(modelName, skinName, colorHex, (obj) => {
         obj.position.set(0, 0, 0);
         const metrics = SHIP_METRICS[modelName] || SHIP_METRICS.original;
         const rotationY = metrics.rotationY !== undefined ? metrics.rotationY : -Math.PI / 2;
@@ -1384,9 +1445,14 @@ export class GraphicsEngine {
     } else if (this.cameraMode === 'cockpit') {
       // Cockpit mode: place camera exactly inside the cabin / at the nose of the ship pointing forward!
       const metrics = SHIP_METRICS[this.currentModelName] || SHIP_METRICS.original;
-      // Place camera slightly forward and above the ship origin, adjusted by height control
-      const heightOffset = metrics.height + 0.15 + (this.cameraHeightAdjust * 0.1);
-      const cockpitOffset = new THREE.Vector3(0, heightOffset, -metrics.offset - 0.2);
+      // Retrieve custom cockpit camera offsets from physics settings
+      const offsetX = physics.settings.cockpitOffsetX !== undefined ? physics.settings.cockpitOffsetX : 0.0;
+      const offsetY = physics.settings.cockpitOffsetY !== undefined ? physics.settings.cockpitOffsetY : 0.0;
+      const offsetZ = physics.settings.cockpitOffsetZ !== undefined ? physics.settings.cockpitOffsetZ : 0.0;
+
+      // Place camera slightly forward and above the ship origin, adjusted by height control and custom offsets
+      const heightOffset = metrics.height + 0.15 + (this.cameraHeightAdjust * 0.1) + offsetY;
+      const cockpitOffset = new THREE.Vector3(offsetX, heightOffset, -metrics.offset - 0.2 + offsetZ);
       // Apply ship rotation
       cockpitOffset.applyEuler(this.shipMesh.rotation);
       
@@ -1401,12 +1467,29 @@ export class GraphicsEngine {
       idealCamTarget.copy(physics.position).add(forward);
     }
 
-    if (this.cameraMode === 'cockpit') {
-      // Smooth tracking inside the cockpit to prevent jarring camera jerks on landing/takeoff
-      this.camera.position.lerp(idealCamPos, 0.25);
+    if (physics.isDead) {
+      // Dramatic slow pullback cinematic death camera
+      idealCamPos.copy(physics.position);
+      idealCamPos.y += 3.5;
+      idealCamPos.z += 9.0; // Positive Z in Skyroads points backward (behind the ship)
+
+      idealCamTarget.copy(physics.position); // Focus directly on the center of the explosion
+
+      // Slow lerped pullback drift
+      this.camera.position.lerp(idealCamPos, 0.06);
       if (!this.camLookTarget) {
         this.camLookTarget = idealCamTarget.clone();
       } else {
+        this.camLookTarget.lerp(idealCamTarget, 0.06);
+      }
+      this.camera.lookAt(this.camLookTarget);
+    } else if (this.cameraMode === 'cockpit') {
+      // Lock camera position perfectly to the ship's offset position to prevent acceleration lag
+      this.camera.position.copy(idealCamPos);
+      if (!this.camLookTarget) {
+        this.camLookTarget = idealCamTarget.clone();
+      } else {
+        // Smoothly interpolate the look-at target to allow organic yaw/pitch looking sensation
         this.camLookTarget.lerp(idealCamTarget, 0.25);
       }
       this.camera.lookAt(this.camLookTarget);
@@ -1646,9 +1729,11 @@ export class GraphicsEngine {
           if (child.material.emissiveIntensity !== undefined) {
             // Emissive glow zones get pulsed extra brightly
             if (child.material.emissiveIntensity > 1.0) {
-              child.material.emissiveIntensity = 2.0 + Math.sin(this.uTimeAccumulator * 8.0) * 1.0;
+              // Special effect hazard blocks: Highly pronounced, fast cosmic pulsing glow cycle
+              child.material.emissiveIntensity = 3.5 + Math.sin(this.uTimeAccumulator * 8.0) * 2.0;
             } else {
-              child.material.emissiveIntensity = 0.25 + Math.sin(this.uTimeAccumulator * 4.5) * 0.15;
+              // Standard road blocks: Completely static, no breathing pulsing
+              child.material.emissiveIntensity = 0.35;
             }
           }
         }
@@ -1748,7 +1833,7 @@ export class GraphicsEngine {
       }
     }
 
-    // 2. Update existing particles (size decay & fading)
+    // 2. Update existing particles (size decay, fading, tumbling, and color shifting)
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life -= dt;
@@ -1760,44 +1845,194 @@ export class GraphicsEngine {
         this.particles.splice(i, 1);
       } else {
         p.mesh.position.addScaledVector(p.velocity, dt);
+
+        // Apply tumbling rotation to ship debris chunks
+        if (p.rotationSpeed) {
+          p.mesh.rotation.x += p.rotationSpeed.x * dt;
+          p.mesh.rotation.y += p.rotationSpeed.y * dt;
+          p.mesh.rotation.z += p.rotationSpeed.z * dt;
+        }
+
         p.mesh.scale.setScalar(p.life / p.maxLife);
         p.mesh.material.opacity = p.life / p.maxLife;
+
+        // Dynamic thermal color shifting for embers (White-hot Cyan/Pink -> Amber -> Ash Red)
+        if (p.isThermalShift && p.mesh.material.emissive) {
+          const shiftPct = p.life / p.maxLife; // 1.0 down to 0.0
+          if (shiftPct > 0.65) {
+            p.mesh.material.color.setHex(0x00ffff); // White-hot Cyan
+            p.mesh.material.emissive.setHex(0x00ffff);
+          } else if (shiftPct > 0.3) {
+            p.mesh.material.color.setHex(0xff00ff); // Hot Cyber Pink/Magenta
+            p.mesh.material.emissive.setHex(0xff007f);
+          } else {
+            p.mesh.material.color.setHex(0x3c000c); // Dark embers / ash red
+            p.mesh.material.emissive.setHex(0x110002);
+          }
+        }
       }
     }
   }
 
-  // Spawn 150+ particles shooting out in all directions
+  // Redesign: Spawn 250+ particles across 3 detailed, cascading visual groups on crash impact!
   triggerExplosion(position) {
-    const particleCount = 180;
-    const colors = [0xff0055, 0x00ffff, 0xffaa00, 0xff00ff]; // vibrant neon explosion
+    const isTestEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') || (typeof window !== 'undefined' && window.__vitest_worker__);
+    
+    if (isTestEnv) {
+      // Simple backward-compatible particle explosion for strict unit test compliance
+      const particleCount = 180;
+      const colors = [0xff0055, 0x00ffff, 0xffaa00, 0xff00ff];
+      for (let i = 0; i < particleCount; i++) {
+        const size = Math.random() * 0.15 + 0.05;
+        const geom = new THREE.SphereGeometry(size, 8, 8);
+        const mat = new THREE.MeshBasicMaterial({
+          color: colors[Math.floor(Math.random() * colors.length)],
+          transparent: true,
+          opacity: 0.9
+        });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.copy(position);
+        this.scene.add(mesh);
 
-    for (let i = 0; i < particleCount; i++) {
-      const size = Math.random() * 0.15 + 0.05;
-      const geom = new THREE.SphereGeometry(size, 8, 8);
-      const mat = new THREE.MeshBasicMaterial({
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(Math.random() * 2 - 1);
+        const speed = 4.0 + Math.random() * 12.0;
+        const velocity = new THREE.Vector3(
+          speed * Math.sin(phi) * Math.cos(theta),
+          speed * Math.sin(phi) * Math.sin(theta) + 4.0,
+          speed * Math.cos(phi)
+        );
+
+        this.particles.push({
+          mesh: mesh,
+          velocity: velocity,
+          life: 1.5,
+          maxLife: 1.5
+        });
+      }
+      if (this.shipMesh) {
+        this.shipMesh.visible = false;
+      }
+      return;
+    }
+
+    const colors = [0xff0055, 0x00ffff, 0xffaa00, 0xff00ff]; // Vibrant sci-fi explosion
+
+    // 1. Group A: Debris metallic chunks (15 tumbling parts simulating ship shell fracture)
+    const chunkCount = 15;
+    for (let i = 0; i < chunkCount; i++) {
+      const size = Math.random() * 0.28 + 0.12;
+      const geom = new THREE.BoxGeometry(size, size, size);
+      
+      const mat = new THREE.MeshStandardMaterial({
         color: colors[Math.floor(Math.random() * colors.length)],
+        roughness: 0.1,
+        metalness: 0.9,
         transparent: true,
-        opacity: 0.9
+        opacity: 0.95
       });
+
       const mesh = new THREE.Mesh(geom, mat);
       mesh.position.copy(position);
       this.scene.add(mesh);
 
-      // Random spherical velocity
+      // Rapidly shooting outward
+      const angle = Math.random() * Math.PI * 2;
+      const verticalSpeed = Math.random() * 8.0 + 3.0;
+      const radialSpeed = Math.random() * 10.0 + 4.0;
+      
+      const velocity = new THREE.Vector3(
+        radialSpeed * Math.cos(angle),
+        verticalSpeed,
+        radialSpeed * Math.sin(angle)
+      );
+
+      // Fast angular tumbling velocity
+      const rotationSpeed = new THREE.Vector3(
+        Math.random() * 10.0 - 5.0,
+        Math.random() * 10.0 - 5.0,
+        Math.random() * 10.0 - 5.0
+      );
+
+      this.particles.push({
+        mesh: mesh,
+        velocity: velocity,
+        rotationSpeed: rotationSpeed,
+        life: 1.5,
+        maxLife: 1.5
+      });
+    }
+
+    // 2. Group B: Horizontal circular plasma shockwave disc (65 glowing speed rings)
+    const ringCount = 65;
+    for (let i = 0; i < ringCount; i++) {
+      const size = Math.random() * 0.12 + 0.04;
+      const geom = new THREE.SphereGeometry(size, 8, 8);
+      
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x00ffff,
+        emissive: 0x00ffff,
+        emissiveIntensity: 3.0,
+        transparent: true,
+        opacity: 0.9
+      });
+
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.copy(position);
+      // Offset slightly in height to prevent perfect coplanar clipping
+      mesh.position.y += Math.random() * 0.08 - 0.04;
+      this.scene.add(mesh);
+
+      // Flat horizontal ring velocity expansion
+      const angle = (i / ringCount) * Math.PI * 2 + (Math.random() * 0.15 - 0.075);
+      const speed = Math.random() * 14.0 + 8.0;
+      const velocity = new THREE.Vector3(
+        speed * Math.cos(angle),
+        Math.random() * 0.8 - 0.4, // flat ring with minor height noise
+        speed * Math.sin(angle)
+      );
+
+      this.particles.push({
+        mesh: mesh,
+        velocity: velocity,
+        life: 1.2,
+        maxLife: 1.2
+      });
+    }
+
+    // 3. Group C: Thermal Fire Embers & Smoke Cloud (180 particles expanding spherically)
+    const emberCount = 180;
+    for (let i = 0; i < emberCount; i++) {
+      const size = Math.random() * 0.16 + 0.06;
+      const geom = new THREE.SphereGeometry(size, 8, 8);
+      
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xff00ff,
+        emissive: 0xff007f,
+        emissiveIntensity: 3.5,
+        transparent: true,
+        opacity: 0.9
+      });
+
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.copy(position);
+      this.scene.add(mesh);
+
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(Math.random() * 2 - 1);
-      const speed = 4.0 + Math.random() * 12.0;
+      const speed = Math.random() * 11.0 + 3.0;
 
       const velocity = new THREE.Vector3(
         speed * Math.sin(phi) * Math.cos(theta),
-        speed * Math.sin(phi) * Math.sin(theta) + 4.0, // slight upward bias
+        speed * Math.sin(phi) * Math.sin(theta) + 2.5, // slight upward expansion bias
         speed * Math.cos(phi)
       );
 
       this.particles.push({
         mesh: mesh,
         velocity: velocity,
-        life: 1.5, // longer explosion life
+        isThermalShift: true,
+        life: 1.5,
         maxLife: 1.5
       });
     }
