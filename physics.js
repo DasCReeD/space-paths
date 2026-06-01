@@ -36,6 +36,8 @@ export class PhysicsEngine {
     this.groundHeight = 0;
     this.isDead = false;
     this.deathReason = '';
+    this.difficulty = 'hard';
+    this.isTransitioning = false;
     
     // Classic landing bounce (rebound) parameters
     this.isRebounding = false;
@@ -51,6 +53,34 @@ export class PhysicsEngine {
     
     this.oxygen = 100;
     this.fuel = 10000;
+
+    this.settings = {
+      bounceFactor: 1.0,
+      gravityFactor: 1.0,
+      jumpFactor: 1.0,
+      
+      // Configurable Throttle
+      maxSpeedNormal: 32.0,
+      maxSpeedBoost: 60.0,
+      accelForward: 18.0,
+      decelBrakes: 35.0,
+      dragZ: 4.0,
+
+      // Configurable Handling
+      maxSteerSpeed: 10.0,
+      steerAccel: 35.0,
+      dragSteer: 28.0,
+
+      // Easy Mode Front Collision Rebounds
+      easyCollisionBounceVel: 10.0,
+      easyCollisionBounceDist: 1.2,
+
+      // Jumping & Flight dynamics
+      fallGravityMultiplier: 1.45,
+      variableJumpDampening: 0.82,
+      coyoteTimeBuffer: 0.25
+    };
+    this.boatThrottleEnabled = false;
   }
 
   reset(startFuel, startOxygen) {
@@ -60,6 +90,7 @@ export class PhysicsEngine {
     this.groundHeight = 0;
     this.isDead = false;
     this.deathReason = '';
+    this.isTransitioning = false;
     this.isRebounding = false;
     this.reboundTimer = 0.0;
     this.fuel = startFuel * 50; // Map original DOS fuel scale
@@ -80,6 +111,32 @@ export class PhysicsEngine {
   update(dt, keyboard, levelInfo) {
     if (this.isDead) return;
     dt = Math.min(dt, 0.05); // Cap timestep to prevent tunneling
+
+    // Synchronize customizable settings properties with active instance variables
+    this.maxSpeedNormal = this.settings.maxSpeedNormal !== undefined ? this.settings.maxSpeedNormal : 32.0;
+    this.maxSpeedBoost = this.settings.maxSpeedBoost !== undefined ? this.settings.maxSpeedBoost : 60.0;
+    this.accelForward = this.settings.accelForward !== undefined ? this.settings.accelForward : 18.0;
+    this.decelBrakes = this.settings.decelBrakes !== undefined ? this.settings.decelBrakes : 35.0;
+    this.dragZ = this.settings.dragZ !== undefined ? this.settings.dragZ : 4.0;
+    this.maxSteerSpeed = this.settings.maxSteerSpeed !== undefined ? this.settings.maxSteerSpeed : 10.0;
+    this.steerAccel = this.settings.steerAccel !== undefined ? this.settings.steerAccel : 35.0;
+    this.dragSteer = this.settings.dragSteer !== undefined ? this.settings.dragSteer : 28.0;
+
+    if (this.isTransitioning) {
+      // Auto-pilot inside transition tube!
+      this.velocity.x = 0;
+      this.velocity.y = 0;
+      this.velocity.z = -this.maxSpeedNormal; // Lock forward speed
+      this.position.x = 0;
+      this.position.y = 1.0; // Elevate slightly inside tube
+      this.position.z += this.velocity.z * dt;
+      this.onGround = true;
+      this.groundHeight = 1.0;
+      
+      // Update engine states
+      this.activeEffects = { boost: false, sticky: false, slippery: false, burning: false };
+      return;
+    }
 
     // 1. Consume Fuel & Oxygen
     if (Math.abs(this.velocity.z) > 0.5) {
@@ -133,9 +190,11 @@ export class PhysicsEngine {
       }
     } else {
       // Natural rolling drag
-      if (this.velocity.z < 0) {
-        this.velocity.z += this.dragZ * dt;
-        if (this.velocity.z > 0) this.velocity.z = 0;
+      if (!this.boatThrottleEnabled) {
+        if (this.velocity.z < 0) {
+          this.velocity.z += this.dragZ * dt;
+          if (this.velocity.z > 0) this.velocity.z = 0;
+        }
       }
     }
 
@@ -150,7 +209,7 @@ export class PhysicsEngine {
       steeringDrag = 1.0; // minimal friction, drift!
     }
 
-    if (keyboard.mouseControlsEnabled) {
+    if (keyboard.mouseControlsEnabled || keyboard.touchControlsEnabled) {
       let steerVal = 0;
       if (keyboard.steerAmount !== undefined && keyboard.steerAmount !== 0) {
         steerVal = keyboard.steerAmount;
@@ -190,27 +249,29 @@ export class PhysicsEngine {
 
     // 5. Jump & Gravity
     // Coyote time / Near-ground jump buffer (allows jumping when falling within 0.25 units of a valid ground block)
-    const isNearGround = this.velocity.y < 0 && this.groundHeight > -5.0 && (this.position.y - this.groundHeight) <= 0.25;
-    if (keyboard.jump && (this.onGround || this.isRebounding || isNearGround)) {
-      this.velocity.y = this.jumpImpulse;
+    // coyoteTimeBuffer setting defines the vertical near-ground distance threshold for jumping
+    const isNearGround = this.velocity.y < 0 && this.groundHeight > -5.0 && (this.position.y - this.groundHeight) <= (this.settings.coyoteTimeBuffer !== undefined ? this.settings.coyoteTimeBuffer : 0.25);
+    const wantsToJump = keyboard.jump || (keyboard.spacePressed !== undefined ? keyboard.spacePressed : false);
+    if (wantsToJump && (this.onGround || this.isRebounding || isNearGround)) {
+      this.velocity.y = this.jumpImpulse * (this.settings.jumpFactor !== undefined ? this.settings.jumpFactor : 1.0);
       this.onGround = false;
       this.isRebounding = false;
       keyboard.resetJump(); // Avoid double jumping immediately
     }
 
     if (!this.onGround) {
-      let gravityForce = levelInfo.gravity;
+      let gravityForce = levelInfo.gravity * (this.settings.gravityFactor !== undefined ? this.settings.gravityFactor : 1.0);
       
       // If falling down, apply asymmetric falling gravity to make the jump snappy and less floaty
       if (this.velocity.y < 0) {
-        gravityForce *= 1.45;
+        gravityForce *= (this.settings.fallGravityMultiplier !== undefined ? this.settings.fallGravityMultiplier : 1.45);
       }
 
       if (this.velocity.y > 0) {
         const isSpaceHeld = keyboard.spacePressed !== undefined ? keyboard.spacePressed : true;
         if (!isSpaceHeld) {
           // Cut upward velocity (variable jump height)
-          this.velocity.y *= 0.82;
+          this.velocity.y *= (this.settings.variableJumpDampening !== undefined ? this.settings.variableJumpDampening : 0.82);
         }
       }
       // Pull ship down using level's specific gravity scale
@@ -252,11 +313,25 @@ export class PhysicsEngine {
             const isSideCollision = (shipBox.maxZ <= block.maxZ + 0.15) || (overlapX < 0.35 && overlapZ > 0.5);
 
             if (!isSideCollision) {
-              // Front collision -> Crash!
-              this.isDead = true;
-              this.deathReason = 'COLLIDED WITH BLOCK';
-              this.velocity.set(0, 0, 0);
-              return;
+              if (this.difficulty === 'easy') {
+                // Bounce back instead of dying!
+                this.velocity.z = this.settings.easyCollisionBounceVel !== undefined ? this.settings.easyCollisionBounceVel : 10.0; // Positive Z is backward
+                this.position.z += this.settings.easyCollisionBounceDist !== undefined ? this.settings.easyCollisionBounceDist : 1.2; // Push back to clear block bounding box
+                this.triggerWallCollisionAudio = true; // Scrape/scrape wall audio as bounce indicator
+                this.velocity.x = 0;
+                
+                // Update the ship's bounding box
+                const halfW = SHIP_WIDTH / 2;
+                const halfL = SHIP_LENGTH / 2;
+                shipBox.minZ = this.position.z - halfL;
+                shipBox.maxZ = this.position.z + halfL;
+              } else {
+                // Front collision -> Crash!
+                this.isDead = true;
+                this.deathReason = 'COLLIDED WITH BLOCK';
+                this.velocity.set(0, 0, 0);
+                return;
+              }
             } else {
               // Side wall collision -> Push ship out of the block and slide!
               const halfW = SHIP_WIDTH / 2;
@@ -291,10 +366,11 @@ export class PhysicsEngine {
           this.position.y = block.maxY;
           this.groundHeight = block.maxY;
 
-          if (this.velocity.y < -3.0) {
+          const isJumpHeld = keyboard.spacePressed !== undefined ? keyboard.spacePressed : false;
+          if (this.velocity.y < -3.0 && !isJumpHeld) {
             this.isRebounding = true;
             this.reboundTimer = 0.12;
-            this.velocity.y = 4.2; // Classic bounce upwards
+            this.velocity.y = 4.2 * (this.settings.bounceFactor !== undefined ? this.settings.bounceFactor : 1.0); // Classic bounce upwards
             this.onGround = false;
             this.triggerLandingReboundAudio = true;
           } else {
@@ -323,10 +399,11 @@ export class PhysicsEngine {
           this.position.y = 0.0;
           this.groundHeight = 0.0;
 
-          if (this.velocity.y < -3.0) {
+          const isJumpHeld = keyboard.spacePressed !== undefined ? keyboard.spacePressed : false;
+          if (this.velocity.y < -3.0 && !isJumpHeld) {
             this.isRebounding = true;
             this.reboundTimer = 0.12;
-            this.velocity.y = 4.2; // Classic bounce upwards
+            this.velocity.y = 4.2 * (this.settings.bounceFactor !== undefined ? this.settings.bounceFactor : 1.0); // Classic bounce upwards
             this.onGround = false;
             this.triggerLandingReboundAudio = true;
           } else {
@@ -431,6 +508,14 @@ export class KeyboardController {
     this.spacePressed = false;
     this.steerAmount = 0; // Proportional steer amount (-1 to 1) like an analogue stick
 
+    this.touch = {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+      jump: false
+    };
+
     // Separate keyboard and mouse state tracking to allow seamless combinations
     this.keys = {
       forward: false,
@@ -448,6 +533,7 @@ export class KeyboardController {
     };
 
     this.mouseControlsEnabled = false;
+    this.touchControlsEnabled = false;
 
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', (e) => this.handleKey(e, true));
@@ -524,13 +610,35 @@ export class KeyboardController {
     this.updateCombinedState();
   }
 
+  setTouchState(action, active) {
+    if (this.touch[action] !== undefined) {
+      this.touch[action] = active;
+    }
+    this.updateCombinedState();
+  }
+
+  setTouchSteerAmount(amount) {
+    this.steerAmount = amount;
+    if (amount < 0) {
+      this.touch.left = true;
+      this.touch.right = false;
+    } else if (amount > 0) {
+      this.touch.left = false;
+      this.touch.right = true;
+    } else {
+      this.touch.left = false;
+      this.touch.right = false;
+    }
+    this.updateCombinedState();
+  }
+
   updateCombinedState() {
-    this.forward = this.keys.forward || (this.mouseControlsEnabled && this.mouse.forward);
-    this.backward = this.keys.backward;
-    this.left = this.keys.left || (this.mouseControlsEnabled && this.mouse.left);
-    this.right = this.keys.right || (this.mouseControlsEnabled && this.mouse.right);
-    this.jump = this.keys.jump || (this.mouseControlsEnabled && this.mouse.jump);
-    this.spacePressed = this.keys.jump || (this.mouseControlsEnabled && this.mouse.jump);
+    this.forward = this.keys.forward || (this.mouseControlsEnabled && this.mouse.forward) || (this.touchControlsEnabled && this.touch.forward);
+    this.backward = this.keys.backward || (this.touchControlsEnabled && this.touch.backward);
+    this.left = this.keys.left || (this.mouseControlsEnabled && this.mouse.left) || (this.touchControlsEnabled && this.touch.left);
+    this.right = this.keys.right || (this.mouseControlsEnabled && this.mouse.right) || (this.touchControlsEnabled && this.touch.right);
+    this.jump = this.keys.jump || (this.mouseControlsEnabled && this.mouse.jump) || (this.touchControlsEnabled && this.touch.jump);
+    this.spacePressed = this.keys.jump || (this.mouseControlsEnabled && this.mouse.jump) || (this.touchControlsEnabled && this.touch.jump);
   }
 
   resetJump() {

@@ -55,6 +55,12 @@ class GameManager {
     // Ship preview variables
     this.previewEngine = null;
     this.tempSelectedSkin = 'default';
+
+    // Infinite Mode & settings tracking
+    this.isInfiniteMode = false;
+    this.infiniteZOffset = 0;
+    this.infiniteLevelTransitioning = false;
+    this.preSettingsState = 'menu';
   }
 
   init() {
@@ -67,11 +73,56 @@ class GameManager {
     this.keyboard.mouseControlsEnabled = savedMousePlay;
     this.updateMouseToggleBtn();
 
+    // Load persisted touch setting from localStorage
+    const savedTouchPlay = localStorage.getItem('skyroads_touch_controls') === 'true';
+    this.keyboard.touchControlsEnabled = savedTouchPlay;
+    this.updateTouchToggleBtn();
+
+    // Load persisted boat throttle setting from localStorage
+    const savedBoatThrottle = localStorage.getItem('skyroads_boat_throttle') === 'true';
+    this.physics.boatThrottleEnabled = savedBoatThrottle;
+    this.updateBoatThrottleToggleBtn();
+
+    // Load persisted difficulty setting from localStorage
+    const savedDifficulty = localStorage.getItem('skyroads_difficulty') || 'easy';
+    this.physics.difficulty = savedDifficulty;
+    this.updateDifficultyToggleBtn();
+
+    // Load persisted background music setting from localStorage
+    const savedMusic = localStorage.getItem('skyroads_music_play') !== 'false';
+    gameAudio.setMusicEnabled(savedMusic);
+    this.updateMusicToggleBtn();
+
     // Load persisted model and skin preferences
     this.selectedModel = localStorage.getItem('skyroads_selected_model') || 'corvette1';
     this.selectedSkin = localStorage.getItem('skyroads_selected_skin') || '#ff007f';
     this.graphics.currentModelName = this.selectedModel;
     this.graphics.currentSkinName = this.selectedSkin;
+
+    // Initialize tunable physics preset profiles by loading from localStorage or falling back to defaults
+    this.physicsPresets = { vga: {}, snappy: {}, lunar: {}, custom: {} };
+    const basePresets = {
+      vga: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 25, dragSteer: 18, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25 },
+      snappy: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.25, gravityFactor: 1.45, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25 },
+      lunar: { maxSpeedNormal: 24, maxSpeedBoost: 50, accelForward: 12, decelBrakes: 25, dragZ: 2, maxSteerSpeed: 8, steerAccel: 15, dragSteer: 8, easyCollisionBounceVel: 8, easyCollisionBounceDist: 1.5, bounceFactor: 1.5, jumpImpulse: 7.5, jumpFactor: 1.0, gravityFactor: 0.45, fallGravityMultiplier: 1.15, variableJumpDampening: 0.90, coyoteTimeBuffer: 0.40 },
+      custom: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25 }
+    };
+
+    for (const key in basePresets) {
+      const saved = localStorage.getItem(`skyroads_physics_preset_${key}`);
+      if (saved) {
+        try {
+          this.physicsPresets[key] = { ...basePresets[key], ...JSON.parse(saved) };
+        } catch (e) {
+          this.physicsPresets[key] = { ...basePresets[key] };
+        }
+      } else {
+        this.physicsPresets[key] = { ...basePresets[key] };
+      }
+    }
+
+    this.activePreset = localStorage.getItem('skyroads_physics_active_preset') || 'snappy';
+    this.applyActivePreset();
 
     // 2. Setup Navigation Listeners
     this.setupUIListeners();
@@ -100,7 +151,44 @@ class GameManager {
         gameAudio.playClick();
         this.graphics.adjustCameraHeight(1); // raise camera height
       }
+      if (e.code === 'KeyU' || e.code === 'PageUp') {
+        gameAudio.playClick();
+        this.graphics.adjustCameraPitch(1); // look up
+      }
+      if (e.code === 'KeyJ' || e.code === 'PageDown') {
+        gameAudio.playClick();
+        this.graphics.adjustCameraPitch(-1); // look down
+      }
+      if (e.code === 'KeyO') {
+        gameAudio.playClick();
+        this.physics.settings.gravityFactor = Math.min(3.0, (this.physics.settings.gravityFactor || 1.0) + 0.1);
+        this.physics.settings.bounceFactor = Math.min(3.0, (this.physics.settings.bounceFactor || 1.0) + 0.1);
+        const gravityVal = this.currentLevelData.gravity ? ((this.currentLevelData.gravity - 3) * 100 * this.physics.settings.gravityFactor) : 500 * this.physics.settings.gravityFactor;
+        const gravityTextEl = document.getElementById('hud-gravity-text');
+        if (gravityTextEl) gravityTextEl.innerText = String(Math.round(gravityVal)).padStart(4, '0');
+      }
+      if (e.code === 'KeyP') {
+        gameAudio.playClick();
+        this.toggleSettingsMenu();
+      }
     });
+
+    // Global listener for Escape to toggle settings/pause menu anywhere
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        gameAudio.playClick();
+        this.toggleSettingsMenu();
+      }
+    });
+
+    const btnSettingsGear = document.getElementById('btn-settings-gear');
+    if (btnSettingsGear) {
+      btnSettingsGear.addEventListener('click', (e) => {
+        gameAudio.playClick();
+        this.toggleSettingsMenu();
+      });
+    }
 
     // 4. Listen to keyboard menu navigation when not actively playing a level
     window.addEventListener('keydown', (e) => {
@@ -114,20 +202,91 @@ class GameManager {
   }
 
   updateMouseToggleBtn() {
-    const btn = document.getElementById('btn-toggle-mouse');
+    const isEnabled = this.keyboard.mouseControlsEnabled;
+    const btnIds = ['btn-toggle-mouse', 'btn-settings-mouse'];
+    btnIds.forEach(id => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      if (isEnabled) {
+        btn.innerText = 'MOUSE PLAY: ON';
+        btn.classList.remove('btn-info');
+        btn.classList.add('btn-primary');
+      } else {
+        btn.innerText = 'MOUSE PLAY: OFF';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-info');
+      }
+    });
+  }
+
+  updateTouchToggleBtn() {
+    const isEnabled = this.keyboard.touchControlsEnabled;
+    const btnIds = ['btn-toggle-touch', 'btn-settings-touch'];
+    btnIds.forEach(id => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      if (isEnabled) {
+        btn.innerText = 'TOUCH CONTROLS: ON';
+        btn.classList.remove('btn-info');
+        btn.classList.add('btn-primary');
+      } else {
+        btn.innerText = 'TOUCH CONTROLS: OFF';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-info');
+      }
+    });
+  }
+
+  updateBoatThrottleToggleBtn() {
+    const isEnabled = this.physics.boatThrottleEnabled;
+    const btnIds = ['btn-toggle-boat-throttle', 'btn-pause-toggle-boat-throttle', 'btn-touch-boat-throttle', 'btn-settings-boat-throttle'];
+    btnIds.forEach(id => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      if (isEnabled) {
+        btn.innerText = id === 'btn-touch-boat-throttle' ? 'BOAT: ON' : 'BOAT THROTTLE: ON';
+        btn.classList.remove('btn-info');
+        btn.classList.add('btn-primary');
+      } else {
+        btn.innerText = id === 'btn-touch-boat-throttle' ? 'BOAT: OFF' : 'BOAT THROTTLE: OFF';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-info');
+      }
+    });
+  }
+
+  updateDifficultyToggleBtn() {
+    const isEasy = this.physics.difficulty === 'easy';
+    const btn = document.getElementById('btn-settings-difficulty');
     if (!btn) return;
-    if (this.keyboard.mouseControlsEnabled) {
-      btn.innerText = 'MOUSE PLAY: ON';
-      btn.classList.remove('btn-info');
-      btn.classList.add('btn-primary');
-    } else {
-      btn.innerText = 'MOUSE PLAY: OFF';
-      btn.classList.remove('btn-primary');
+    if (isEasy) {
+      btn.innerText = 'DIFFICULTY: EASY';
+      btn.classList.remove('btn-secondary');
       btn.classList.add('btn-info');
+    } else {
+      btn.innerText = 'DIFFICULTY: HARD';
+      btn.classList.remove('btn-info');
+      btn.classList.add('btn-secondary');
+    }
+  }
+
+  updateMusicToggleBtn() {
+    const isEnabled = gameAudio.musicSequencer ? gameAudio.musicSequencer.musicEnabled : true;
+    const btn = document.getElementById('btn-settings-music');
+    if (!btn) return;
+    if (isEnabled) {
+      btn.innerText = 'MUSIC: ON';
+      btn.classList.remove('btn-secondary');
+      btn.classList.add('btn-info');
+    } else {
+      btn.innerText = 'MUSIC: OFF';
+      btn.classList.remove('btn-info');
+      btn.classList.add('btn-secondary');
     }
   }
 
   openShipPicker() {
+    this.prePickerState = this.gameState;
     this.gameState = 'ship_picker';
     this.tempSelectedModel = this.selectedModel || 'corvette1';
     this.tempSelectedSkin = this.selectedSkin || '#ff007f';
@@ -156,6 +315,69 @@ class GameManager {
       }
       this.previewEngine = new ShipPreviewEngine();
       this.previewEngine.init(container, this.tempSelectedModel, this.tempSelectedSkin);
+    }
+  }
+
+  applyActivePreset() {
+    const config = this.physicsPresets[this.activePreset];
+    for (const param in config) {
+      this.physics.settings[param] = config[param];
+    }
+  }
+
+  togglePhysicsCalibrator(forceState) {
+    const panel = document.getElementById('physics-calibrator-screen');
+    const btn = document.getElementById('btn-settings-physics');
+    if (!panel || !btn) return;
+
+    const isActive = forceState !== undefined ? forceState : !panel.classList.contains('active');
+    
+    if (isActive) {
+      panel.classList.add('active');
+      btn.classList.add('active');
+      this.updateCalibratorUI();
+    } else {
+      panel.classList.remove('active');
+      btn.classList.remove('active');
+    }
+  }
+
+  updateCalibratorUI() {
+    // Highlight active preset button
+    const presetButtons = ['vga', 'snappy', 'lunar', 'custom'];
+    presetButtons.forEach(key => {
+      const btn = document.getElementById(`preset-btn-${key}`);
+      if (btn) {
+        if (key === this.activePreset) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      }
+    });
+
+    // Load preset config values into slider inputs and labels
+    const config = this.physicsPresets[this.activePreset];
+    for (const param in config) {
+      const slider = document.getElementById(`input-${param}`);
+      const readout = document.getElementById(`val-${param}`);
+      if (slider) {
+        slider.value = config[param];
+      }
+      if (readout) {
+        readout.innerText = Number(config[param]).toFixed(param === 'coyoteTimeBuffer' || param === 'variableJumpDampening' || param === 'gravityFactor' || param === 'fallGravityMultiplier' || param === 'bounceFactor' || param === 'dragZ' ? 2 : 1);
+      }
+    }
+  }
+
+  showCalibratorAlert() {
+    const alertEl = document.getElementById('calibrator-status-alert');
+    if (alertEl) {
+      alertEl.style.opacity = '1';
+      if (this.alertTimeout) clearTimeout(this.alertTimeout);
+      this.alertTimeout = setTimeout(() => {
+        alertEl.style.opacity = '0';
+      }, 1000);
     }
   }
 
@@ -225,7 +447,12 @@ class GameManager {
       this.previewEngine = null;
     }
 
-    this.returnToMenu();
+    if (this.prePickerState === 'settings') {
+      this.showScreen('settings-screen');
+      this.gameState = 'settings';
+    } else {
+      this.returnToMenu();
+    }
   }
 
   setupUIListeners() {
@@ -247,6 +474,26 @@ class GameManager {
         this.keyboard.mouseControlsEnabled = !this.keyboard.mouseControlsEnabled;
         localStorage.setItem('skyroads_mouse_play', this.keyboard.mouseControlsEnabled);
         this.updateMouseToggleBtn();
+      });
+    }
+
+    const btnToggleTouch = document.getElementById('btn-toggle-touch');
+    if (btnToggleTouch) {
+      btnToggleTouch.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.keyboard.touchControlsEnabled = !this.keyboard.touchControlsEnabled;
+        localStorage.setItem('skyroads_touch_controls', this.keyboard.touchControlsEnabled);
+        this.updateTouchToggleBtn();
+      });
+    }
+
+    const btnToggleBoatThrottle = document.getElementById('btn-toggle-boat-throttle');
+    if (btnToggleBoatThrottle) {
+      btnToggleBoatThrottle.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.physics.boatThrottleEnabled = !this.physics.boatThrottleEnabled;
+        localStorage.setItem('skyroads_boat_throttle', this.physics.boatThrottleEnabled);
+        this.updateBoatThrottleToggleBtn();
       });
     }
 
@@ -341,6 +588,341 @@ class GameManager {
       gameAudio.playClick();
       this.returnToMenu();
     });
+
+    const fovSlider = document.getElementById('hud-cam-fov-slider');
+    if (fovSlider) {
+      fovSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.graphics.setCameraFOV(val);
+      });
+    }
+
+    // Start Infinite Road Mode
+    const btnStartInfinite = document.getElementById('btn-start-infinite');
+    if (btnStartInfinite) {
+      btnStartInfinite.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.isInfiniteMode = true;
+        this.infiniteZOffset = 0;
+        this.startLevel(0);
+      });
+    }
+
+    // Settings Menu Listeners
+    const btnSettingsResume = document.getElementById('btn-settings-resume');
+    if (btnSettingsResume) {
+      btnSettingsResume.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.toggleSettingsMenu();
+      });
+    }
+
+    const btnSettingsRetry = document.getElementById('btn-settings-retry');
+    if (btnSettingsRetry) {
+      btnSettingsRetry.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.startLevel(this.currentLevelIndex);
+      });
+    }
+
+    const btnSettingsQuit = document.getElementById('btn-settings-quit');
+    if (btnSettingsQuit) {
+      btnSettingsQuit.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.returnToMenu();
+      });
+    }
+
+    const btnSettingsClose = document.getElementById('btn-settings-close');
+    if (btnSettingsClose) {
+      btnSettingsClose.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.toggleSettingsMenu();
+      });
+    }
+
+    const btnSettingsDifficulty = document.getElementById('btn-settings-difficulty');
+    if (btnSettingsDifficulty) {
+      btnSettingsDifficulty.addEventListener('click', () => {
+        gameAudio.playClick();
+        const currentDiff = this.physics.difficulty;
+        const nextDiff = currentDiff === 'easy' ? 'hard' : 'easy';
+        this.physics.difficulty = nextDiff;
+        localStorage.setItem('skyroads_difficulty', nextDiff);
+        this.updateDifficultyToggleBtn();
+      });
+    }
+
+    const btnSettingsMusic = document.getElementById('btn-settings-music');
+    if (btnSettingsMusic) {
+      btnSettingsMusic.addEventListener('click', () => {
+        gameAudio.playClick();
+        if (gameAudio.musicSequencer) {
+          const isEnabled = !gameAudio.musicSequencer.musicEnabled;
+          gameAudio.setMusicEnabled(isEnabled);
+          localStorage.setItem('skyroads_music_play', isEnabled);
+          this.updateMusicToggleBtn();
+        }
+      });
+    }
+
+    const btnSettingsMouse = document.getElementById('btn-settings-mouse');
+    if (btnSettingsMouse) {
+      btnSettingsMouse.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.keyboard.mouseControlsEnabled = !this.keyboard.mouseControlsEnabled;
+        localStorage.setItem('skyroads_mouse_play', this.keyboard.mouseControlsEnabled);
+        this.updateMouseToggleBtn();
+      });
+    }
+
+    const btnSettingsTouch = document.getElementById('btn-settings-touch');
+    if (btnSettingsTouch) {
+      btnSettingsTouch.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.keyboard.touchControlsEnabled = !this.keyboard.touchControlsEnabled;
+        localStorage.setItem('skyroads_touch_controls', this.keyboard.touchControlsEnabled);
+        this.updateTouchToggleBtn();
+      });
+    }
+
+    const btnSettingsBoatThrottle = document.getElementById('btn-settings-boat-throttle');
+    if (btnSettingsBoatThrottle) {
+      btnSettingsBoatThrottle.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.physics.boatThrottleEnabled = !this.physics.boatThrottleEnabled;
+        localStorage.setItem('skyroads_boat_throttle', this.physics.boatThrottleEnabled);
+        this.updateBoatThrottleToggleBtn();
+      });
+    }
+
+    const btnSettingsPicker = document.getElementById('btn-settings-picker');
+    if (btnSettingsPicker) {
+      btnSettingsPicker.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.openShipPicker();
+      });
+    }
+
+    // Advanced Physics Calibrator triggers
+    const btnSettingsCalibrator = document.getElementById('btn-settings-calibrator');
+    if (btnSettingsCalibrator) {
+      btnSettingsCalibrator.addEventListener('click', () => {
+        gameAudio.playClick();
+        // Close settings menu and restore state
+        if (this.gameState === 'settings') {
+          const screenId = this.preSettingsState === 'playing' ? '' : (this.preSettingsState === 'paused' ? 'pause-screen' : 'menu-screen');
+          this.showScreen(screenId);
+          if (this.preSettingsState === 'playing') {
+            this.gameState = 'playing';
+            gameAudio.startEngine();
+            gameAudio.startMusic();
+          } else {
+            this.gameState = this.preSettingsState;
+          }
+        }
+        this.togglePhysicsCalibrator(true);
+      });
+    }
+
+    const btnSettingsPhysics = document.getElementById('btn-settings-physics');
+    if (btnSettingsPhysics) {
+      btnSettingsPhysics.addEventListener('click', (e) => {
+        e.stopPropagation();
+        gameAudio.playClick();
+        this.togglePhysicsCalibrator();
+      });
+    }
+
+    const btnCalibratorClose = document.getElementById('btn-calibrator-close');
+    if (btnCalibratorClose) {
+      btnCalibratorClose.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.togglePhysicsCalibrator(false);
+      });
+    }
+
+    // Collapsible accordion group headers
+    const groupHeaders = document.querySelectorAll('#physics-calibrator-screen .group-header');
+    groupHeaders.forEach(header => {
+      header.addEventListener('click', () => {
+        gameAudio.playClick();
+        const card = header.closest('.calibrator-group-card');
+        if (card) {
+          card.classList.toggle('collapsed');
+        }
+      });
+    });
+
+    // Preset slot selection triggers
+    ['vga', 'snappy', 'lunar', 'custom'].forEach(key => {
+      const btn = document.getElementById(`preset-btn-${key}`);
+      if (btn) {
+        btn.addEventListener('click', () => {
+          gameAudio.playClick();
+          this.activePreset = key;
+          localStorage.setItem('skyroads_physics_active_preset', key);
+          this.applyActivePreset();
+          this.updateCalibratorUI();
+          this.showCalibratorAlert();
+        });
+      }
+    });
+
+    // Reset current active preset to its design baseline
+    const btnCalibratorReset = document.getElementById('btn-calibrator-reset');
+    if (btnCalibratorReset) {
+      btnCalibratorReset.addEventListener('click', () => {
+        gameAudio.playClick();
+        const basePresets = {
+          vga: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 25, dragSteer: 18, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25 },
+          snappy: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.25, gravityFactor: 1.45, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25 },
+          lunar: { maxSpeedNormal: 24, maxSpeedBoost: 50, accelForward: 12, decelBrakes: 25, dragZ: 2, maxSteerSpeed: 8, steerAccel: 15, dragSteer: 8, easyCollisionBounceVel: 8, easyCollisionBounceDist: 1.5, bounceFactor: 1.5, jumpImpulse: 7.5, jumpFactor: 1.0, gravityFactor: 0.45, fallGravityMultiplier: 1.15, variableJumpDampening: 0.90, coyoteTimeBuffer: 0.40 },
+          custom: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25 }
+        };
+        this.physicsPresets[this.activePreset] = { ...basePresets[this.activePreset] };
+        localStorage.setItem(`skyroads_physics_preset_${this.activePreset}`, JSON.stringify(this.physicsPresets[this.activePreset]));
+        this.applyActivePreset();
+        this.updateCalibratorUI();
+        this.showCalibratorAlert();
+      });
+    }
+
+    // Dynamic slider range inputs and real-time auto-saving
+    const sliders = document.querySelectorAll('#physics-calibrator-screen input[type="range"]');
+    sliders.forEach(slider => {
+      slider.addEventListener('input', () => {
+        const param = slider.id.replace('input-', '');
+        const value = parseFloat(slider.value);
+        
+        // Update active preset and physics settings
+        this.physicsPresets[this.activePreset][param] = value;
+        this.physics.settings[param] = value;
+        
+        // Auto-save active configuration to localStorage
+        localStorage.setItem(`skyroads_physics_preset_${this.activePreset}`, JSON.stringify(this.physicsPresets[this.activePreset]));
+        
+        // Update active numerical readout text
+        const readout = document.getElementById(`val-${param}`);
+        if (readout) {
+          readout.innerText = value.toFixed(param === 'coyoteTimeBuffer' || param === 'variableJumpDampening' || param === 'gravityFactor' || param === 'fallGravityMultiplier' || param === 'bounceFactor' || param === 'dragZ' ? 2 : 1);
+        }
+        
+        this.showCalibratorAlert();
+      });
+
+      // Blur the slider when steering or jumping to return focus to the page for driving
+      slider.addEventListener('keydown', (e) => {
+        const driveKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+        const driveKeyNames = ['w', 'a', 's', 'd', ' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
+        if (driveKeys.includes(e.code) || driveKeyNames.includes(e.key.toLowerCase())) {
+          slider.blur();
+        }
+      });
+    });
+
+    // Pause Menu Listeners
+    const btnPauseResume = document.getElementById('btn-pause-resume');
+    if (btnPauseResume) {
+      btnPauseResume.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.resumeGame();
+      });
+    }
+
+    const btnPauseRetry = document.getElementById('btn-pause-retry');
+    if (btnPauseRetry) {
+      btnPauseRetry.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.startLevel(this.currentLevelIndex);
+      });
+    }
+
+    const btnPauseQuit = document.getElementById('btn-pause-quit');
+    if (btnPauseQuit) {
+      btnPauseQuit.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.returnToMenu();
+      });
+    }
+
+    const btnPauseToggleBoatThrottle = document.getElementById('btn-pause-toggle-boat-throttle');
+    if (btnPauseToggleBoatThrottle) {
+      btnPauseToggleBoatThrottle.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.physics.boatThrottleEnabled = !this.physics.boatThrottleEnabled;
+        localStorage.setItem('skyroads_boat_throttle', this.physics.boatThrottleEnabled);
+        this.updateBoatThrottleToggleBtn();
+      });
+    }
+
+    const btnTouchBoatThrottle = document.getElementById('btn-touch-boat-throttle');
+    if (btnTouchBoatThrottle) {
+      btnTouchBoatThrottle.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.physics.boatThrottleEnabled = !this.physics.boatThrottleEnabled;
+        localStorage.setItem('skyroads_boat_throttle', this.physics.boatThrottleEnabled);
+        this.updateBoatThrottleToggleBtn();
+      });
+    }
+
+    const btnInGamePause = document.getElementById('btn-in-game-pause');
+    if (btnInGamePause) {
+      btnInGamePause.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.pauseGame();
+      });
+    }
+
+    // Touch layout toggle button
+    const btnTouchLayoutToggle = document.getElementById('btn-touch-layout-toggle');
+    if (btnTouchLayoutToggle) {
+      btnTouchLayoutToggle.addEventListener('click', () => {
+        gameAudio.playClick();
+        const hybridLayout = document.getElementById('layout-dpad-hybrid');
+        const classicLayout = document.getElementById('layout-classic-console');
+        if (hybridLayout.classList.contains('active')) {
+          hybridLayout.classList.remove('active');
+          hybridLayout.classList.add('hidden');
+          classicLayout.classList.remove('hidden');
+          classicLayout.classList.add('active');
+          btnTouchLayoutToggle.innerText = 'LAYOUT: CLASSIC CONSOLE';
+          btnTouchLayoutToggle.classList.add('active');
+        } else {
+          classicLayout.classList.remove('active');
+          classicLayout.classList.add('hidden');
+          hybridLayout.classList.remove('hidden');
+          hybridLayout.classList.add('active');
+          btnTouchLayoutToggle.innerText = 'LAYOUT: D-PAD HYBRID';
+          btnTouchLayoutToggle.classList.remove('active');
+        }
+      });
+    }
+
+    // Floating Touch Camera buttons
+    const btnTouchCamMode = document.getElementById('btn-touch-cam-mode');
+    if (btnTouchCamMode) {
+      btnTouchCamMode.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.graphics.toggleCameraMode();
+      });
+    }
+
+    const btnTouchZoomIn = document.getElementById('btn-touch-zoom-in');
+    if (btnTouchZoomIn) {
+      btnTouchZoomIn.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.graphics.cycleZoomLevel(-1); // Zoom in
+      });
+    }
+
+    const btnTouchZoomOut = document.getElementById('btn-touch-zoom-out');
+    if (btnTouchZoomOut) {
+      btnTouchZoomOut.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.graphics.cycleZoomLevel(1); // Zoom out
+      });
+    }
   }
 
   showScreen(screenId) {
@@ -348,6 +930,11 @@ class GameManager {
     const screens = document.querySelectorAll('.overlay-screen');
     screens.forEach(s => s.classList.remove('active'));
     screens.forEach(s => s.classList.add('hidden'));
+
+    // If opening a screen other than in-game (screenId is non-empty), close the physics panel
+    if (screenId && screenId !== 'physics-calibrator-screen') {
+      this.togglePhysicsCalibrator(false);
+    }
 
     // If no target specified, just hide everything
     if (!screenId) return;
@@ -373,6 +960,8 @@ class GameManager {
   }
 
   async showLevelSelection(packName) {
+    this.isInfiniteMode = false;
+    this.infiniteZOffset = 0;
     this.currentPack = packName;
     this.gameState = 'loading';
     
@@ -391,7 +980,7 @@ class GameManager {
     const grid = document.getElementById('level-grid');
     grid.innerHTML = ''; // Clear previous
 
-    const names = packName === 'standard' ? this.standardRoadNames : this.xmasRoadNames;
+    const names = packName === 'standard' ? [...this.standardRoadNames, ...this.xmasRoadNames] : this.xmasRoadNames;
 
     levels.forEach((level, idx) => {
       const btn = document.createElement('div');
@@ -420,6 +1009,9 @@ class GameManager {
   }
 
   async startLevel(index) {
+    if (!this.isInfiniteMode) {
+      this.infiniteZOffset = 0;
+    }
     this.currentLevelIndex = index;
     const packLevels = getCachedPack(this.currentPack);
     this.currentLevelData = packLevels[index];
@@ -459,10 +1051,24 @@ class GameManager {
       }
     };
 
-    this.levelInfo = await buildLevelAsync(this.currentLevelData, this.graphics.scene, onProgress);
+    if (this.isInfiniteMode || this.infiniteZOffset !== 0) {
+      this.levelInfo = await buildLevelAsync(
+        this.currentLevelData, 
+        this.graphics.scene, 
+        onProgress, 
+        this.infiniteZOffset, 
+        this.isInfiniteMode
+      );
+    } else {
+      this.levelInfo = await buildLevelAsync(
+        this.currentLevelData, 
+        this.graphics.scene, 
+        onProgress
+      );
+    }
 
     // Spawn low-poly city scenery flanking both sides of the track
-    this.graphics.spawnCityScenery(this.levelInfo.trackLength);
+    this.graphics.spawnCityScenery(this.levelInfo.trackLength, this.infiniteZOffset);
 
     // 3. Reset Physics ship state
     this.physics.reset(this.levelInfo.fuel, this.levelInfo.oxygen);
@@ -491,27 +1097,43 @@ class GameManager {
       : 3; // default center
     const spawnX = (avgCol - 3) * TILE_WIDTH;
 
-    // Place ship on the first solid row, slightly elevated
-    const spawnZ = -spawnRow * TILE_LENGTH;
+    // Place ship on the first solid row, slightly elevated, adjusted by infiniteZOffset
+    const spawnZ = -spawnRow * TILE_LENGTH + this.infiniteZOffset;
     this.physics.position.set(spawnX, 0.3, spawnZ);
     this.physics.onGround = false;
 
     // 5. Update HUD headers & telemetry, then show HUD and hide overlays
     const packNameEl = document.getElementById('hud-pack-name');
     if (packNameEl) packNameEl.innerText = this.currentPack === 'standard' ? 'STANDARD PACK' : 'XMAS SPECIAL';
-    const roadNames = this.currentPack === 'standard' ? this.standardRoadNames : this.xmasRoadNames;
+    const roadNames = this.currentPack === 'standard' ? [...this.standardRoadNames, ...this.xmasRoadNames] : this.xmasRoadNames;
     const roadNameEl = document.getElementById('hud-road-name');
     if (roadNameEl) roadNameEl.innerText = roadNames[index] || `ROAD ${index}`;
 
-    const gravityVal = this.currentLevelData.gravity ? (this.currentLevelData.gravity * 100) : 800;
+    const gravityVal = this.currentLevelData.gravity ? ((this.currentLevelData.gravity - 3) * 100) : 500;
     const gravityTextEl = document.getElementById('hud-gravity-text');
     if (gravityTextEl) gravityTextEl.innerText = String(gravityVal).padStart(4, '0');
 
     document.getElementById('hud').classList.remove('hidden');
     this.showScreen(''); // Hide all menus
 
+    // Toggle Pause Trigger button visibility
+    const btnInGamePause = document.getElementById('btn-in-game-pause');
+    if (btnInGamePause) btnInGamePause.classList.remove('hidden');
+
+    // Toggle Mobile Touch controls HUD visibility
+    const touchHud = document.getElementById('mobile-touch-hud');
+    if (touchHud) {
+      if (this.keyboard.touchControlsEnabled) {
+        touchHud.classList.remove('hidden');
+        this.setupTouchControlsDOMEvents();
+      } else {
+        touchHud.classList.add('hidden');
+      }
+    }
+
     // 6. Trigger Continuous Sound Hum
     gameAudio.startEngine();
+    gameAudio.startMusic();
 
     this.gameState = 'playing';
     this.lastTime = performance.now();
@@ -520,13 +1142,237 @@ class GameManager {
   returnToMenu() {
     this.gameState = 'menu';
     document.getElementById('hud').classList.add('hidden');
+    
+    // Hide in-game trigger and touch HUD
+    const btnInGamePause = document.getElementById('btn-in-game-pause');
+    if (btnInGamePause) btnInGamePause.classList.add('hidden');
+    const touchHud = document.getElementById('mobile-touch-hud');
+    if (touchHud) touchHud.classList.add('hidden');
+
     gameAudio.stopEngine();
+    gameAudio.startMusic();
     this.showScreen('menu-screen');
+  }
+
+  pauseGame() {
+    this.gameState = 'paused';
+    gameAudio.stopEngine();
+    
+    const btnInGamePause = document.getElementById('btn-in-game-pause');
+    if (btnInGamePause) btnInGamePause.classList.add('hidden');
+    
+    const touchHud = document.getElementById('mobile-touch-hud');
+    if (touchHud) touchHud.classList.add('hidden');
+    
+    this.showScreen('pause-screen');
+  }
+
+  resumeGame() {
+    this.gameState = 'playing';
+    this.lastTime = performance.now();
+    gameAudio.startEngine();
+    gameAudio.startMusic();
+    
+    const btnInGamePause = document.getElementById('btn-in-game-pause');
+    if (btnInGamePause) btnInGamePause.classList.remove('hidden');
+    
+    const touchHud = document.getElementById('mobile-touch-hud');
+    if (touchHud && this.keyboard.touchControlsEnabled) touchHud.classList.remove('hidden');
+    
+    this.showScreen(''); // Hide pause overlay
+  }
+
+  setupTouchControlsDOMEvents() {
+    if (this._touchControlsSetupDone) return;
+    this._touchControlsSetupDone = true;
+
+    // Simple buttons binding
+    const touchButtons = document.querySelectorAll('.touch-btn, .dpad-btn');
+    touchButtons.forEach(btn => {
+      const action = btn.getAttribute('data-action');
+      if (!action) return;
+      
+      const pressStart = (e) => {
+        e.preventDefault();
+        btn.classList.add('pressed');
+        this.keyboard.setTouchState(action, true);
+      };
+
+      const pressEnd = (e) => {
+        e.preventDefault();
+        btn.classList.remove('pressed');
+        this.keyboard.setTouchState(action, false);
+      };
+
+      btn.addEventListener('touchstart', pressStart);
+      btn.addEventListener('touchend', pressEnd);
+      btn.addEventListener('touchcancel', pressEnd);
+
+      // Pointer events (for simulator testing and desktop mouse clicks)
+      btn.addEventListener('pointerdown', pressStart);
+      btn.addEventListener('pointerup', pressEnd);
+      btn.addEventListener('pointerleave', pressEnd);
+    });
+
+    // Joystick drag and steer
+    const joystickBase = document.getElementById('joystick-base');
+    const joystickKnob = document.getElementById('joystick-knob');
+    if (joystickBase && joystickKnob) {
+      let isDragging = false;
+
+      const handleMove = (e) => {
+        if (!isDragging) return;
+        const rect = joystickBase.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const maxDist = rect.width / 2 - 15;
+        let dx = e.clientX - centerX;
+        dx = Math.max(-maxDist, Math.min(maxDist, dx));
+        joystickKnob.style.transform = `translate(${dx}px, -50%)`;
+        this.keyboard.setTouchSteerAmount(dx / maxDist);
+      };
+
+      const handleEnd = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        joystickBase.releasePointerCapture(e.pointerId);
+        joystickKnob.style.transform = 'translate(0px, -50%)';
+        this.keyboard.setTouchSteerAmount(0);
+      };
+
+      joystickBase.addEventListener('pointerdown', (e) => {
+        isDragging = true;
+        joystickBase.setPointerCapture(e.pointerId);
+        handleMove(e);
+      });
+      joystickBase.addEventListener('pointermove', handleMove);
+      joystickBase.addEventListener('pointerup', handleEnd);
+      joystickBase.addEventListener('pointercancel', handleEnd);
+    }
+  }
+
+  toggleSettingsMenu() {
+    if (this.gameState === 'settings') {
+      // Close settings menu and restore state
+      const screenId = this.preSettingsState === 'playing' ? '' : (this.preSettingsState === 'paused' ? 'pause-screen' : 'menu-screen');
+      this.showScreen(screenId);
+      
+      if (this.preSettingsState === 'playing') {
+        this.gameState = 'playing';
+        gameAudio.startEngine();
+        gameAudio.startMusic();
+      } else {
+        this.gameState = this.preSettingsState;
+      }
+    } else {
+      // Open settings menu
+      gameAudio.stopEngine();
+      this.preSettingsState = this.gameState;
+      this.gameState = 'settings';
+      
+      // Update Settings popup overlay controls visibility based on gameplay state
+      const pausedActions = document.getElementById('settings-paused-actions');
+      if (pausedActions) {
+        if (this.preSettingsState === 'playing' || this.preSettingsState === 'paused') {
+          pausedActions.classList.remove('hidden');
+        } else {
+          pausedActions.classList.add('hidden');
+        }
+      }
+      
+      this.showScreen('settings-screen');
+    }
+  }
+
+  async triggerInfiniteLevelTransition() {
+    if (this.infiniteLevelTransitioning) return;
+    this.infiniteLevelTransitioning = true;
+    this.physics.isTransitioning = true;
+
+    // Save active level finishZ & roadMeshes to clean up later
+    const oldFinishZ = this.levelInfo.finishZ;
+    const oldMeshes = [...this.levelInfo.roadMeshes];
+
+    // We have 3.75s of transition tube at maxSpeedNormal (32).
+    // Midway through the tube (1.8s), load the next level ahead.
+    setTimeout(async () => {
+      try {
+        // 1. Calculate next level index
+        const packLevels = getCachedPack(this.currentPack);
+        const nextIdx = (this.currentLevelIndex + 1) % packLevels.length;
+        this.currentLevelIndex = nextIdx;
+        this.currentLevelData = packLevels[nextIdx];
+
+        // Bind to window for physics tile checks
+        window.currentLevelIndex = nextIdx;
+        window.currentLevelData = this.currentLevelData;
+
+        // 2. Set next level offset: start of next level starts exactly at end of autopilot tube
+        // End of tube is oldFinishZ - 120.0
+        this.infiniteZOffset = oldFinishZ - 120.0;
+
+        // 3. Load next level geometry asynchronously
+        const nextLevelInfo = await buildLevelAsync(
+          this.currentLevelData,
+          this.graphics.scene,
+          null,
+          this.infiniteZOffset,
+          true
+        );
+
+        // 4. Update scene references and clean up old meshes
+        this.levelInfo = nextLevelInfo;
+
+        // Spawn city scenery flanking the new track length at the new offset
+        this.graphics.spawnCityScenery(nextLevelInfo.trackLength, this.infiniteZOffset);
+
+        // Clean up old meshes from the scene
+        oldMeshes.forEach(mesh => {
+          this.graphics.scene.remove(mesh);
+          if (mesh.geometry) mesh.geometry.dispose();
+          if (mesh.material) {
+            if (Array.isArray(mesh.material)) {
+              mesh.material.forEach(m => m.dispose());
+            } else {
+              mesh.material.dispose();
+            }
+          }
+        });
+
+        // 5. Replenish fuel/oxygen and update gravity/telemetry
+        this.physics.fuel = nextLevelInfo.fuel * 50;
+        this.physics.oxygen = nextLevelInfo.oxygen;
+
+        const roadNames = this.currentPack === 'standard' ? [...this.standardRoadNames, ...this.xmasRoadNames] : this.xmasRoadNames;
+        const roadNameEl = document.getElementById('hud-road-name');
+        if (roadNameEl) roadNameEl.innerText = roadNames[nextIdx] || `ROAD ${nextIdx}`;
+
+        const gravityVal = this.currentLevelData.gravity ? ((this.currentLevelData.gravity - 3) * 100) : 500;
+        const gravityTextEl = document.getElementById('hud-gravity-text');
+        if (gravityTextEl) gravityTextEl.innerText = String(gravityVal).padStart(4, '0');
+
+        // Trigger a beautiful transition/refill sound effect!
+        gameAudio.playRefill();
+
+      } catch (error) {
+        console.error('Failed seamless level stitching transition:', error);
+      }
+    }, 1800);
+
+    // End autopilot and return controls to player after 3.75s
+    setTimeout(() => {
+      this.physics.isTransitioning = false;
+      this.infiniteLevelTransitioning = false;
+    }, 3750);
   }
 
   animate(timestamp) {
     const dt = (timestamp - this.lastTime) / 1000.0;
     this.lastTime = timestamp;
+
+    if (this.gameState === 'paused') {
+      this.animationFrameId = requestAnimationFrame((t) => this.animate(t));
+      return;
+    }
 
     if (this.gameState === 'playing') {
       // 1. Advance Physics Engine (DT capped internally to prevent tunneling)
@@ -573,7 +1419,11 @@ class GameManager {
 
       // 6. Check success condition (crossed Z-line)
       if (!this.physics.isDead && this.physics.position.z <= this.levelInfo.finishZ + SHIP_LENGTH / 2) {
-        this.handleSuccess();
+        if (this.isInfiniteMode) {
+          this.triggerInfiniteLevelTransition();
+        } else {
+          this.handleSuccess();
+        }
       }
 
       // 7. Check death condition
@@ -684,6 +1534,7 @@ class GameManager {
   handleDeath() {
     this.gameState = 'death';
     gameAudio.stopEngine();
+    gameAudio.stopMusic();
     gameAudio.playExplosion();
     this.graphics.triggerExplosion(this.physics.position);
 
@@ -712,6 +1563,7 @@ class GameManager {
   handleSuccess() {
     this.gameState = 'success';
     gameAudio.stopEngine();
+    gameAudio.stopMusic();
     gameAudio.playWin();
     
     // Hide next button if it was the last road

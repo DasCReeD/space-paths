@@ -16,7 +16,7 @@
 | **Test Runner** | [Vitest](https://vitest.dev/) v1.x (jsdom environment)        |
 | **Package**     | `skyroads-modern` v1.0.0 (private, ESM)                       |
 | **Fonts**       | Google Fonts — Orbitron (display), Outfit (body)               |
-| **Level Data**  | Pre-extracted JSON embedded in `levels.js` (~6 MB, 283k lines) |
+| **Level Data**  | Lazy-loaded JSON files fetched on demand (~6 MB standard and xmas packs) |
 
 ### Tech Stack Diagram
 
@@ -237,15 +237,15 @@ Tile = {
 
 | File | Lines | Size | Responsibility |
 |------|------:|-----:|----------------|
-| [app.js](file:///c:/dev/Sky%20roads/app.js) | 334 | 11 KB | Game orchestrator, state machine, UI event wiring, HUD updates, game loop |
-| [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) | 413 | 14 KB | Three.js renderer, scene setup, ship mesh, skybox, particles, chase camera |
-| [physics.js](file:///c:/dev/Sky%20roads/physics.js) | 375 | 13 KB | Position/velocity integration, collision detection, fuel/oxygen, special tiles, keyboard input |
-| [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) | 270 | 9 KB | Converts parsed level JSON to Three.js geometry, bounding boxes, finish line |
-| [audio.js](file:///c:/dev/Sky%20roads/audio.js) | 241 | 8 KB | Procedural sound synthesis via Web Audio API (engine hum, SFX) |
-| [levels.js](file:///c:/dev/Sky%20roads/levels.js) | 283,458 | 6.3 MB | Static level data constant (62 levels across 2 packs) |
-| [index.html](file:///c:/dev/Sky%20roads/index.html) | 154 | 6 KB | DOM structure: canvas container, HUD, overlay screens (menu, levels, death, success, how-to) |
-| [index.css](file:///c:/dev/Sky%20roads/index.css) | 515 | 11 KB | Synthwave design system: CSS custom properties, glassmorphism, neon glows, responsive layout |
-| [vite.config.js](file:///c:/dev/Sky%20roads/vite.config.js) | 17 | 236 B | Dev server (port 3000, auto-open), build (esbuild minify), test (jsdom) |
+| [app.js](file:///c:/dev/Sky%20roads/app.js) | 1,487 | 64 KB | Game orchestrator, state machine, UI event wiring, HUD updates, touch control mapping, physics calibrator dashboard, infinite road seamless transition manager, game loop |
+| [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) | 1,675 | 71 KB | Three.js renderer, scene setup, ship mesh, skybox, particles, chase camera, volumetric fragment shaders, city scenery spawners, custom procedural space/nebula particle systems |
+| [physics.js](file:///c:/dev/Sky%20roads/physics.js) | 579 | 24 KB | Three-axis motion integration, collision detection, fuel/oxygen, special tiles terrain effects, keyboard input, dynamic calibrator settings parameters, coyote-time buffers, collision/bounce behaviors |
+| [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) | 955 | 35 KB | Asynchronous geometry compilation, BoxGeometry/rounded archways, palette mappings, finish neon arches, gap/tunnel mesh optimizations |
+| [audio.js](file:///c:/dev/Sky%20roads/audio.js) | 494 | 18 KB | Procedural sound synthesis via Web Audio API, speed-modulated dual-oscillator engine hum, jump sweeps, refill chimes, boost sweeps, wall collisions, landing rebound variations, win arpeggios, background synthesizer music playback |
+| [levels.js](file:///c:/dev/Sky%20roads/levels.js) | 76 | 2 KB | Lazy-loading level pack manifest & caching utility to dynamically load `./data/standard_levels.json` and `./data/xmas_levels.json` without bloating initial page loads |
+| [index.html](file:///c:/dev/Sky%20roads/index.html) | 641 | 37 KB | DOM structure: canvas container, HUD overlays, touch controls overlays [D-Pad Hybrid, Classic Console layouts], settings popups with calibration sliders, level select buttons |
+| [index.css](file:///c:/dev/Sky%20roads/index.css) | 1,869 | 49 KB | Synthwave design system: glassmorphic styles, neon glow micro-animations, full-scale layouts, landscape/portrait media query scaling, touch dock UI |
+| [vite.config.js](file:///c:/dev/Sky%20roads/vite.config.js) | 17 | 325 B | Dev server (port 3000, auto-open), build (esbuild minify), test (jsdom) |
 | [package.json](file:///c:/dev/Sky%20roads/package.json) | 21 | 361 B | Package manifest, scripts: `dev`, `build`, `preview`, `test` |
 
 ---
@@ -256,13 +256,13 @@ Tile = {
 
 The project deliberately avoids SPA frameworks. `app.js` serves as a thin orchestrator wiring together three independent engines (graphics, physics, audio) plus a pure data module. This keeps the dependency graph flat and each module testable in isolation.
 
-### 2. Embedded Level Data vs. Runtime Loading
+### 2. Dynamic Lazy Loading of Level Data
 
-All 62 levels (~6 MB JSON) are embedded directly in `levels.js` rather than loaded at runtime. This eliminates network latency and asset-loading complexity at the cost of initial bundle size. Vite's tree-shaking and minification mitigate the payload for production builds.
+All level pack files (~6.3 MB JSON data) are dynamically lazy-loaded via `fetch` when starting standard or xmas level packs. The `levels.js` module exposes an asynchronous `loadLevelPack(packName)` function that caches data once fetched. This reduces the initial JS bundle size from 6MB+ to just ~2KB, ensuring fast loading and saving initial network bandwidth.
 
-### 3. Procedural Audio (No Asset Files)
+### 3. Procedural Audio & Music (No Asset Files)
 
-All sound effects are synthesized in real-time using oscillators, noise buffers, and filters from the Web Audio API. This means **zero audio file dependencies**, keeping the project fully self-contained and reducing deployment complexity.
+All sound effects (jump sweeps, engine rumble, refills, crashes, landing bounds, and steering clicks) and synth wave background tracks are synthesized in real-time using audio oscillators, custom gain envelopes, biquad filters, and custom white/brown noise buffers from the Web Audio API. This means **zero external audio assets to download**, keeping the project fully offline-capable, highly performant, and self-contained.
 
 ### 4. Global Window State for Cross-Module Communication
 
@@ -291,3 +291,18 @@ Special tile behaviors (boost, sticky, slippery, burning, refill) are determined
 ### 8. CSS Design System with Custom Properties
 
 The UI uses a synthwave/cyberpunk aesthetic defined through CSS custom properties (`:root` variables) for colors, fonts, and neon shadow effects. Glassmorphism cards (`backdrop-filter: blur`) overlay the 3D viewport.
+
+### 9. Multi-Touch HUD Overlay & Layout Customization
+
+To support mobile play, a high-fidelity glassmorphic overlay is injected dynamically with two distinct layouts:
+- **D-Pad Hybrid**: Left on-screen D-pad for steering and acceleration alongside right throttle/jump action triggers.
+- **Classic Console**: Left virtual slider joystick for analog-like steering, with right-side action buttons for discrete braking, thrusting, and jumping.
+Controls utilize multi-touch (`touchstart`, `touchend`, pointer capture) to guarantee zero latency and simultaneous button presses.
+
+### 10. Seamless Level Stitching (Infinite Road Mode)
+
+In infinite road mode, the game loops through levels seamlessly by stitching the track ahead. The orchestrator tracks a `this.infiniteZOffset` corresponding to the finish line of the current road. Mid-way through the autopilot transition, `buildLevelAsync` is triggered ahead, and obsolete Three.js meshes are cleanly deleted/disposed from memory to avoid resource leaks.
+
+### 11. Physics Parameter Calibrator settings
+
+An interactive settings popup exposes real-time slider controls for fine-tuning game constants such as forward speed, boost velocity, steering inertia, wall collision bounce/pushback, coyote-time buffers, and landing bounce height. This eliminates the default floating sensation and lets players customize responsiveness.

@@ -3,7 +3,8 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   server: {
     port: 3000,
-    open: true
+    open: true,
+    host: '0.0.0.0'
   },
   build: {
     outDir: 'dist',
@@ -11,6 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    globals: true
+    globals: true,
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.agents/**']
   }
 });

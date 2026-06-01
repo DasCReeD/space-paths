@@ -1,8 +1,17 @@
 // SkyRoads Three.js Visual & Rendering Pipeline
 import * as THREE from 'three';
 import { SHIP_WIDTH, SHIP_HEIGHT, SHIP_LENGTH } from './physics.js';
+import { CockpitConsole3D } from './cockpitConsole.js';
 import spaceshipHullPlatingUrl from './spaceship_hull_plating.png';
-import skyboxSpaceNebulaUrl from './skybox_space_nebula.png';
+import hudOverlayUrl from './hud_overlay.jfif';
+import cocpitUrl from './cocpit.jfif';
+import cocpitPilotUrl from './cocpit_pilot.jfif';
+
+const COCKPIT_OVERLAYS = [
+  hudOverlayUrl,
+  cocpitUrl,
+  cocpitPilotUrl
+];
 
 // Glob all large high-res Hubble background images from the top100 folder
 const skyboxImages = import.meta.glob('./SBS - Seamless Abstract Pack - 512x512/top100-large/top100/*.jpg', { eager: true });
@@ -11,9 +20,11 @@ const skyboxKeys = Object.keys(skyboxImages);
 // Add OBJ and FBX loaders
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import fighterObjUrl from './fighter1.obj?url';
 import uvMapUrl from './uvmap.jpg';
 import cityFbxUrl from './futuristic low poly city by niko.fbx?url';
+import skyboxGltfUrl from './assets/free_colorful_sci_fi_skybox_gltf/scene.gltf?url';
 
 // Custom skin textures provided by user in fighter.zip
 import freelancerSkinUrl from './freelancer.jpg';
@@ -240,6 +251,8 @@ export class GraphicsEngine {
     this.particles = [];
     this.starField = null;
     this.nebulaSphere = null;
+    this.skyboxMesh = null;
+    this.gltfLoaded = false;
     
     // Scenery templates & groups
     this.buildingTemplates = [];
@@ -280,11 +293,14 @@ export class GraphicsEngine {
       this.cameraHeightAdjust = 3.0; // All the way up by default!
       this.camLookTarget = null;
     }
+    this.cockpitStyleIndex = 0;
+    this.cameraPitchAdjust = 0.0;
   }
 
   init(container) {
     // 1. Create Scene & Renderer
     this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x0a0210); // Solid color background fallback
     this.scene.fog = new THREE.FogExp2(0x0a0519, 0.003); // Subtle atmospheric fog
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -298,6 +314,7 @@ export class GraphicsEngine {
     // 2. Setup Camera
     this.camera = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 1000);
     this.camera.position.set(0, 3, 8);
+    this.scene.add(this.camera);
 
     // 3. Add Premium Lighting — bright enough to see the road clearly
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
@@ -361,6 +378,14 @@ export class GraphicsEngine {
       // Safe catch
     }
 
+    // Initialize 3D Cockpit Console
+    try {
+      this.cockpitConsole3D = new CockpitConsole3D(this.camera);
+      this.cockpitConsole3D.updatePositionAndScale(container.clientWidth, container.clientHeight);
+    } catch (e) {
+      // Graceful fallback
+    }
+
     // Handle resize
     window.addEventListener('resize', () => this.handleResize(container));
 
@@ -369,8 +394,18 @@ export class GraphicsEngine {
   }
 
   toggleCameraMode() {
-    this.cameraMode = this.cameraMode === 'fixed' ? 'follow' : 'fixed';
+    if (this.cameraMode === 'fixed') {
+      this.cameraMode = 'follow';
+    } else if (this.cameraMode === 'follow') {
+      this.cameraMode = 'cockpit';
+    } else {
+      this.cameraMode = 'fixed';
+    }
     this.updateCameraHUD();
+  }
+
+  cycleCockpitStyle() {
+    // Legacy mockup overlay cycling removed completely
   }
 
   cycleZoomLevel(direction) {
@@ -403,13 +438,61 @@ export class GraphicsEngine {
     this.updateCameraHUD();
   }
 
+  adjustCameraPitch(direction) {
+    // direction: +1 to look up, -1 to look down
+    const step = 0.05; // radians (approx 2.8 degrees)
+    const minAdjust = -0.5; // -28.6 degrees
+    const maxAdjust = 0.5;  // 28.6 degrees
+    this.cameraPitchAdjust = Math.max(minAdjust, Math.min(maxAdjust, this.cameraPitchAdjust + direction * step));
+    this.updateCameraHUD();
+  }
+
+  setCameraFOV(fov) {
+    if (this.camera) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+      
+      const fovValEl = document.getElementById('hud-cam-fov-val');
+      if (fovValEl) {
+        fovValEl.innerText = `${Math.round(fov)}°`;
+      }
+      const sliderEl = document.getElementById('hud-cam-fov-slider');
+      if (sliderEl) {
+        sliderEl.value = fov;
+      }
+    }
+  }
+
   updateCameraHUD() {
     const modeEl = document.getElementById('hud-camera-mode');
     const zoomEl = document.getElementById('hud-camera-zoom');
     const heightEl = document.getElementById('hud-camera-height');
+    const pitchEl = document.getElementById('hud-camera-pitch');
+
+    const hud = document.getElementById('hud');
+    if (hud) {
+      if (this.cameraMode === 'cockpit') {
+        hud.classList.add('hud-cockpit-view');
+      } else {
+        hud.classList.remove('hud-cockpit-view');
+      }
+    }
+
+    if (this.shipMesh) {
+      this.shipMesh.visible = this.cameraMode !== 'cockpit';
+    }
+
     if (modeEl) {
-      modeEl.innerText = this.cameraMode === 'fixed' ? 'FIXED' : 'FOLLOW';
-      modeEl.style.color = this.cameraMode === 'fixed' ? '#00ffcc' : '#ffaa00';
+      if (this.cameraMode === 'fixed') {
+        modeEl.innerText = 'FIXED';
+        modeEl.style.color = '#00ffcc';
+      } else if (this.cameraMode === 'follow') {
+        modeEl.innerText = 'FOLLOW';
+        modeEl.style.color = '#ffaa00';
+      } else if (this.cameraMode === 'cockpit') {
+        modeEl.innerText = 'COCKPIT';
+        modeEl.style.color = '#ff00ff';
+      }
     }
     if (zoomEl) {
       zoomEl.innerText = this.zoomLevel.toUpperCase();
@@ -419,32 +502,100 @@ export class GraphicsEngine {
       const currentHeight = baseHeight + this.cameraHeightAdjust;
       heightEl.innerText = `${currentHeight.toFixed(2)}m`;
     }
+    if (pitchEl) {
+      const pitchDeg = this.cameraPitchAdjust * (180 / Math.PI);
+      pitchEl.innerText = `${pitchDeg.toFixed(1)}°`;
+    }
   }
 
   createSkybox() {
-    // 1. Create a massive background sphere for the custom space nebula texture
-    const textureLoader = new THREE.TextureLoader();
-    const nebulaTex = textureLoader.load(skyboxSpaceNebulaUrl);
-    nebulaTex.wrapS = THREE.RepeatWrapping;
-    nebulaTex.wrapT = THREE.RepeatWrapping;
-    
-    // Disable mipmapping and use linear filtering to force maximum crispness (no blurry skybox)
-    nebulaTex.minFilter = THREE.LinearFilter;
-    nebulaTex.magFilter = THREE.LinearFilter;
-    nebulaTex.generateMipmaps = false;
-    
-    // Enable anisotropic filtering if renderer and capabilities are available
-    if (this.renderer && this.renderer.capabilities) {
-      nebulaTex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
-    }
-    
+    // 1. Create a massive background sphere with a custom fBm shader or a solid fallback
     const sphereGeom = new THREE.SphereGeometry(450, 32, 32);
-    const sphereMat = new THREE.MeshBasicMaterial({
-      map: nebulaTex,
-      side: THREE.BackSide,
-      depthWrite: false,
-      fog: false // Disable level fog entirely to make Hubble images pop in vivid, pure colors!
-    });
+    let sphereMat;
+    if (this.isTestEnv) {
+      sphereMat = new THREE.MeshBasicMaterial({
+        color: 0x0a0210,
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false // Disable level fog entirely
+      });
+    } else {
+      sphereMat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          varying vec3 vPosition;
+          void main() {
+            vUv = uv;
+            vPosition = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform float uTime;
+          varying vec2 vUv;
+          varying vec3 vPosition;
+
+          // GPU-based 3D noise fBm algorithm
+          // 3D Noise from IQ
+          float hash(float n) { return fract(sin(n)*753.5453123); }
+          float noise(in vec3 x) {
+            vec3 p = floor(x);
+            vec3 f = fract(x);
+            f = f*f*(3.0-2.0*f);
+            float n = p.x + p.y*157.0 + 113.0*p.z;
+            return mix(mix(mix(hash(n+  0.0), hash(n+  1.0),f.x),
+                           mix(hash(n+157.0), hash(n+158.0),f.x),f.y),
+                       mix(mix(hash(n+113.0), hash(n+114.0),f.x),
+                           mix(hash(n+270.0), hash(n+271.0),f.x),f.y),f.z);
+          }
+
+          float fbm(vec3 p) {
+            float f = 0.0;
+            f += 0.5000 * noise(p); p = p * 2.01;
+            f += 0.2500 * noise(p); p = p * 2.02;
+            f += 0.1250 * noise(p); p = p * 2.03;
+            f += 0.0625 * noise(p);
+            return f;
+          }
+
+          void main() {
+            // Swirling animated cosmic nebulae blending neon colors (deep purple, cosmic magenta, cyan highlights)
+            vec3 dir = normalize(vPosition);
+            
+            // fBm noise query coordinates rotating slowly
+            float angle = uTime * 0.005;
+            float s = sin(angle);
+            float c = cos(angle);
+            vec3 rotDir = vec3(
+              dir.x * c - dir.z * s,
+              dir.y,
+              dir.x * s + dir.z * c
+            );
+            
+            float n = fbm(rotDir * 3.5 + vec3(0.0, 0.0, uTime * 0.03));
+            
+            // Blending cyberpunk colors
+            vec3 purple = vec3(0.12, 0.02, 0.25);
+            vec3 magenta = vec3(0.98, 0.0, 0.6);
+            vec3 cyan = vec3(0.0, 0.98, 0.98);
+            
+            vec3 col = mix(purple, magenta, n);
+            col = mix(col, cyan, pow(max(0.0, n - 0.4), 2.0) * 2.5);
+            
+            // Add subtle vignettes
+            gl_FragColor = vec4(col * (0.8 + 0.2 * n), 1.0);
+          }
+        `,
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false
+      });
+    }
+
     const nebulaSphere = new THREE.Mesh(sphereGeom, sphereMat);
     this.nebulaSphere = nebulaSphere;
     this.scene.add(nebulaSphere);
@@ -562,8 +713,87 @@ export class GraphicsEngine {
 
       this.starField = new THREE.LineSegments(geom, mat);
       this.scene.add(this.starField);
-    }
 
+      // ── LOGARITHMIC SPIRAL GALAXY PARTICLES ──
+      // Implement an animated particle system containing ~1500 particles behind the play space
+      const galaxyCount = 1500;
+      const galaxyGeom = new THREE.BufferGeometry();
+      const galaxyPosArray = new Float32Array(galaxyCount * 3);
+      const galaxyColorArray = new Float32Array(galaxyCount * 3);
+      
+      this.galaxyParticlesData = [];
+      const aVal = 3.5;
+      const bVal = 0.28;
+      
+      for (let i = 0; i < galaxyCount; i++) {
+        // Place along double arms: 50% chance to shift theta by PI
+        const isArm2 = Math.random() < 0.5;
+        const theta = Math.random() * Math.PI * 4.0;
+        const spiralTheta = isArm2 ? theta + Math.PI : theta;
+        
+        // Logarithmic spiral base radius: r = a * e^(b*theta)
+        const spiralRadius = aVal * Math.exp(bVal * theta);
+        
+        // Add normal-distributed offsets
+        const u1 = Math.random() || 0.0001;
+        const u2 = Math.random();
+        const normalRand = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+        const radialOffset = normalRand * (spiralRadius * 0.15 + 1.2);
+        
+        const finalRadius = spiralRadius + radialOffset;
+        const finalX = Math.cos(spiralTheta) * finalRadius;
+        const finalY = Math.sin(spiralTheta) * finalRadius;
+        const finalZ = (Math.random() - 0.5) * (spiralRadius * 0.15 + 3.0);
+        
+        // Track the data for rotational updates
+        this.galaxyParticlesData.push({
+          radius: finalRadius,
+          theta: spiralTheta,
+          zOffset: finalZ
+        });
+        
+        galaxyPosArray[i * 3] = finalX;
+        galaxyPosArray[i * 3 + 1] = finalY + 25.0; // Place behind play space, shifted up
+        galaxyPosArray[i * 3 + 2] = -420.0 + finalZ; // Distant background
+        
+        // Blending cyberpunk colors
+        const randCol = Math.random();
+        if (randCol < 0.35) {
+          galaxyColorArray[i * 3] = 0.0; galaxyColorArray[i * 3 + 1] = 0.98; galaxyColorArray[i * 3 + 2] = 0.98; // Cyan
+        } else if (randCol < 0.70) {
+          galaxyColorArray[i * 3] = 0.98; galaxyColorArray[i * 3 + 1] = 0.0; galaxyColorArray[i * 3 + 2] = 0.6; // Magenta
+        } else {
+          galaxyColorArray[i * 3] = 0.4; galaxyColorArray[i * 3 + 1] = 0.0; galaxyColorArray[i * 3 + 2] = 0.7; // Deep purple
+        }
+      }
+      
+      galaxyGeom.setAttribute('position', new THREE.BufferAttribute(galaxyPosArray, 3));
+      galaxyGeom.setAttribute('color', new THREE.BufferAttribute(galaxyColorArray, 3));
+      
+      const galaxyCanvas = document.createElement('canvas');
+      galaxyCanvas.width = 16;
+      galaxyCanvas.height = 16;
+      const galaxyCtx = galaxyCanvas.getContext('2d');
+      const galaxyGrad = galaxyCtx.createRadialGradient(8, 8, 0, 8, 8, 8);
+      galaxyGrad.addColorStop(0, 'rgba(255,255,255,1)');
+      galaxyGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      galaxyCtx.fillStyle = galaxyGrad;
+      galaxyCtx.fillRect(0, 0, 16, 16);
+      
+      const galaxyTex = new THREE.CanvasTexture(galaxyCanvas);
+      const galaxyMat = new THREE.PointsMaterial({
+        size: 3.5,
+        map: galaxyTex,
+        vertexColors: true,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        fog: false
+      });
+      
+      this.galaxyPoints = new THREE.Points(galaxyGeom, galaxyMat);
+      this.scene.add(this.galaxyPoints);
+    }
 
     // Glowing Neon Synthwave Sun at the distant horizon
     const sunGeom = new THREE.CircleGeometry(50, 32);
@@ -576,6 +806,58 @@ export class GraphicsEngine {
     this.sunMesh = new THREE.Mesh(sunGeom, sunMat);
     this.sunMesh.position.set(0, 20, -350);
     this.scene.add(this.sunMesh);
+
+    // Initialize time variables
+    this.uTimeAccumulator = 0;
+
+    // Wingtip glow history setup
+    this.wingtipHistory = { left: [], right: [] };
+    this.leftTrailMesh = null;
+    this.rightTrailMesh = null;
+
+    // Asynchronously load the 3D GLTF model under assets/free_colorful_sci_fi_skybox_gltf/scene.gltf
+    if (!this.isTestEnv) {
+      try {
+        const gltfLoader = new GLTFLoader();
+        gltfLoader.load(
+          skyboxGltfUrl,
+          (gltf) => {
+            try {
+              this.skyboxMesh = gltf.scene;
+              // Scale it up by a massive factor so it serves as the environment backdrop
+              this.skyboxMesh.scale.set(500, 500, 500);
+              
+              // Add loaded mesh to scene
+              this.scene.add(this.skyboxMesh);
+              this.gltfLoaded = true;
+
+              // Cleanly disable and hide the old procedural elements
+              if (this.nebulaSphere) {
+                this.nebulaSphere.visible = false;
+              }
+              if (this.starField) {
+                this.starField.visible = false;
+              }
+              if (this.galaxyPoints) {
+                this.galaxyPoints.visible = false;
+              }
+              if (this.sunMesh) {
+                this.sunMesh.visible = false;
+              }
+            } catch (err) {
+              console.error("Error setting up loaded GLTF skybox:", err);
+            }
+          },
+          undefined,
+          (err) => {
+            console.error("Error loading GLTF skybox:", err);
+          }
+        );
+      } catch (e) {
+        console.error("GLTFLoader instantiation failed:", e);
+      }
+    }
+
   }
 
   loadModelAndTexture(modelName, skinNameOrColor, onComplete) {
@@ -1093,24 +1375,48 @@ export class GraphicsEngine {
       idealCamTarget.x = 0.0;
       idealCamPos.y = this.lastOnGroundHeight + scaledOffset.y;
       idealCamTarget.y = this.lastOnGroundHeight + scaledTargetOffset.y;
-    } else {
+    } else if (this.cameraMode === 'follow') {
       // Follow mode: follow ship dynamically in X, Y (including jumps), and Z
       idealCamPos.x = physics.position.x;
       idealCamPos.y = physics.position.y + scaledOffset.y;
       idealCamTarget.x = physics.position.x;
       idealCamTarget.y = physics.position.y + scaledTargetOffset.y;
+    } else if (this.cameraMode === 'cockpit') {
+      // Cockpit mode: place camera exactly inside the cabin / at the nose of the ship pointing forward!
+      const metrics = SHIP_METRICS[this.currentModelName] || SHIP_METRICS.original;
+      // Place camera slightly forward and above the ship origin, adjusted by height control
+      const heightOffset = metrics.height + 0.15 + (this.cameraHeightAdjust * 0.1);
+      const cockpitOffset = new THREE.Vector3(0, heightOffset, -metrics.offset - 0.2);
+      // Apply ship rotation
+      cockpitOffset.applyEuler(this.shipMesh.rotation);
+      
+      idealCamPos.copy(physics.position).add(cockpitOffset);
+      
+      // Target is directly ahead along ship forward direction, rotated by pitch controls
+      const forward = new THREE.Vector3(0, 0, -10.0);
+      const pitchEuler = new THREE.Euler(this.cameraPitchAdjust, 0, 0);
+      forward.applyEuler(pitchEuler);
+      
+      forward.applyEuler(this.shipMesh.rotation);
+      idealCamTarget.copy(physics.position).add(forward);
     }
 
-    // Interpolate camera position for buttery-smooth movements
-    this.camera.position.lerp(idealCamPos, 0.1);
-    
-    // Stable direct look-at target interpolation (breaks recursive camera matrix feedback loops)
-    if (!this.camLookTarget) {
-      this.camLookTarget = idealCamTarget.clone();
+    if (this.cameraMode === 'cockpit') {
+      // Zero lag tracking inside the cockpit to prevent jitter
+      this.camera.position.copy(idealCamPos);
+      this.camera.lookAt(idealCamTarget);
     } else {
-      this.camLookTarget.lerp(idealCamTarget, 0.1);
+      // Interpolate camera position for buttery-smooth movements
+      this.camera.position.lerp(idealCamPos, 0.1);
+      
+      // Stable direct look-at target interpolation (breaks recursive camera matrix feedback loops)
+      if (!this.camLookTarget) {
+        this.camLookTarget = idealCamTarget.clone();
+      } else {
+        this.camLookTarget.lerp(idealCamTarget, 0.1);
+      }
+      this.camera.lookAt(this.camLookTarget);
     }
-    this.camera.lookAt(this.camLookTarget);
 
     // Keep the directional sunlight aligned near the ship for optimal shadows
     this.sunLight.position.set(physics.position.x + 30, 80, physics.position.z + 40);
@@ -1172,9 +1478,186 @@ export class GraphicsEngine {
       this.sunMesh.position.x = physics.position.x;
       this.sunMesh.position.z = physics.position.z - 350;
     }
+    if (this.skyboxMesh && this.gltfLoaded) {
+      // Copy the player's position so that the skybox centers dynamically on the ship
+      this.skyboxMesh.position.copy(physics.position);
+      
+      // Apply a slow rotation over time to make it dynamic and majestic
+      this.skyboxMesh.rotation.y += 0.015 * dt;
+    }
 
     // 3. Update active particles (thrusters and explosions)
     this.updateParticles(physics, dt);
+
+    // Update uTime uniform for the fBm background nebula shader material
+    this.uTimeAccumulator += dt;
+    if (this.nebulaSphere && this.nebulaSphere.material && this.nebulaSphere.material.uniforms && this.nebulaSphere.material.uniforms.uTime) {
+      this.nebulaSphere.material.uniforms.uTime.value = this.uTimeAccumulator;
+    }
+
+    // ── ROTATE LOGARITHMIC SPIRAL GALAXY PARTICLES ──
+    // Implement slowly rotating logarithmic spiral galaxy particles behind the play space with decaying angular velocity rotation
+    if (this.galaxyPoints && this.galaxyParticlesData) {
+      const posAttr = this.galaxyPoints.geometry.attributes.position;
+      const posArray = posAttr.array;
+      const timeFactor = this.uTimeAccumulator * 0.08;
+      
+      for (let i = 0; i < this.galaxyParticlesData.length; i++) {
+        const data = this.galaxyParticlesData[i];
+        
+        // Decay angular velocity based on radial distance: outer parts rotate slower!
+        // Decaying angular velocity: theta(t) = theta0 + baseSpeed * dt / (1.0 + radius * 0.05)
+        const angularVelocity = 0.12 / (1.0 + data.radius * 0.06);
+        const currentTheta = data.theta + timeFactor * angularVelocity;
+        
+        posArray[i * 3] = Math.cos(currentTheta) * data.radius;
+        posArray[i * 3 + 1] = Math.sin(currentTheta) * data.radius + 25.0; // Place behind play space, shifted up
+        // Z position stays fixed with subtle random drift
+        posArray[i * 3 + 2] = -420.0 + data.zOffset;
+      }
+      posAttr.needsUpdate = true;
+    }
+
+    // ── SPACESHIP EXHAUST FLAME MESHS PULSING ──
+    // Exhaust flame scale pulsing using a periodic sin wave to look incredibly alive and organic
+    if (this.nozzleL && this.nozzleR && !physics.isDead) {
+      const pulseScale = 1.0 + Math.sin(this.uTimeAccumulator * 32.0) * 0.18;
+      this.nozzleL.scale.set(pulseScale, pulseScale, pulseScale);
+      this.nozzleR.scale.set(pulseScale, pulseScale, pulseScale);
+    }
+
+    // ── SPACESHIP WINGTIP GLOW TRAILS (Ribbon Mesh) ──
+    // Implement Spaceship Exhaust/Wing Trails (Milestone 4):
+    // Track wingtip history (15 points), create Ribbon Mesh with additive blending and opacity gradients.
+    if (!this.isTestEnv && this.shipMesh && !physics.isDead) {
+      const metrics = SHIP_METRICS[this.currentModelName] || SHIP_METRICS.original;
+      
+      // Calculate precise left and right wingtip absolute coordinates in world space
+      const shipPos = physics.position.clone();
+      const leftTipOffset = new THREE.Vector3(-metrics.offset * 1.6, metrics.height + 0.15, SHIP_LENGTH / 2);
+      const rightTipOffset = new THREE.Vector3(metrics.offset * 1.6, metrics.height + 0.15, SHIP_LENGTH / 2);
+      
+      // Apply ship rotation/orientation to tip offsets
+      leftTipOffset.applyEuler(this.shipMesh.rotation);
+      rightTipOffset.applyEuler(this.shipMesh.rotation);
+      
+      const leftTipWorld = shipPos.clone().add(leftTipOffset);
+      const rightTipWorld = shipPos.clone().add(rightTipOffset);
+
+      // Add to history queues (max 15 points)
+      this.wingtipHistory.left.push(leftTipWorld);
+      this.wingtipHistory.right.push(rightTipWorld);
+
+      if (this.wingtipHistory.left.length > 15) this.wingtipHistory.left.shift();
+      if (this.wingtipHistory.right.length > 15) this.wingtipHistory.right.shift();
+
+      // Helper function to build or update a Ribbon mesh
+      const updateRibbonTrail = (history, side) => {
+        if (history.length < 2) return;
+        
+        let geom;
+        let isNew = false;
+        
+        const meshName = side === 'left' ? 'leftTrailMesh' : 'rightTrailMesh';
+        
+        if (!this[meshName]) {
+          geom = new THREE.BufferGeometry();
+          isNew = true;
+        } else {
+          geom = this[meshName].geometry;
+        }
+
+        const count = history.length;
+        const positions = new Float32Array(count * 2 * 3); // 2 vertices (top & bottom edges) per history point
+        
+        for (let i = 0; i < count; i++) {
+          const pt = history[i];
+          const idx = i * 6;
+          
+          // Width of ribbon tapers off slightly towards the tail
+          const width = 0.05 * (i / count);
+          
+          // Top edge vertex
+          positions[idx] = pt.x;
+          positions[idx + 1] = pt.y + width;
+          positions[idx + 2] = pt.z;
+          
+          // Bottom edge vertex
+          positions[idx + 3] = pt.x;
+          positions[idx + 4] = pt.y - width;
+          positions[idx + 5] = pt.z;
+        }
+
+        geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+        // Create triangle indices if first time creating
+        if (isNew) {
+          const indices = [];
+          for (let i = 0; i < count - 1; i++) {
+            const v = i * 2;
+            // Face 1
+            indices.push(v, v + 1, v + 2);
+            // Face 2
+            indices.push(v + 1, v + 3, v + 2);
+          }
+          geom.setIndex(indices);
+          
+          // Gorgeous additive blend ribbon material matching ship aesthetic (neon cyan or magenta)
+          const trailColor = side === 'left' ? 0x00ffff : 0xff00ff;
+          const trailMat = new THREE.MeshBasicMaterial({
+            color: trailColor,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.7,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+          });
+
+          this[meshName] = new THREE.Mesh(geom, trailMat);
+          this.scene.add(this[meshName]);
+        } else {
+          geom.attributes.position.needsUpdate = true;
+        }
+
+        // Fade trail opacity organically towards the trailing tip
+        if (this[meshName] && this[meshName].material) {
+          this[meshName].material.opacity = 0.65 * (physics.velocity.length() / 25.0);
+        }
+      };
+
+      updateRibbonTrail(this.wingtipHistory.left, 'left');
+      updateRibbonTrail(this.wingtipHistory.right, 'right');
+    }
+
+    // ── NEON pulsing TRACK MATERIAL PATHWAYS ──
+    // Implement neon pulsing pathways using shader animation inside the active scene meshes
+    if (!this.isTestEnv && this.scene) {
+      const pulseVal = Math.sin(this.uTimeAccumulator * 4.5) * 0.35 + 0.65;
+      
+      this.scene.traverse((child) => {
+        // Find road meshes and pulse their emissive intensity
+        if (child.isMesh && child.material && child.material.emissive) {
+          // If the material has standard name/properties, pulse it!
+          if (child.material.emissiveIntensity !== undefined) {
+            // Emissive glow zones get pulsed extra brightly
+            if (child.material.emissiveIntensity > 1.0) {
+              child.material.emissiveIntensity = 2.0 + Math.sin(this.uTimeAccumulator * 8.0) * 1.0;
+            } else {
+              child.material.emissiveIntensity = 0.25 + Math.sin(this.uTimeAccumulator * 4.5) * 0.15;
+            }
+          }
+        }
+      });
+    }
+
+    if (this.cockpitConsole3D) {
+      try {
+        const levelData = (typeof window !== 'undefined') ? window.currentLevelData : null;
+        this.cockpitConsole3D.update(physics, levelData, this.cameraMode);
+      } catch (e) {
+        // Graceful fallback
+      }
+    }
   }
 
   // Manage thrusters and crash explosions
@@ -1408,14 +1891,14 @@ export class GraphicsEngine {
    *
    * @param {number} trackLength - Z-length of the current level road track.
    */
-  spawnCityScenery(trackLength) {
+  spawnCityScenery(trackLength, zOffset = 0) {
     if (this.buildingTemplates.length === 0 || !this.sceneryGroup) return;
 
     const interval = 35.0; // spawn every 35 units along Z-axis
     const leftX = -18.0;   // safely to the left of the 14-width road
     const rightX = 18.0;  // safely to the right
 
-    for (let z = -20; z > -trackLength; z -= interval) {
+    for (let z = -20 + zOffset; z > -trackLength + zOffset; z -= interval) {
       // Left side building
       const tLeft = this.buildingTemplates[Math.floor(Math.random() * this.buildingTemplates.length)];
       if (tLeft) {
@@ -1444,6 +1927,13 @@ export class GraphicsEngine {
     this.camera.aspect = container.clientWidth / container.clientHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(container.clientWidth, container.clientHeight);
+    if (this.cockpitConsole3D) {
+      try {
+        this.cockpitConsole3D.updatePositionAndScale(container.clientWidth, container.clientHeight);
+      } catch (e) {
+        // Graceful fallback
+      }
+    }
   }
 
   render() {

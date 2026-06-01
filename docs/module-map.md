@@ -20,7 +20,7 @@
 
 ## app.js — Game Orchestrator
 
-**File:** [app.js](file:///c:/dev/Sky%20roads/app.js) · 334 lines · 11 KB
+**File:** [app.js](file:///c:/dev/Sky%20roads/app.js) · 1,487 lines · 64 KB
 
 ### Imports
 
@@ -113,7 +113,7 @@ graph TD
 
 ## graphics.js — Rendering Engine
 
-**File:** [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) · 413 lines · 14 KB
+**File:** [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) · 1,675 lines · 71 KB
 
 ### Imports
 
@@ -187,7 +187,7 @@ Defined at [L5–L412](file:///c:/dev/Sky%20roads/graphics.js#L5-L412).
 
 ## physics.js — Physics Engine & Input
 
-**File:** [physics.js](file:///c:/dev/Sky%20roads/physics.js) · 375 lines · 13 KB
+**File:** [physics.js](file:///c:/dev/Sky%20roads/physics.js) · 579 lines · 24 KB
 
 ### Imports
 
@@ -305,7 +305,7 @@ Defined at [L349–L373](file:///c:/dev/Sky%20roads/physics.js#L349-L373).
 
 ## levelLoader.js — Level Geometry Builder
 
-**File:** [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) · 270 lines · 9 KB
+**File:** [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) · 955 lines · 35 KB
 
 ### Imports
 
@@ -389,7 +389,7 @@ Converts a palette index to a Three.js Color using the level's palette array. Fa
 
 ## audio.js — Sound Synthesizer
 
-**File:** [audio.js](file:///c:/dev/Sky%20roads/audio.js) · 241 lines · 8 KB
+**File:** [audio.js](file:///c:/dev/Sky%20roads/audio.js) · 494 lines · 18 KB
 
 ### Imports
 
@@ -447,7 +447,7 @@ Defined at [L3–L238](file:///c:/dev/Sky%20roads/audio.js#L3-L238). Not exporte
 
 ## levels.js — Level Data Store
 
-**File:** [levels.js](file:///c:/dev/Sky%20roads/levels.js) · 283,458 lines · 6.3 MB
+**File:** [levels.js](file:///c:/dev/Sky%20roads/levels.js) · 76 lines · 2 KB
 
 ### Imports
 
@@ -480,7 +480,7 @@ Each `LevelData` object contains:
 
 ## index.html — DOM Element Map
 
-**File:** [index.html](file:///c:/dev/Sky%20roads/index.html) · 154 lines · 6 KB
+**File:** [index.html](file:///c:/dev/Sky%20roads/index.html) · 641 lines · 37 KB
 
 ### Element ID Reference
 
@@ -563,7 +563,7 @@ Every DOM element accessed by JavaScript, organized by screen:
 
 ## index.css — Design System
 
-**File:** [index.css](file:///c:/dev/Sky%20roads/index.css) · 515 lines · 11 KB
+**File:** [index.css](file:///c:/dev/Sky%20roads/index.css) · 1,869 lines · 49 KB
 
 ### CSS Custom Properties (`:root`)
 

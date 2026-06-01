@@ -1,17 +1,138 @@
 // Web Audio API Retro Sound Synthesizer for SkyRoads WebGL
 
+class RetroMusicSequencer {
+  constructor(audioCtx) {
+    this.ctx = audioCtx;
+    this.bpm = 125;
+    this.stepDuration = 60 / this.bpm / 4; // 16th notes
+    this.isPlaying = false;
+    this.intervalId = null;
+    this.currentStep = 0;
+    this.gainNode = null;
+    this.musicEnabled = true;
+
+    // A minor / C major retro arpeggio progression (16 steps per loop)
+    this.bassLine = [
+      45, 45, 45, 45, // A2
+      43, 43, 43, 43, // G2
+      41, 41, 41, 41, // F2
+      40, 40, 40, 40  // E2
+    ];
+
+    this.leadArp = [
+      57, 60, 64, 69, // A3, C4, E4, A4
+      55, 59, 62, 67, // G3, B3, D4, G4
+      53, 57, 60, 65, // F3, A3, C4, F4
+      52, 56, 59, 64  // E3, G#3, B3, E4
+    ];
+  }
+
+  init() {
+    if (this.gainNode) return;
+    this.gainNode = this.ctx.createGain();
+    this.gainNode.gain.setValueAtTime(0.0, this.ctx.currentTime);
+    this.gainNode.connect(this.ctx.destination);
+  }
+
+  midiToFreq(note) {
+    return 440 * Math.pow(2, (note - 69) / 12);
+  }
+
+  playStep(time) {
+    if (!this.musicEnabled) return;
+
+    const step = this.currentStep % 16;
+    const bassNote = this.bassLine[step];
+    const leadNote = this.leadArp[step];
+
+    // 1. Play deep retro triangular bass notes (on steps 0, 2, 4, 6...)
+    if (step % 2 === 0) {
+      const bassOsc = this.ctx.createOscillator();
+      const bassGain = this.ctx.createGain();
+      bassOsc.type = "triangle";
+      bassOsc.frequency.setValueAtTime(this.midiToFreq(bassNote - 12), time);
+      
+      bassGain.gain.setValueAtTime(0.04, time);
+      bassGain.gain.exponentialRampToValueAtTime(0.001, time + this.stepDuration * 1.8);
+      
+      bassOsc.connect(bassGain);
+      bassGain.connect(this.gainNode);
+      bassOsc.start(time);
+      bassOsc.stop(time + this.stepDuration * 1.8);
+    }
+
+    // 2. Play beautiful pulse/square lead arpeggio on 16th notes
+    const leadOsc = this.ctx.createOscillator();
+    const leadGain = this.ctx.createGain();
+    leadOsc.type = "sine"; // Warm retro sine arpeggiator
+    leadOsc.frequency.setValueAtTime(this.midiToFreq(leadNote), time);
+
+    leadGain.gain.setValueAtTime(0.012, time);
+    leadGain.gain.exponentialRampToValueAtTime(0.001, time + this.stepDuration * 0.95);
+
+    leadOsc.connect(leadGain);
+    leadGain.connect(this.gainNode);
+    leadOsc.start(time);
+    leadOsc.stop(time + this.stepDuration * 0.95);
+
+    this.currentStep++;
+  }
+
+  start() {
+    this.init();
+    if (this.isPlaying || !this.musicEnabled) return;
+    this.isPlaying = true;
+    this.currentStep = 0;
+    this.gainNode.gain.setTargetAtTime(0.35, this.ctx.currentTime, 0.1);
+
+    let nextNoteTime = this.ctx.currentTime;
+    const scheduleAheadTime = 0.1;
+
+    const scheduler = () => {
+      while (nextNoteTime < this.ctx.currentTime + scheduleAheadTime) {
+        this.playStep(nextNoteTime);
+        nextNoteTime += this.stepDuration;
+      }
+    };
+
+    this.intervalId = setInterval(scheduler, 25);
+  }
+
+  stop() {
+    if (!this.isPlaying) return;
+    this.isPlaying = false;
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    if (this.gainNode) {
+      this.gainNode.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.05);
+    }
+  }
+}
+
 class AudioSynthesizer {
   constructor() {
     this.ctx = null;
     this.engineOsc = null;
     this.engineGain = null;
     this.isEngineRunning = false;
+    this.musicSequencer = null;
   }
 
   init() {
-    if (this.ctx) return;
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(e => console.warn("Failed to resume AudioContext:", e));
+      }
+      return;
+    }
     try {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.musicSequencer = new RetroMusicSequencer(this.ctx);
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(e => console.warn("Failed to resume AudioContext:", e));
+      }
     } catch (e) {
       console.warn("Web Audio API is not supported in this browser:", e);
     }
@@ -410,6 +531,31 @@ class AudioSynthesizer {
       noiseNode.stop(this.ctx.currentTime + 0.08);
     } catch (e) {
       // Ignore
+    }
+  }
+
+  startMusic() {
+    this.init();
+    if (this.musicSequencer) {
+      this.musicSequencer.start();
+    }
+  }
+
+  stopMusic() {
+    if (this.musicSequencer) {
+      this.musicSequencer.stop();
+    }
+  }
+
+  setMusicEnabled(enabled) {
+    this.init();
+    if (this.musicSequencer) {
+      this.musicSequencer.musicEnabled = enabled;
+      if (!enabled) {
+        this.musicSequencer.stop();
+      } else {
+        this.musicSequencer.start();
+      }
     }
   }
 }

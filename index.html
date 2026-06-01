@@ -21,8 +21,29 @@
   </script>
 </head>
 <body>
+  <!-- Top-Left Floating Settings Gear Button -->
+  <button id="btn-settings-gear" class="btn-settings-gear-trigger" title="Open Settings">
+    <svg viewBox="0 0 24 24" width="24" height="24">
+      <path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+    </svg>
+  </button>
+
+  <!-- Top-Left Floating Physics Calibrator Button -->
+  <button id="btn-settings-physics" class="btn-settings-physics-trigger" title="Tune Physics">
+    <svg viewBox="0 0 24 24" width="24" height="24">
+      <path fill="currentColor" d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
+    </svg>
+  </button>
+
+
   <!-- Container for the 3D viewport -->
   <div id="canvas-container"></div>
+
+  <!-- Top-Left In-Game Pause Trigger Button -->
+  <button id="btn-in-game-pause" class="btn-pause-trigger hidden" title="Pause Game">
+    <span></span>
+    <span></span>
+  </button>
 
   <!-- Centered Cockpit Dashboard HUD overlay shown during gameplay -->
   <div id="hud" class="hud-container hidden">
@@ -148,12 +169,23 @@
           </div>
         </div>
 
-        <div class="telemetry-box camera-box">
-          <span class="cockpit-sublabel">CAM</span>
-          <div class="camera-info-row">
-            <div>MODE: <span id="hud-camera-mode">FIXED</span></div>
-            <div>ZOOM: <span id="hud-camera-zoom">MED</span></div>
-            <div>HGT: <span id="hud-camera-height">1.80m</span></div>
+        <div class="telemetry-box camera-box" style="height: auto; min-height: 80px; gap: 4px;">
+          <span class="cockpit-sublabel">CAM CONFIG</span>
+          <div class="camera-info-row" style="font-size: 0.48rem; display: flex; flex-direction: column; gap: 2px;">
+            <div style="display: flex; justify-content: space-between; width: 100%;">
+              <span>MODE: <span id="hud-camera-mode" style="font-weight:900;">FIXED</span></span>
+              <span>ZOOM: <span id="hud-camera-zoom">MED</span></span>
+            </div>
+            <div style="display: flex; justify-content: space-between; width: 100%;">
+              <span>HGT: <span id="hud-camera-height">1.80m</span></span>
+              <span>PITCH: <span id="hud-camera-pitch">0.0°</span></span>
+            </div>
+            <!-- FOV Slider (Next-Gen UI integration) -->
+            <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px; pointer-events: auto; width: 100%;">
+              <span style="font-size: 0.44rem; color: #8c8f99;">FOV</span>
+              <input type="range" id="hud-cam-fov-slider" min="45" max="110" value="65" style="width: 70px; height: 4px; background: #2f3035; border: none; cursor: pointer; outline: none; flex-grow: 1;" title="Adjust Field of View">
+              <span id="hud-cam-fov-val" style="font-size: 0.44rem; font-weight:900; color: #ff00ff; min-width: 22px; text-align: right;">65°</span>
+            </div>
           </div>
         </div>
 
@@ -171,6 +203,19 @@
 
   <!-- Screens Overlay (Menus, Death Screen, Success Screen) -->
   <div id="ui-overlay" class="overlay-container">
+
+    <!-- PAUSE MENU OVERLAY -->
+    <div id="pause-screen" class="overlay-screen hidden glass-card status-card">
+      <h2 class="status-title text-success">GAME PAUSED</h2>
+      <p class="status-msg">Space journey suspended. Systems stable.</p>
+      
+      <div class="menu-buttons">
+        <button id="btn-pause-resume" class="btn btn-primary btn-glow">RESUME</button>
+        <button id="btn-pause-retry" class="btn btn-secondary btn-glow">RETRY</button>
+        <button id="btn-pause-toggle-boat-throttle" class="btn btn-info btn-glow">BOAT THROTTLE: OFF</button>
+        <button id="btn-pause-quit" class="btn btn-secondary">QUIT TO MAIN MENU</button>
+      </div>
+    </div>
     
     <!-- MAIN MENU SCREEN -->
     <div id="menu-screen" class="overlay-screen active glass-card">
@@ -178,10 +223,12 @@
       <h2 class="subtitle-text">MODERN WEBGL REMAKE</h2>
       
       <div class="menu-buttons">
-        <button id="btn-play-standard" class="btn btn-primary btn-glow">PLAY STANDARD PACK</button>
-        <button id="btn-play-xmas" class="btn btn-secondary btn-glow">PLAY XMAS SPECIAL</button>
-        <button id="btn-toggle-mouse" class="btn btn-info btn-glow">MOUSE PLAY: OFF</button>
-        <button id="btn-open-picker" class="btn btn-info btn-glow">SPACESHIP GARAGE</button>
+        <button id="btn-play-standard" class="btn btn-primary btn-glow">PLAY</button>
+        <button id="btn-play-xmas" class="btn btn-secondary btn-glow" style="display: none !important;">PLAY XMAS SPECIAL</button>
+        <button id="btn-toggle-mouse" class="btn btn-info btn-glow" style="display: none !important;">MOUSE PLAY: OFF</button>
+        <button id="btn-toggle-touch" class="btn btn-info btn-glow" style="display: none !important;">TOUCH CONTROLS: OFF</button>
+        <button id="btn-toggle-boat-throttle" class="btn btn-info btn-glow" style="display: none !important;">BOAT THROTTLE: OFF</button>
+        <button id="btn-open-picker" class="btn btn-info btn-glow" style="display: none !important;">SPACESHIP GARAGE</button>
         <button id="btn-how-to" class="btn btn-info">HOW TO PLAY</button>
       </div>
 
@@ -190,11 +237,246 @@
       </div>
     </div>
 
+    <!-- UNIFIED SETTINGS & PAUSE MENU OVERLAY -->
+    <div id="settings-screen" class="overlay-screen hidden glass-card status-card">
+      <h2 class="status-title text-glow">SYSTEM SETTINGS</h2>
+      
+      <!-- Paused Gameplay actions (Only visible when paused) -->
+      <div id="settings-paused-actions" class="menu-buttons hidden" style="margin-bottom: 20px;">
+        <button id="btn-settings-resume" class="btn btn-primary btn-glow">RESUME ROAD</button>
+        <button id="btn-settings-retry" class="btn btn-secondary btn-glow">RETRY ROAD</button>
+        <button id="btn-settings-quit" class="btn btn-secondary">QUIT TO MENU</button>
+      </div>
+
+      <div class="settings-options" style="display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 320px; margin: 0 auto;">
+        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">DIFFICULTY</span>
+          <button id="btn-settings-difficulty" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">DIFFICULTY: EASY</button>
+        </div>
+        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">BACKGROUND MUSIC</span>
+          <button id="btn-settings-music" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">MUSIC: ON</button>
+        </div>
+        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">MOUSE PLAY</span>
+          <button id="btn-settings-mouse" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">MOUSE PLAY: OFF</button>
+        </div>
+        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">TOUCH HUD</span>
+          <button id="btn-settings-touch" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">TOUCH HUD: OFF</button>
+        </div>
+        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">BOAT THROTTLE</span>
+          <button id="btn-settings-boat-throttle" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">BOAT: OFF</button>
+        </div>
+        <div class="settings-control-row" style="margin-top: 10px; width: 100%;">
+          <button id="btn-settings-picker" class="btn btn-secondary btn-glow" style="width: 100%; font-size: 0.8rem; padding: 10px 15px; margin: 0;">SPACESHIP GARAGE</button>
+        </div>
+        <div class="settings-control-row" style="margin-top: 5px; width: 100%;">
+          <button id="btn-settings-calibrator" class="btn btn-secondary btn-glow" style="width: 100%; font-size: 0.8rem; padding: 10px 15px; margin: 0; background: linear-gradient(135deg, #a100ff 0%, #ff007f 100%);">PHYSICS CALIBRATOR ⚙️</button>
+        </div>
+      </div>
+      
+      <div class="menu-buttons" style="margin-top: 25px;">
+        <button id="btn-settings-close" class="btn btn-primary btn-glow">CLOSE</button>
+      </div>
+    </div>
+
+    <!-- ADVANCED PHYSICS CALIBRATOR OVERLAY -->
+    <div id="physics-calibrator-screen" class="physics-floating-calibrator glass-card">
+      <h2 class="status-title text-glow">PHYSICS CALIBRATOR</h2>
+      
+      <!-- Tunable Preset Selectors -->
+      <div class="preset-section" style="margin-bottom: 12px; text-align: center; width: 100%;">
+        <span style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; font-weight: 700; color: #ff007f; display: block; margin-bottom: 8px; text-shadow: 0 0 5px rgba(255,0,127,0.3);">CALIBRATION PRESETS</span>
+        <div class="preset-buttons-container" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; width: 100%;">
+          <button id="preset-btn-vga" class="btn-preset active">VGA CLASSIC</button>
+          <button id="preset-btn-snappy" class="btn-preset">MODERN SNAPPY</button>
+          <button id="preset-btn-lunar" class="btn-preset">LUNAR FLOAT</button>
+          <button id="preset-btn-custom" class="btn-preset">CUSTOM SLOT</button>
+        </div>
+      </div>
+
+      <!-- Live Save status alert -->
+      <div id="calibrator-status-alert" style="height: 20px; font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: #00ff66; text-align: center; margin-bottom: 10px; font-weight: 700; opacity: 0; transition: opacity 0.3s ease; text-shadow: 0 0 8px rgba(0,255,102,0.4);">
+        CONFIGURATION AUTO-SAVED 💾
+      </div>
+
+      <div class="calibrator-scroll-container" style="flex: 1; overflow-y: auto; padding-right: 5px; width: 100%; display: flex; flex-direction: column; gap: 20px;">
+        
+        <!-- SECTION 1: THROTTLE (SPEED & ACCELERATION) -->
+        <div class="calibrator-group-card">
+          <div class="group-header">1. THROTTLE (FORWARD VELOCITY)</div>
+          <div class="sliders-list">
+            
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">MAX NORMAL SPEED</span>
+                <span id="val-maxSpeedNormal" class="slider-value">32.0</span>
+              </div>
+              <input type="range" id="input-maxSpeedNormal" min="10" max="60" step="1" value="32">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">MAX BOOST SPEED</span>
+                <span id="val-maxSpeedBoost" class="slider-value">60.0</span>
+              </div>
+              <input type="range" id="input-maxSpeedBoost" min="30" max="100" step="1" value="60">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">FORWARD ACCELERATION</span>
+                <span id="val-accelForward" class="slider-value">18.0</span>
+              </div>
+              <input type="range" id="input-accelForward" min="5" max="50" step="1" value="18">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">BRAKES DECELERATION</span>
+                <span id="val-decelBrakes" class="slider-value">35.0</span>
+              </div>
+              <input type="range" id="input-decelBrakes" min="10" max="80" step="1" value="35">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">PASSIVE ROLLING DRAG</span>
+                <span id="val-dragZ" class="slider-value">4.0</span>
+              </div>
+              <input type="range" id="input-dragZ" min="0" max="20" step="0.5" value="4">
+            </div>
+
+          </div>
+        </div>
+
+        <!-- SECTION 2: HANDLING & REBOUNDS -->
+        <div class="calibrator-group-card">
+          <div class="group-header">2. HANDLING (STEERING & REBOUNDS)</div>
+          <div class="sliders-list">
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">STEERING SPEED</span>
+                <span id="val-maxSteerSpeed" class="slider-value">10.0</span>
+              </div>
+              <input type="range" id="input-maxSteerSpeed" min="4" max="25" step="0.5" value="10">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">STEERING RESPONSE (INERTIA)</span>
+                <span id="val-steerAccel" class="slider-value">35.0</span>
+              </div>
+              <input type="range" id="input-steerAccel" min="10" max="100" step="1" value="35">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">STEERING STABILIZATION</span>
+                <span id="val-dragSteer" class="slider-value">28.0</span>
+              </div>
+              <input type="range" id="input-dragSteer" min="5" max="80" step="1" value="28">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">WALL IMPACT BOUNCE VELOCITY</span>
+                <span id="val-easyCollisionBounceVel" class="slider-value">10.0</span>
+              </div>
+              <input type="range" id="input-easyCollisionBounceVel" min="2" max="25" step="0.5" value="10">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">WALL IMPACT PUSHBACK DISTANCE</span>
+                <span id="val-easyCollisionBounceDist" class="slider-value">1.2</span>
+              </div>
+              <input type="range" id="input-easyCollisionBounceDist" min="0.2" max="3.0" step="0.1" value="1.2">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">GROUND LANDING BOUNCE HEIGHT</span>
+                <span id="val-bounceFactor" class="slider-value">1.0</span>
+              </div>
+              <input type="range" id="input-bounceFactor" min="0" max="3.0" step="0.1" value="1.0">
+            </div>
+
+          </div>
+        </div>
+
+        <!-- SECTION 3: JUMPING & FLIGHT -->
+        <div class="calibrator-group-card">
+          <div class="group-header">3. JUMPING & FLIGHT DYNAMICS</div>
+          <div class="sliders-list">
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">JUMP HEIGHT (IMPULSE)</span>
+                <span id="val-jumpImpulse" class="slider-value">10.5</span>
+              </div>
+              <input type="range" id="input-jumpImpulse" min="5" max="20" step="0.5" value="10.5">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">GRAVITY SCALE (JUMP DURATION)</span>
+                <span id="val-gravityFactor" class="slider-value">1.0</span>
+              </div>
+              <input type="range" id="input-gravityFactor" min="0.2" max="3.0" step="0.05" value="1.0">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">ASYMMETRIC DOWNWARD GRAVITY</span>
+                <span id="val-fallGravityMultiplier" class="slider-value">1.45</span>
+              </div>
+              <input type="range" id="input-fallGravityMultiplier" min="1.0" max="2.5" step="0.05" value="1.45">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">SHORT JUMP RELEASE DAMPENING</span>
+                <span id="val-variableJumpDampening" class="slider-value">0.82</span>
+              </div>
+              <input type="range" id="input-variableJumpDampening" min="0.5" max="1.0" step="0.02" value="0.82">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">COYOTE TIME JUMP BUFFER</span>
+                <span id="val-coyoteTimeBuffer" class="slider-value">0.25</span>
+              </div>
+              <input type="range" id="input-coyoteTimeBuffer" min="0.0" max="0.8" step="0.05" value="0.25">
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="menu-buttons" style="margin-top: 15px; display: flex; gap: 15px; justify-content: center; width: 100%;">
+        <button id="btn-calibrator-reset" class="btn btn-secondary" style="font-size: 0.75rem; padding: 10px 15px; margin: 0; min-width: 180px;">RESET PRESET TO BASE 🔄</button>
+        <button id="btn-calibrator-close" class="btn btn-primary btn-glow" style="font-size: 0.75rem; padding: 10px 15px; margin: 0; min-width: 120px;">BACK</button>
+      </div>
+    </div>
+
     <!-- LEVEL SELECTION SCREEN -->
     <div id="level-screen" class="overlay-screen hidden glass-card">
       <div class="overlay-header">
         <button id="btn-level-back" class="btn-icon">&larr; BACK</button>
         <h2 id="level-pack-title" class="screen-title">SELECT A ROAD</h2>
+      </div>
+
+      <!-- Infinite Road Mode Trigger Button -->
+      <div style="margin-bottom: 20px; width: 100%; display: flex; justify-content: center;">
+        <button id="btn-start-infinite" class="btn btn-primary btn-glow" style="width: 100%; max-width: 400px; font-size: 0.9rem; padding: 14px 20px; font-family: 'Orbitron', sans-serif; letter-spacing: 1px;">
+          START INFINITE ROAD 🚀
+        </button>
       </div>
 
       <div id="level-grid" class="level-grid-container">
@@ -256,7 +538,11 @@
         </div>
         <div class="control-row">
           <span class="key-badge">C</span>
-          <span class="control-desc">TOGGLE CAMERA MODE (FIXED / FOLLOW)</span>
+          <span class="control-desc">CYCLE CAMERA (FIXED ➔ FOLLOW ➔ COCKPIT)</span>
+        </div>
+        <div class="control-row">
+          <span class="key-badge">H</span>
+          <span class="control-desc">CYCLE COCKPIT CABIN/HUD STYLES</span>
         </div>
         <div class="control-row">
           <span class="key-badge">[</span> <span class="key-badge">]</span>
@@ -366,3 +652,56 @@
   <script type="module" src="./app.js"></script>
 </body>
 </html>
+
+<!-- Mobile Touch HUD Overlay -->
+<div id="mobile-touch-hud" class="touch-hud hidden pointer-events-none">
+  <button id="btn-touch-layout-toggle" class="touch-layout-btn pointer-events-auto" title="Cycle Control Layout">
+    LAYOUT: D-PAD HYBRID
+  </button>
+  <button id="btn-touch-boat-throttle" class="touch-boat-btn pointer-events-auto" title="Toggle Boat Throttle Mode">
+    BOAT: OFF
+  </button>
+
+  <!-- Floating Touch Camera Control Dock -->
+  <div id="touch-camera-dock" class="touch-camera-dock pointer-events-auto">
+    <button id="btn-touch-cam-mode" class="touch-cam-btn" title="Cycle Camera Mode">📷 VIEW</button>
+    <button id="btn-touch-zoom-in" class="touch-cam-btn" title="Zoom In">🔍 +</button>
+    <button id="btn-touch-zoom-out" class="touch-cam-btn" title="Zoom Out">🔍 -</button>
+  </div>
+
+  <!-- D-Pad Hybrid Layout Container -->
+  <div id="layout-dpad-hybrid" class="touch-layout-container active">
+    <div class="dpad-hybrid-container pointer-events-auto">
+      <div class="dpad-btn dpad-up" data-action="forward">▲</div>
+      <div class="dpad-btn dpad-left" data-action="left">◀</div>
+      <div class="dpad-center-stub"></div>
+      <div class="dpad-btn dpad-right" data-action="right">▶</div>
+      <div class="dpad-btn dpad-down" data-action="backward">▼</div>
+    </div>
+    
+    <div class="right-buttons-hybrid pointer-events-auto">
+      <button class="touch-btn action-jump" data-action="jump">
+        <span class="btn-icon-lbl">▲</span>
+        JUMP
+      </button>
+      <button class="touch-btn action-throttle" data-action="forward">
+        <span class="btn-icon-lbl">⚡</span>
+        THRUST
+      </button>
+    </div>
+  </div>
+
+  <!-- Classic Console Layout Container -->
+  <div id="layout-classic-console" class="touch-layout-container hidden">
+    <div id="joystick-base" class="joystick-base pointer-events-auto">
+      <div id="joystick-knob" class="joystick-knob"></div>
+      <div class="joystick-guide-text">◀ STEER ▶</div>
+    </div>
+
+    <div class="right-buttons-classic pointer-events-auto">
+      <button class="touch-btn action-brake-classic" data-action="backward">BRAKE</button>
+      <button class="touch-btn action-throttle-classic" data-action="forward">THRUST</button>
+      <button class="touch-btn action-jump-classic" data-action="jump">JUMP</button>
+    </div>
+  </div>
+</div>

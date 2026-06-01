@@ -397,6 +397,22 @@ describe('buildLevel', () => {
       // 1 obstacle block + 3 tunnel walls = 4
       expect(result.collidables).toHaveLength(4);
     });
+
+    it('should dynamically shift tunnel height (baseY) to sit on top of block obstacle', () => {
+      const halfBlockWithTunnel = createHalfBlockTile(0);
+      halfBlockWithTunnel.tunnel = true;
+      halfBlockWithTunnel.bottom_color = 1;
+      const row = [null, null, null, halfBlockWithTunnel, null, null, null];
+      const levelData = createBaseLevelData({ rows: [row] });
+      const result = buildLevel(levelData, scene);
+      
+      // We expect 1 block collidable (minY=0.0, maxY=1.0) and 3 tunnel collidables (minY=1.0, maxY=3.8)
+      expect(result.collidables).toHaveLength(4);
+      
+      // Find the tunnel left wall collidable
+      const tunnelLeftWall = result.collidables.find(c => c.minY === 1.0 && c.maxY === 3.8);
+      expect(tunnelLeftWall).toBeDefined();
+    });
   });
 
   // ── Gravity Scaling ───────────────────────────────────────────────────
@@ -470,6 +486,21 @@ describe('buildLevel', () => {
       });
       const result = buildLevel(levelData, scene);
       expect(result.finishZ).toBe(-(1 * TILE_LENGTH) - 2.0);
+    });
+
+    it('should generate an autopilot tube with support ribs in Infinite Mode', () => {
+      const levelData = createBaseLevelData({
+        rows: [createNullRow()]
+      });
+      const result = buildLevel(levelData, scene, 0, true);
+      
+      // Without infinite mode, it creates 4 finish elements.
+      // With infinite mode, it adds:
+      // - 1 translucent autopilot tube
+      // - 5 pink support ribs
+      // Total meshes: 4 + 1 + 5 = 10
+      expect(result.roadMeshes).toHaveLength(10);
+      expect(scene.add).toHaveBeenCalledTimes(10);
     });
   });
 

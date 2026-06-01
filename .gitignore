@@ -10,7 +10,13 @@ node_modules/
 # Production Builds
 dist/
 
+# Agent Workspaces
+.agents/
+
 # OS/Editor Caches
 .DS_Store
 Thumbs.db
 *.log
+
+# Large download zips
+top100-large.zip

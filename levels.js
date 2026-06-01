@@ -22,6 +22,26 @@ export async function loadLevelPack(packName) {
     xmas: './data/xmas_levels.json',
   };
 
+  if (packName === 'standard') {
+    const resStandard = await fetch(`${fileMap.standard}?v=${Date.now()}`);
+    const resXmas = await fetch(`${fileMap.xmas}?v=${Date.now()}`);
+    if (!resStandard.ok || !resXmas.ok) {
+      throw new Error(`Failed to load standard or xmas level pack`);
+    }
+    const standardLevels = await resStandard.json();
+    const xmasLevels = await resXmas.json();
+
+    const combinedLevels = [
+      ...standardLevels,
+      ...xmasLevels.map((lvl, idx) => ({
+        ...lvl,
+        level_index: standardLevels.length + idx
+      }))
+    ];
+    packCache['standard'] = combinedLevels;
+    return combinedLevels;
+  }
+
   const url = fileMap[packName];
   if (!url) {
     throw new Error(`Unknown level pack: "${packName}"`);

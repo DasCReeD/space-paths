@@ -493,6 +493,34 @@ describe('PhysicsEngine', () => {
       expect(physics.isRebounding).toBe(false); // Cleared
       expect(physics.onGround).toBe(false);
     });
+
+    it('should respect custom gravityFactor settings', () => {
+      physics.onGround = false;
+      physics.velocity.y = 5.0;
+      physics.settings.gravityFactor = 2.0;
+      physics.update(0.05, keyboard, levelInfo);
+      // Expected: gravity scaled by gravityFactor (24 * 2.0 = 48)
+      // Vy = 5.0 - 48.0 * 0.05 = 2.6
+      expect(physics.velocity.y).toBeCloseTo(2.6, 5);
+    });
+
+    it('should respect custom bounceFactor settings', () => {
+      physics.position.set(0, 0.05, -30);
+      physics.velocity.set(0, -6.0, -10.0);
+      physics.onGround = false;
+      physics.settings.bounceFactor = 1.5;
+      
+      window.currentLevelData = {
+        rows: Array.from({ length: 100 }, () => [{}, {}, {}, {}, {}, {}, {}])
+      };
+      
+      physics.update(0.016, keyboard, levelInfo);
+      
+      // Expected: rebound velocity scaled by bounceFactor (4.2 * 1.5 = 6.3)
+      expect(physics.velocity.y).toBeCloseTo(6.3, 5);
+      
+      window.currentLevelData = null; // Cleanup
+    });
   });
 
   // ── Fuel Consumption ──────────────────────────────────────────────────
@@ -830,6 +858,25 @@ describe('PhysicsEngine', () => {
       expect(physics.deathReason).toBe('COLLIDED WITH BLOCK');
     });
 
+    it('should bounce back on front collision when difficulty is easy', () => {
+      physics.difficulty = 'easy';
+      physics.position.set(0, 0.2, -5.5);
+      physics.velocity.z = -10.0;
+      const obstacle = createObstacleBlock({
+        minX: -1.0, maxX: 1.0,
+        minY: 0.0, maxY: 2.0,
+        minZ: -10.0, maxZ: -5.5
+      });
+      const collidingLevel = createLevelInfo({ collidables: [obstacle] });
+      physics.update(0.05, keyboard, collidingLevel);
+      
+      expect(physics.isDead).toBe(false);
+      expect(physics.velocity.z).toBe(10.0); // Bounced back velocity
+      // Z position is: -5.5 + (-9.8)*0.05 + 1.2 = -5.99 + 1.2 = -4.79
+      expect(physics.position.z).toBeCloseTo(-4.79, 5);
+      expect(physics.triggerWallCollisionAudio).toBe(true); // Bounce audio trigger
+    });
+
     it('should zero velocity on collision death', () => {
       // Same setup as front-hit test; verify velocity zeroed on collision
       physics.position.set(0, 0.2, -5.5);
@@ -1164,6 +1211,96 @@ describe('PhysicsEngine', () => {
       expect(SHIP_WIDTH).toBe(0.6);
       expect(SHIP_HEIGHT).toBe(0.4);
       expect(SHIP_LENGTH).toBe(1.8);
+    });
+  });
+
+  // ── Advanced Physics Calibrator & Presets ─────────────────────────────
+
+  describe('Advanced Physics Calibrator Sliders & Presets', () => {
+    it('should initialize with default customizable settings', () => {
+      expect(physics.settings.maxSpeedNormal).toBe(32.0);
+      expect(physics.settings.maxSpeedBoost).toBe(60.0);
+      expect(physics.settings.accelForward).toBe(18.0);
+      expect(physics.settings.decelBrakes).toBe(35.0);
+      expect(physics.settings.dragZ).toBe(4.0);
+      expect(physics.settings.maxSteerSpeed).toBe(10.0);
+      expect(physics.settings.steerAccel).toBe(35.0);
+      expect(physics.settings.dragSteer).toBe(28.0);
+      expect(physics.settings.easyCollisionBounceVel).toBe(10.0);
+      expect(physics.settings.easyCollisionBounceDist).toBe(1.2);
+      expect(physics.settings.fallGravityMultiplier).toBe(1.45);
+      expect(physics.settings.variableJumpDampening).toBe(0.82);
+      expect(physics.settings.coyoteTimeBuffer).toBe(0.25);
+    });
+
+    it('should apply custom max normal speed in Z update', () => {
+      physics.settings.maxSpeedNormal = 50.0;
+      physics.velocity.z = -45.0;
+      keyboard.forward = true;
+      physics.update(0.05, keyboard, levelInfo);
+      
+      // With custom max speed of 50, velocity of -45 can accelerate forward (-Z)
+      // accelForward * dt = 18 * 0.05 = 0.9. Vz becomes -45 - 0.9 = -45.9
+      expect(physics.velocity.z).toBeCloseTo(-45.9, 3);
+    });
+
+    it('should cap normal speed to custom max normal speed', () => {
+      physics.settings.maxSpeedNormal = 20.0;
+      physics.velocity.z = -25.0;
+      physics.update(0.05, keyboard, levelInfo);
+      
+      // Custom max speed is 20, so vz should be capped to -20
+      expect(physics.velocity.z).toBe(-20.0);
+    });
+
+    it('should apply custom steering acceleration inertia in X update', () => {
+      physics.settings.steerAccel = 80.0;
+      keyboard.right = true;
+      physics.update(0.05, keyboard, levelInfo);
+      
+      // vx = 0 + steerAccel * dt = 0 + 80 * 0.05 = 4.0
+      expect(physics.velocity.x).toBeCloseTo(4.0, 3);
+    });
+
+    it('should apply custom easy collision bounce pushback factors', () => {
+      physics.difficulty = 'easy';
+      physics.settings.easyCollisionBounceVel = 18.0;
+      physics.settings.easyCollisionBounceDist = 2.5;
+      
+      // Position Z at start boundary of obstacle
+      physics.position.set(0, 0.2, -5.5);
+      physics.velocity.z = -10.0;
+      const obstacle = createObstacleBlock({
+        minX: -1.0, maxX: 1.0,
+        minY: 0.0, maxY: 2.0,
+        minZ: -10.0, maxZ: -5.5
+      });
+      const collidingLevel = createLevelInfo({ collidables: [obstacle] });
+      physics.update(0.05, keyboard, collidingLevel);
+
+      expect(physics.isDead).toBe(false);
+      expect(physics.velocity.z).toBe(18.0); // Uses custom bounce velocity
+      // Z position: -5.5 + (-9.8)*0.05 + 2.5 = -5.99 + 2.5 = -3.49
+      expect(physics.position.z).toBeCloseTo(-3.49, 3);
+    });
+
+    it('should utilize custom coyote time buffer range', () => {
+      physics.settings.coyoteTimeBuffer = 0.65;
+      
+      // Ship falling down (vy = -1) and is 0.5 units above groundHeight (0)
+      physics.position.set(0, 0.5, -10);
+      physics.velocity.y = -1.0;
+      physics.groundHeight = 0;
+      physics.onGround = false;
+      
+      // Try to jump
+      keyboard.jump = true;
+      physics.update(0.05, keyboard, levelInfo);
+
+      // Coyote buffer of 0.65 allows jumping at 0.5 units high!
+      // velocity.y should be reset to jump impulse (10.5) minus gravity over dt (24 * 0.05 = 1.2) = 9.3
+      expect(physics.velocity.y).toBeCloseTo(9.3, 5);
+      expect(physics.onGround).toBe(false);
     });
   });
 });

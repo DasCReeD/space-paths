@@ -1216,4 +1216,1024 @@ body, html {
   box-shadow: 0 0 10px var(--color-primary);
 }
 
+/* First-Person Cockpit Cabin Overlay Styles */
+.cockpit-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 4; /* Layer exactly on top of Three.js canvas but underneath HUD dashboards */
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.cockpit-overlay.active {
+  opacity: 1;
+}
+
+.cockpit-overlay img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill; /* Covers the full screen to create a immersive cockpit bezel mockup */
+  filter: contrast(1.15) brightness(0.95);
+}
+
+.cockpit-hud-hint {
+  position: absolute;
+  top: 25px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ff00ff;
+  background: rgba(10, 5, 20, 0.75);
+  border: 1px solid rgba(255, 0, 255, 0.3);
+  padding: 6px 16px;
+  border-radius: 20px;
+  letter-spacing: 1.5px;
+  box-shadow: 0 0 10px rgba(255, 0, 255, 0.2);
+  text-shadow: 0 0 5px rgba(255, 0, 255, 0.5);
+  z-index: 10;
+  animation: pulsing-hint 2s infinite ease-in-out;
+}
+
+@keyframes pulsing-hint {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; box-shadow: 0 0 15px rgba(255, 0, 255, 0.45); }
+}
+
+
+/* In-Game Top-Left Pause Trigger Button styling */
+.btn-pause-trigger {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 46px;
+  height: 46px;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-pause-trigger span {
+  width: 4px;
+  height: 18px;
+  background-color: var(--color-secondary);
+  border-radius: 2px;
+  transition: background-color 0.2s ease;
+  box-shadow: 0 0 8px var(--color-secondary-glow);
+}
+
+.btn-pause-trigger:hover {
+  background: rgba(255, 255, 255, 0.16);
+  transform: scale(1.05);
+  border-color: var(--color-secondary);
+}
+
+.btn-pause-trigger:hover span {
+  background-color: var(--color-primary);
+  box-shadow: 0 0 8px var(--color-primary-glow);
+}
+
+.btn-pause-trigger:active {
+  transform: scale(0.92);
+}
+
+/* Mobile Touch Controls HUD Styling with high-fidelity glassmorphism */
+.touch-hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 99;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.pointer-events-none {
+  pointer-events: none !important;
+}
+
+.pointer-events-auto {
+  pointer-events: auto !important;
+}
+
+.touch-layout-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.touch-layout-btn:hover {
+  border-color: var(--color-secondary);
+  color: var(--color-secondary);
+  box-shadow: 0 0 15px var(--color-secondary-glow);
+}
+
+.touch-layout-btn.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 15px var(--color-primary-glow);
+}
+
+.touch-boat-btn {
+  position: absolute;
+  top: 20px;
+  left: 80px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.touch-boat-btn:hover {
+  border-color: var(--color-secondary);
+  color: var(--color-secondary);
+  box-shadow: 0 0 15px var(--color-secondary-glow);
+}
+
+.touch-boat-btn.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 15px var(--color-primary-glow);
+}
+
+.touch-camera-dock {
+  position: absolute;
+  top: 75px;
+  right: 20px;
+  display: flex;
+  gap: 8px;
+  z-index: 100;
+}
+
+.touch-cam-btn {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.touch-cam-btn:hover, .touch-cam-btn:active {
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 10px var(--color-secondary-glow);
+  transform: scale(1.05);
+}
+
+.touch-layout-container {
+  position: absolute;
+  bottom: 160px; /* Aligned above the main dashboard cockpit panel height of 140px */
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 40px;
+  box-sizing: border-box;
+  transition: opacity 0.3s ease;
+}
+
+/* D-Pad Hybrid design (classic diamond Dpad layout) */
+.dpad-hybrid-container {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  background: rgba(10, 5, 20, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(255, 0, 204, 0.15);
+  border-radius: 50%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 12px rgba(255, 255, 255, 0.05);
+}
+
+.dpad-btn {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dpad-up { top: 8px; left: 64px; }
+.dpad-left { top: 64px; left: 8px; }
+.dpad-right { top: 64px; right: 8px; }
+.dpad-down { bottom: 8px; left: 64px; }
+
+.dpad-center-stub {
+  position: absolute;
+  top: 66px;
+  left: 66px;
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 0, 204, 0.05);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.dpad-btn:active, .dpad-btn.pressed {
+  background: rgba(255, 0, 204, 0.18);
+  border-color: var(--color-primary);
+  color: var(--color-text);
+  box-shadow: 0 0 15px var(--color-primary-glow);
+  transform: scale(0.92);
+}
+
+/* Action Buttons */
+.touch-btn {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.touch-btn .btn-icon-lbl {
+  font-size: 1.25rem;
+  margin-bottom: 2px;
+}
+
+.touch-btn:active, .touch-btn.pressed {
+  transform: scale(0.92);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.right-buttons-hybrid {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.action-jump {
+  width: 86px;
+  height: 86px;
+  font-size: 0.68rem;
+  border-color: var(--color-secondary-glow);
+}
+.action-jump:active, .action-jump.pressed {
+  background: rgba(0, 255, 204, 0.18);
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 20px var(--color-secondary-glow);
+}
+
+.action-throttle {
+  width: 100px;
+  height: 100px;
+  font-size: 0.76rem;
+  border-color: var(--color-primary-glow);
+}
+.action-throttle:active, .action-throttle.pressed {
+  background: rgba(255, 0, 204, 0.18);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 20px var(--color-primary-glow);
+}
+
+/* Classic Console Layout: Joystick and 3 right buttons */
+.joystick-base {
+  position: relative;
+  width: 170px;
+  height: 70px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1.5px solid rgba(0, 255, 204, 0.12);
+  border-radius: 35px;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6), 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: calc(50% - 24px);
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #2b3a4a 0%, #151e26 100%);
+  border: 2px solid var(--color-secondary);
+  border-radius: 50%;
+  transform: translate(0px, -50%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.2);
+  cursor: grab;
+  touch-action: none;
+  transition: transform 0.05s ease-out;
+}
+
+.joystick-knob:active {
+  cursor: grabbing;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 15px var(--color-primary-glow), inset 0 1px 2px rgba(255, 255, 255, 0.3);
+}
+
+.joystick-guide-text {
+  position: absolute;
+  width: 100%;
+  text-align: center;
+  bottom: -22px;
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #737680;
+  letter-spacing: 1px;
+}
+
+.right-buttons-classic {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.action-brake-classic {
+  width: 66px;
+  height: 66px;
+  font-size: 0.6rem;
+  border-color: rgba(255, 50, 50, 0.25);
+}
+.action-brake-classic:active, .action-brake-classic.pressed {
+  background: rgba(255, 50, 50, 0.15);
+  border-color: var(--color-danger);
+  box-shadow: 0 0 15px rgba(255, 50, 50, 0.4);
+}
+
+.action-throttle-classic {
+  width: 82px;
+  height: 82px;
+  font-size: 0.68rem;
+  border-color: var(--color-primary-glow);
+}
+.action-throttle-classic:active, .action-throttle-classic.pressed {
+  background: rgba(255, 0, 204, 0.15);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 18px var(--color-primary-glow);
+}
+
+.action-jump-classic {
+  width: 82px;
+  height: 82px;
+  font-size: 0.68rem;
+  border-color: var(--color-secondary-glow);
+}
+.action-jump-classic:active, .action-jump-classic.pressed {
+  background: rgba(0, 255, 204, 0.15);
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 18px var(--color-secondary-glow);
+}
+
+/* ==========================================================================
+   PREMIUM RESPONSIVE HUD & MENU SCALING SYSTEM
+   ========================================================================== */
+
+/* 1. Gameplay HUD (Cockpit dashboard widgets) Responsive Scaling */
+@media (max-width: 820px) {
+  .hud-container {
+    padding: 0 !important;
+  }
+  .cockpit-panel {
+    position: relative !important;
+    left: 50% !important;
+    margin-left: -410px !important;
+    width: 820px !important;
+    max-width: none !important;
+    flex-shrink: 0 !important;
+    transform: scale(0.9) !important;
+    transform-origin: bottom center !important;
+    margin-bottom: 0 !important;
+  }
+}
+
+@media (max-width: 740px) {
+  .cockpit-panel {
+    transform: scale(0.8) !important;
+  }
+}
+
+@media (max-width: 660px) {
+  .cockpit-panel {
+    transform: scale(0.7) !important;
+  }
+}
+
+@media (max-width: 580px) {
+  .cockpit-panel {
+    transform: scale(0.6) !important;
+  }
+}
+
+@media (max-width: 500px) {
+  .cockpit-panel {
+    transform: scale(0.5) !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .cockpit-panel {
+    transform: scale(0.44) !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .cockpit-panel {
+    transform: scale(0.4) !important;
+  }
+}
+
+/* 2. Mobile Touch Controls Overlay HUD Scaling (Portrait orientation) */
+@media (orientation: portrait) {
+  .touch-layout-container {
+    bottom: 85px !important;
+    padding: 0 15px !important;
+  }
+
+  /* D-Pad Hybrid layout */
+  .dpad-hybrid-container {
+    width: 150px !important;
+    height: 150px !important;
+  }
+  
+  .dpad-btn {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 1.1rem !important;
+  }
+  
+  .dpad-up { top: 6px !important; left: 53px !important; }
+  .dpad-left { top: 53px !important; left: 6px !important; }
+  .dpad-right { top: 53px !important; right: 6px !important; }
+  .dpad-down { bottom: 6px !important; left: 53px !important; }
+  
+  .dpad-center-stub {
+    top: 55px !important;
+    left: 55px !important;
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  /* Hybrid Action buttons */
+  .right-buttons-hybrid {
+    gap: 12px !important;
+  }
+
+  .action-throttle {
+    width: 82px !important;
+    height: 82px !important;
+    font-size: 0.68rem !important;
+  }
+
+  .action-jump {
+    width: 72px !important;
+    height: 72px !important;
+    font-size: 0.6rem !important;
+  }
+
+  /* Classic Console layout */
+  .joystick-base {
+    width: 130px !important;
+    height: 50px !important;
+    border-radius: 25px !important;
+  }
+
+  .joystick-knob {
+    width: 36px !important;
+    height: 36px !important;
+    left: calc(50% - 18px) !important;
+  }
+
+  .joystick-guide-text {
+    bottom: -18px !important;
+    font-size: 0.5rem !important;
+  }
+
+  /* Classic Action buttons */
+  .right-buttons-classic {
+    gap: 10px !important;
+  }
+
+  .action-brake-classic {
+    width: 52px !important;
+    height: 52px !important;
+    font-size: 0.5rem !important;
+  }
+
+  .action-throttle-classic {
+    width: 66px !important;
+    height: 66px !important;
+    font-size: 0.58rem !important;
+  }
+
+  .action-jump-classic {
+    width: 66px !important;
+    height: 66px !important;
+    font-size: 0.58rem !important;
+  }
+}
+
+/* 3. Screens & Overlays Responsive Design */
+
+/* Tablet Viewport Adjustments (< 768px) */
+@media (max-width: 768px) {
+  .level-grid-container {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .ship-picker-container {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 240px auto !important;
+    height: auto !important;
+    max-height: 90vh !important;
+    gap: 15px !important;
+    padding: 10px 0 !important;
+  }
+
+  .ship-skins-sidebar {
+    max-height: 300px !important;
+  }
+}
+
+/* Phone Viewport Adjustments (< 480px) */
+@media (max-width: 480px) {
+  .level-grid-container {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .glass-card {
+    padding: 20px 15px !important;
+    border-radius: 12px !important;
+  }
+
+  .logo-text {
+    font-size: 2.2rem !important;
+    letter-spacing: 3px !important;
+  }
+
+  .subtitle-text {
+    font-size: 0.85rem !important;
+    margin-bottom: 20px !important;
+  }
+
+  /* How-To-Play screen adjustments */
+  .control-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+    padding: 8px 12px !important;
+  }
+
+  .key-badge {
+    font-size: 0.72rem !important;
+    padding: 3px 6px !important;
+    margin-right: 6px !important;
+    display: inline-block !important;
+    min-width: 24px !important;
+  }
+
+  .control-desc {
+    font-size: 0.82rem !important;
+    margin-top: 4px !important;
+  }
+
+  .colors-grid {
+    grid-template-columns: 1fr !important;
+    font-size: 0.76rem !important;
+  }
+}
+
+/* Extremely Narrow Mobile Viewports (< 360px) */
+@media (max-width: 360px) {
+  .level-grid-container {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+  }
+}
+
+/* 4. Status Cards (Pause, Death, Success, Loading) Optimizations */
+@media (max-width: 480px), (max-height: 600px) {
+  .status-title {
+    font-size: 1.6rem !important;
+    margin-bottom: 10px !important;
+  }
+
+  .status-msg {
+    font-size: 0.9rem !important;
+    margin-bottom: 20px !important;
+  }
+
+  .overlay-screen.status-card {
+    padding: 20px 15px !important;
+    max-height: 95% !important;
+  }
+
+  .overlay-screen.status-card .menu-buttons {
+    gap: 10px !important;
+    margin-bottom: 15px !important;
+  }
+
+  .overlay-screen.status-card .btn {
+    padding: 10px 18px !important;
+    font-size: 0.85rem !important;
+    border-radius: 8px !important;
+  }
+}
+
+/* Unified Settings gear trigger & popup styles */
+.btn-settings-gear-trigger {
+  position: fixed;
+  top: 20px;
+  left: 80px; /* Aligned next to the Pause button which is at 20px */
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: rgba(15, 15, 25, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 255, 255, 0.35);
+  color: #00ffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 10px rgba(0, 255, 255, 0.15);
+  box-sizing: border-box;
+}
+
+.btn-settings-gear-trigger:hover {
+  transform: rotate(45deg) scale(1.08);
+  border-color: #ff00ff;
+  color: #ff00ff;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 0, 255, 0.45);
+}
+
+.btn-settings-gear-trigger:active {
+  transform: scale(0.92);
+}
+
+.settings-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.settings-control-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ==========================================================================
+   PHYSICS CALIBRATOR STYLES & FLOATING LEFT-SIDE ACCORDION
+   ========================================================================== */
+
+/* Top-Left Floating Physics Calibrator Button */
+.btn-settings-physics-trigger {
+  position: fixed;
+  top: 20px;
+  left: 140px; /* Aligned next to the Gear button which is at 80px */
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: rgba(15, 15, 25, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 255, 255, 0.35);
+  color: #00ffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 10px rgba(0, 255, 255, 0.15);
+  box-sizing: border-box;
+}
+
+.btn-settings-physics-trigger:hover {
+  transform: scale(1.08);
+  border-color: #ff00ff;
+  color: #ff00ff;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 0, 255, 0.45);
+}
+
+.btn-settings-physics-trigger:active {
+  transform: scale(0.92);
+}
+
+.btn-settings-physics-trigger.active {
+  background: linear-gradient(135deg, #00ffff 0%, #0088ff 100%);
+  color: #0d0e15;
+  border-color: #00ffff;
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.6);
+}
+
+/* Floating Physics Calibrator vertical left-side panel */
+.physics-floating-calibrator {
+  position: fixed;
+  top: 80px;
+  left: 20px;
+  width: 290px;
+  height: calc(100vh - 120px);
+  max-height: 800px;
+  background: rgba(10, 10, 18, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 20px;
+  box-sizing: border-box;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  transform: translateX(-340px); /* Fully off screen to the left */
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+}
+
+.physics-floating-calibrator.active {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.physics-floating-calibrator .status-title {
+  font-size: 1.1rem;
+  margin-top: 0;
+  margin-bottom: 12px;
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+/* Preset Selector Pill Buttons */
+.btn-preset {
+  background: rgba(14, 16, 28, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  color: #8c8f99;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.btn-preset:hover {
+  color: #ffffff;
+  border-color: rgba(0, 255, 255, 0.4);
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-preset.active {
+  background: linear-gradient(135deg, #00ffff 0%, #0088ff 100%);
+  color: #0d0e15;
+  border-color: #00ffff;
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.45);
+  text-shadow: none;
+}
+
+/* Scroll Container custom scrollbar */
+.calibrator-scroll-container::-webkit-scrollbar {
+  width: 6px;
+}
+.calibrator-scroll-container::-webkit-scrollbar-track {
+  background: rgba(13, 14, 21, 0.3);
+  border-radius: 4px;
+}
+.calibrator-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 0, 127, 0.4);
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.calibrator-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 0, 127, 0.75);
+}
+
+/* Collapsible Calibrator Cards */
+.calibrator-group-card {
+  background: rgba(14, 16, 28, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.3s;
+}
+
+.calibrator-group-card:hover {
+  border-color: rgba(255, 0, 127, 0.2);
+}
+
+/* Collapsible accordion sliders container list */
+.calibrator-group-card .sliders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 500px; /* arbitrary high limit for smooth height animation */
+  overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, margin-top 0.3s ease;
+  opacity: 1;
+  margin-top: 10px;
+}
+
+.calibrator-group-card.collapsed .sliders-list {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  pointer-events: none;
+}
+
+/* Interactive Collapsible Header */
+.group-header {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
+  color: #00ffff;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 6px rgba(0, 255, 255, 0.35);
+  border-left: 3px solid #00ffff;
+  padding-left: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.group-header::after {
+  content: '▲';
+  font-size: 0.6rem;
+  color: #00ffff;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+  margin-left: 10px;
+}
+
+.calibrator-group-card.collapsed .group-header::after {
+  transform: rotate(180deg);
+}
+
+.slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+
+.slider-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.slider-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #8c8f99;
+  letter-spacing: 0.02em;
+}
+
+.slider-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 900;
+  color: #ff007f;
+  text-shadow: 0 0 5px rgba(255, 0, 127, 0.45);
+  background: rgba(255, 0, 127, 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 0, 127, 0.15);
+  min-width: 28px;
+  text-align: center;
+}
+
+/* Range Slider Styling */
+.slider-row input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  outline: none;
+  margin: 6px 0;
+  transition: background 0.3s;
+}
+
+.slider-row input[type="range"]:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ff007f;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(255, 0, 127, 0.8);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.slider-row input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: #ff3399;
+  box-shadow: 0 0 10px rgba(255, 0, 127, 1);
+}
+
+.slider-row input[type="range"]::-webkit-slider-thumb:active {
+  transform: scale(0.9);
+}
+
+/* 3D Cockpit Console View Overrides */
+.hud-cockpit-view .cockpit-panel {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+.hud-cockpit-view #cockpit-hud-overlay {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+
 

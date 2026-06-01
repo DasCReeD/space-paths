@@ -1,6 +1,6 @@
 # 🌌 SkyRoads Modern WebGL Remake
 
-[![Tests](https://img.shields.io/badge/tests-349%20passed-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-409%20passed-brightgreen.svg)](#testing)
 [![Tech Stack](https://img.shields.io/badge/tech--stack-Vite%20%7C%20Three.js%20%7C%20Web%20Audio-blueviolet.svg)](#architecture)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 
@@ -34,7 +34,7 @@ Get the game running locally in under a minute.
 | **Development** | `npm run dev` | Spins up the Vite dev server with Hot Module Replacement (HMR) at `http://localhost:3000`. |
 | **Production Build** | `npm run build` | Bundles and minifies the application using `esbuild` into the `dist/` directory. |
 | **Preview Build** | `npm run preview` | Serves the locally compiled production bundle from `dist/` for performance testing. |
-| **Run Tests** | `npm run test` | Executes the complete test suite of **349 unit tests** using **Vitest**. |
+| **Run Tests** | `npm run test` | Executes the complete test suite of **409 unit tests** using **Vitest**. |
 
 ---
 
@@ -119,6 +119,35 @@ Just like the classic DOS original, tile colors map to unique gameplay behaviors
 
 ---
 
+## 🏎️ Immersive 3D Visor Cockpit & Playtest Pipeline
+
+### 🛸 Holographic Visor Cockpit HUD
+*   **Physical Glassmorphic Casing**: Replaced the legacy DOM HUD overlay with an immersive, custom-extruded sloped dipped-wing glass visor console rendered directly inside the Three.js viewport parented to the camera. Built using a physical material (`MeshPhysicalMaterial`) featuring high transmission and a glossy clearcoat.
+*   **100% Protected Sightlines**: Sits perfectly low in the frame (`y = -0.04`), keeping the central 40% of the screen completely clear for unobstructed spatial flight navigation.
+*   **Mechanical & LCD Telemetry**:
+    *   Speedometer dial needle rotates dynamically matching forward velocity percentage.
+    *   Vertical dials scale based on fuel and oxygen reserves.
+    *   Interactive status LEDs glow dynamically depending on active terrain status.
+    *   LCD screen features 4px-spaced CRT scanlines, blurred phosphor text shadow glows, and flashing alert loops for low-fuel and oxygen levels.
+*   **Dynamic Corner Minimap**: Top-down, 32-row real-time scrolling path scanner positioned in the far right corner (`x = 0.44`) that queries the active level's palette to render track blocks in their exact panel lane colors.
+
+### 🤖 Automated Visual Playtesting Capture Pipeline
+To maintain premium cognitive ergonomics and visual quality, the codebase features an automated design and screenshot playtest capture pipeline operating under `.agents/ui_design_pipeline/`:
+*   **`playtest_capture_script.js`**: An automated Node.js Puppeteer playtester that spins up Google Chrome, clicks through menus, switches to Cockpit View, accelerates, triggers boosts, simulates low fuel, and exports high-resolution snapshots to `scratch/playtests/`.
+*   **`run_pipeline.js`**: Master controller that boots the Vite server locally, runs the Puppeteer playtester, and safely terminates the server upon exit.
+*   **Screenshots Captured**:
+    1.  `playtest_baseline.png` (Standard gameplay).
+    2.  `playtest_boost.png` (Boost active, green status LEDs glowing).
+    3.  `playtest_low_fuel.png` (Fuel warning, red border outline pulsing).
+    4.  `playtest_portrait_tablet.png` (Responsive viewport scaling bounds).
+
+To run the capture pipeline yourself:
+```bash
+node .agents/ui_design_pipeline/run_pipeline.js
+```
+
+---
+
 ## 🛠️ Code Quality Guidelines & Best Practices
 
 The codebase is built and maintained following strict engineering rules to guarantee stability, modularity, and readable structure:
@@ -136,7 +165,7 @@ The codebase is built and maintained following strict engineering rules to guara
 *   Input validations at all boundaries protect against undefined keyboard events and runtime property lookups.
 
 ### 🧪 Test-Driven Development (TDD)
-*   A robust test suite of **349 unit tests** covers every module (`physics`, `graphics`, `levelLoader`, `app`, `audio`, and `preview`).
+*   A robust test suite of **409 unit tests** covers every module (`physics`, `graphics`, `levelLoader`, `app`, `audio`, `cockpitConsole`, and `preview`).
 *   Mocking is strictly implemented for browser APIs (like Three.js components and AudioContexts) using Vitest and jsdom.
 *   Tests are deterministic, independent, and focus on validating functionality and robust edge-case handling.
 
