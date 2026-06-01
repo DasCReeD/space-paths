@@ -956,7 +956,7 @@ body, html {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow-y: auto;
+  overflow: hidden;
   max-height: 100%;
   padding-right: 5px;
 }
@@ -1068,9 +1068,9 @@ body, html {
 
 .ship-models-list {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .ship-skins-list {

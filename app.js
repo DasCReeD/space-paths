@@ -94,7 +94,7 @@ class GameManager {
     this.updateMusicToggleBtn();
 
     // Load persisted model and skin preferences
-    this.selectedModel = localStorage.getItem('skyroads_selected_model') || 'corvette1';
+    this.selectedModel = localStorage.getItem('skyroads_selected_model') || 'original';
     this.selectedSkin = localStorage.getItem('skyroads_selected_skin') || '#ff007f';
     this.graphics.currentModelName = this.selectedModel;
     this.graphics.currentSkinName = this.selectedSkin;
@@ -288,7 +288,7 @@ class GameManager {
   openShipPicker() {
     this.prePickerState = this.gameState;
     this.gameState = 'ship_picker';
-    this.tempSelectedModel = this.selectedModel || 'corvette1';
+    this.tempSelectedModel = this.selectedModel || 'original';
     this.tempSelectedSkin = this.selectedSkin || '#ff007f';
     this.showScreen('ship-picker-screen');
     

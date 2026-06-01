@@ -1354,7 +1354,7 @@ export class GraphicsEngine {
     this.shipMesh.rotation.z += (targetRoll - this.shipMesh.rotation.z) * 0.15;
     
     // Pitch forward (nose down) when rising to keep the road visible; pitch back (nose up, flare) when falling
-    const targetPitch = -physics.velocity.y * 0.015;
+    const targetPitch = -physics.velocity.y * 0.0075;
     this.shipMesh.rotation.x += (targetPitch - this.shipMesh.rotation.x) * 0.15;
 
     // 2. Smooth Chase Camera (with distance scaling and multiple camera modes)
