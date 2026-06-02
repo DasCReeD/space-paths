@@ -802,17 +802,37 @@
     BOAT: OFF
   </button>
 
-  <!-- Floating Touch Camera Control Dock -->
-  <div id="touch-camera-dock" class="touch-camera-dock pointer-events-auto">
-    <button id="btn-touch-cam-mode" class="touch-cam-btn" title="Cycle Camera Mode">📷 VIEW</button>
-    <button id="btn-touch-zoom-in" class="touch-cam-btn" title="Zoom In">🔍 +</button>
-    <button id="btn-touch-zoom-out" class="touch-cam-btn" title="Zoom Out">🔍 -</button>
+  <!-- Top Controls: Pause, Customize, Camera -->
+  <div class="touch-top-bar pointer-events-auto">
+    <button id="btn-touch-customize" class="touch-customize-btn" title="Reposition / Edit Controls">🔧 CUSTOMIZE</button>
+    <div id="touch-camera-dock" class="touch-camera-dock">
+      <button id="btn-touch-cam-mode" class="touch-cam-btn" title="Cycle Camera Mode">📷 VIEW</button>
+      <button id="btn-touch-zoom-in" class="touch-cam-btn" title="Zoom In">🔍 +</button>
+      <button id="btn-touch-zoom-out" class="touch-cam-btn" title="Zoom Out">🔍 -</button>
+    </div>
   </div>
 
-  <!-- Unified Premium Analog Stick HUD -->
-  <div class="touch-hud-main-container">
-    <!-- Left Side: Circular Joystick -->
-    <div class="joystick-outer-wrap pointer-events-auto">
+  <!-- Touch Controls Repositioning Customizer Dashboard (visible in customize mode) -->
+  <div id="touch-customizer-dashboard" class="touch-customizer-dashboard hidden pointer-events-auto">
+    <div class="customizer-title">HUD CONTROL CUSTOMIZER</div>
+    <div class="customizer-options">
+      <button id="btn-cust-type" class="cust-btn">TYPE: JOYSTICK</button>
+      <button id="btn-cust-scale" class="cust-btn">SCALE: 1.0x</button>
+      <button id="btn-cust-swap" class="cust-btn">SWAP SIDES: OFF</button>
+      <button id="btn-cust-buttons" class="cust-btn">BUTTONS: FULL</button>
+    </div>
+    <div class="customizer-actions">
+      <button id="btn-cust-reset" class="cust-action-btn btn-danger">RESET</button>
+      <button id="btn-cust-save" class="cust-action-btn btn-success">SAVE & EXIT</button>
+    </div>
+  </div>
+
+  <!-- Movable Touch Controls Group Left -->
+  <div id="touch-movable-left" class="touch-control-group pointer-events-auto" style="left: 60px; bottom: 160px;">
+    <div class="drag-handle">◀ DRAG HUG ▶</div>
+    
+    <!-- Joystick Type View -->
+    <div id="touch-joystick-view" class="joystick-outer-wrap">
       <div id="joystick-base" class="joystick-base">
         <div id="joystick-knob" class="joystick-knob">
           <div class="joystick-knob-grip"></div>
@@ -823,8 +843,22 @@
       <div class="joystick-guide-text">◀ STEER ▶</div>
     </div>
 
-    <!-- Right Side: Curved Ergonomic Action Buttons -->
-    <div class="right-buttons-arc pointer-events-auto">
+    <!-- D-Pad Buttons Type View -->
+    <div id="touch-dpad-view" class="dpad-hybrid-container hidden">
+      <div class="dpad-btn dpad-up" data-action="forward">▲</div>
+      <div class="dpad-btn dpad-left" data-action="left">◀</div>
+      <div class="dpad-center-stub"></div>
+      <div class="dpad-btn dpad-right" data-action="right">▶</div>
+      <div class="dpad-btn dpad-down" data-action="backward">▼</div>
+    </div>
+  </div>
+
+  <!-- Movable Touch Controls Group Right -->
+  <div id="touch-movable-right" class="touch-control-group pointer-events-auto" style="right: 60px; bottom: 160px;">
+    <div class="drag-handle">◀ DRAG HUG ▶</div>
+    
+    <!-- Curved Action Buttons -->
+    <div id="touch-actions-full" class="right-buttons-arc">
       <button class="touch-btn action-brake" data-action="backward">
         <span class="btn-icon-lbl">▼</span>
         BRAKE
@@ -836,6 +870,14 @@
       <button class="touch-btn action-throttle" data-action="forward">
         <span class="btn-icon-lbl">⚡</span>
         THRUST
+      </button>
+    </div>
+
+    <!-- Simple Jump Only Buttons -->
+    <div id="touch-actions-simple" class="right-buttons-arc hidden">
+      <button class="touch-btn action-jump" data-action="jump" style="position: static; width: 100px; height: 100px; font-size: 0.8rem;">
+        <span class="btn-icon-lbl" style="font-size: 1.5rem;">▲</span>
+        JUMP ONLY
       </button>
     </div>
   </div>

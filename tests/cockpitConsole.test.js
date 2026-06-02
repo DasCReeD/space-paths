@@ -158,7 +158,7 @@ describe('CockpitConsole3D', () => {
       };
       
       cockpit.update(mockPhysics, null, 'follow');
-      expect(cockpit.group.visible).toBe(false);
+      expect(cockpit.group.visible).toBe(true);
 
       cockpit.update(mockPhysics, null, 'cockpit');
       expect(cockpit.group.visible).toBe(true);

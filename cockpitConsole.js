@@ -488,10 +488,8 @@ export class CockpitConsole3D {
    * Update the gauges and minimap state dynamically.
    */
   update(physics, levelData, cameraMode) {
-    const isCockpit = (cameraMode === 'cockpit');
-    this.group.visible = isCockpit;
-    
-    if (!isCockpit) return;
+    // 3D Cockpit Console HUD is now visible and updated in all camera modes!
+    this.group.visible = true;
 
     // Optional Polycarbonate glass bezel and border visibility control
     const showBezel = (physics.settings && physics.settings.showCockpitBezel !== undefined) ? (physics.settings.showCockpitBezel !== 0) : true;

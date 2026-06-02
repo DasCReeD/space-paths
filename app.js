@@ -238,7 +238,11 @@ class GameManager {
       this.handleMenuKeyboard(e);
     });
 
-    // 5. Start high-frequency background render loop (stars sparkling)
+    // 5. Load and apply customizable touch controls layout
+    this.loadTouchConfig();
+    this.setupTouchCustomizerEvents();
+
+    // 6. Start high-frequency background render loop (stars sparkling)
     this.lastTime = performance.now();
     this.animate(this.lastTime);
   }
@@ -1240,6 +1244,7 @@ class GameManager {
     if (touchHud) {
       if (this.keyboard.touchControlsEnabled) {
         touchHud.classList.remove('hidden');
+        this.applyTouchConfig();
         this.setupTouchControlsDOMEvents();
       } else {
         touchHud.classList.add('hidden');
@@ -1292,7 +1297,10 @@ class GameManager {
     if (btnInGamePause) btnInGamePause.classList.remove('hidden');
     
     const touchHud = document.getElementById('mobile-touch-hud');
-    if (touchHud && this.keyboard.touchControlsEnabled) touchHud.classList.remove('hidden');
+    if (touchHud && this.keyboard.touchControlsEnabled) {
+      touchHud.classList.remove('hidden');
+      this.applyTouchConfig();
+    }
     
     this.showScreen(''); // Hide pause overlay
   }
@@ -2011,6 +2019,265 @@ class GameManager {
       if (currentItem) {
         currentItem.click();
       }
+    }
+  }
+
+  loadTouchConfig() {
+    this.touchConfig = {
+      leftPos: { left: '60px', bottom: '160px' },
+      rightPos: { right: '60px', bottom: '160px' },
+      type: 'stick',
+      scale: 1.0,
+      swapped: false,
+      buttons: 'full'
+    };
+
+    try {
+      const saved = localStorage.getItem('skyroads_touch_config');
+      if (saved) {
+        Object.assign(this.touchConfig, JSON.parse(saved));
+      }
+    } catch (e) {
+      // safe fallback
+    }
+
+    this.applyTouchConfig();
+  }
+
+  applyTouchConfig() {
+    const leftGroup = document.getElementById('touch-movable-left');
+    const rightGroup = document.getElementById('touch-movable-right');
+    if (!leftGroup || !rightGroup) return;
+
+    // Apply positions (absolute offsets)
+    leftGroup.style.left = this.touchConfig.swapped ? '' : this.touchConfig.leftPos.left || '60px';
+    leftGroup.style.right = this.touchConfig.swapped ? this.touchConfig.leftPos.right || '60px' : '';
+    leftGroup.style.bottom = this.touchConfig.leftPos.bottom || '160px';
+
+    rightGroup.style.right = this.touchConfig.swapped ? '' : this.touchConfig.rightPos.right || '60px';
+    rightGroup.style.left = this.touchConfig.swapped ? this.touchConfig.rightPos.left || '60px' : '';
+    rightGroup.style.bottom = this.touchConfig.rightPos.bottom || '160px';
+
+    // Apply type (joystick vs dpad)
+    const joyView = document.getElementById('touch-joystick-view');
+    const dpadView = document.getElementById('touch-dpad-view');
+    if (joyView && dpadView) {
+      if (this.touchConfig.type === 'dpad') {
+        joyView.classList.add('hidden');
+        dpadView.classList.remove('hidden');
+      } else {
+        joyView.classList.remove('hidden');
+        dpadView.classList.add('hidden');
+      }
+    }
+
+    // Apply scale factor
+    leftGroup.style.transform = `scale(${this.touchConfig.scale})`;
+    rightGroup.style.transform = `scale(${this.touchConfig.scale})`;
+
+    // Apply action buttons complexity (full vs simple)
+    const actionsFull = document.getElementById('touch-actions-full');
+    const actionsSimple = document.getElementById('touch-actions-simple');
+    if (actionsFull && actionsSimple) {
+      if (this.touchConfig.buttons === 'simple') {
+        actionsFull.classList.add('hidden');
+        actionsSimple.classList.remove('hidden');
+      } else {
+        actionsFull.classList.remove('hidden');
+        actionsSimple.classList.add('hidden');
+      }
+    }
+
+    // Update customizer options labels
+    const btnType = document.getElementById('btn-cust-type');
+    if (btnType) btnType.innerText = `TYPE: ${this.touchConfig.type.toUpperCase()}`;
+
+    const btnScale = document.getElementById('btn-cust-scale');
+    if (btnScale) btnScale.innerText = `SCALE: ${this.touchConfig.scale.toFixed(1)}x`;
+
+    const btnSwap = document.getElementById('btn-cust-swap');
+    if (btnSwap) btnSwap.innerText = `SWAP SIDES: ${this.touchConfig.swapped ? 'ON' : 'OFF'}`;
+
+    const btnButtons = document.getElementById('btn-cust-buttons');
+    if (btnButtons) btnButtons.innerText = `BUTTONS: ${this.touchConfig.buttons.toUpperCase()}`;
+  }
+
+  setupTouchCustomizerEvents() {
+    const btnCustomize = document.getElementById('btn-touch-customize');
+    const customizerDashboard = document.getElementById('touch-customizer-dashboard');
+    const touchHud = document.getElementById('mobile-touch-hud');
+
+    if (!btnCustomize || !customizerDashboard || !touchHud) return;
+
+    btnCustomize.addEventListener('click', () => {
+      gameAudio.playClick();
+      const isActive = touchHud.classList.contains('customizing');
+      if (isActive) {
+        touchHud.classList.remove('customizing');
+        customizerDashboard.classList.add('hidden');
+        btnCustomize.innerText = '🔧 CUSTOMIZE';
+        btnCustomize.classList.remove('active');
+        this.saveTouchConfig();
+      } else {
+        touchHud.classList.add('customizing');
+        customizerDashboard.classList.remove('hidden');
+        btnCustomize.innerText = '💾 SAVE';
+        btnCustomize.classList.add('active');
+      }
+    });
+
+    const btnType = document.getElementById('btn-cust-type');
+    if (btnType) {
+      btnType.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.touchConfig.type = this.touchConfig.type === 'stick' ? 'dpad' : 'stick';
+        this.applyTouchConfig();
+      });
+    }
+
+    const btnScale = document.getElementById('btn-cust-scale');
+    if (btnScale) {
+      btnScale.addEventListener('click', () => {
+        gameAudio.playClick();
+        const scales = [0.8, 1.0, 1.2];
+        let idx = scales.indexOf(this.touchConfig.scale);
+        if (idx === -1) idx = 1;
+        this.touchConfig.scale = scales[(idx + 1) % scales.length];
+        this.applyTouchConfig();
+      });
+    }
+
+    const btnSwap = document.getElementById('btn-cust-swap');
+    if (btnSwap) {
+      btnSwap.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.touchConfig.swapped = !this.touchConfig.swapped;
+        this.applyTouchConfig();
+      });
+    }
+
+    const btnButtons = document.getElementById('btn-cust-buttons');
+    if (btnButtons) {
+      btnButtons.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.touchConfig.buttons = this.touchConfig.buttons === 'full' ? 'simple' : 'full';
+        this.applyTouchConfig();
+      });
+    }
+
+    const btnReset = document.getElementById('btn-cust-reset');
+    if (btnReset) {
+      btnReset.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.touchConfig = {
+          leftPos: { left: '60px', bottom: '160px' },
+          rightPos: { right: '60px', bottom: '160px' },
+          type: 'stick',
+          scale: 1.0,
+          swapped: false,
+          buttons: 'full'
+        };
+        this.applyTouchConfig();
+      });
+    }
+
+    const btnSave = document.getElementById('btn-cust-save');
+    if (btnSave) {
+      btnSave.addEventListener('click', () => {
+        gameAudio.playClick();
+        touchHud.classList.remove('customizing');
+        customizerDashboard.classList.add('hidden');
+        btnCustomize.innerText = '🔧 CUSTOMIZE';
+        btnCustomize.classList.remove('active');
+        this.saveTouchConfig();
+      });
+    }
+
+    const makeMovable = (elemId, posKey) => {
+      const elem = document.getElementById(elemId);
+      if (!elem) return;
+      const handle = elem.querySelector('.drag-handle');
+      if (!handle) return;
+
+      let isDragging = false;
+      let startX, startY;
+      let initialLeft, initialTop;
+
+      const onPointerDown = (e) => {
+        if (!touchHud.classList.contains('customizing')) return;
+        isDragging = true;
+        handle.setPointerCapture(e.pointerId);
+
+        startX = e.clientX;
+        startY = e.clientY;
+
+        const rect = elem.getBoundingClientRect();
+        const parentRect = touchHud.getBoundingClientRect();
+        initialLeft = rect.left - parentRect.left;
+        initialTop = rect.top - parentRect.top;
+
+        e.preventDefault();
+      };
+
+      const onPointerMove = (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        const parentRect = touchHud.getBoundingClientRect();
+        let nextLeft = initialLeft + dx;
+        let nextTop = initialTop + dy;
+
+        nextLeft = Math.max(0, Math.min(parentRect.width - 150, nextLeft));
+        nextTop = Math.max(0, Math.min(parentRect.height - 150, nextTop));
+
+        const nextBottom = parentRect.height - nextTop - 150;
+
+        if (this.touchConfig.swapped) {
+          if (posKey === 'left') {
+            elem.style.left = '';
+            elem.style.right = `${parentRect.width - nextLeft - 150}px`;
+            this.touchConfig.leftPos = { right: elem.style.right, bottom: `${nextBottom}px` };
+          } else {
+            elem.style.right = '';
+            elem.style.left = `${nextLeft}px`;
+            this.touchConfig.rightPos = { left: elem.style.left, bottom: `${nextBottom}px` };
+          }
+        } else {
+          if (posKey === 'left') {
+            elem.style.right = '';
+            elem.style.left = `${nextLeft}px`;
+            this.touchConfig.leftPos = { left: elem.style.left, bottom: `${nextBottom}px` };
+          } else {
+            elem.style.left = '';
+            elem.style.right = `${parentRect.width - nextLeft - 150}px`;
+            this.touchConfig.rightPos = { right: elem.style.right, bottom: `${nextBottom}px` };
+          }
+        }
+        elem.style.bottom = `${nextBottom}px`;
+      };
+
+      const onPointerUp = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        handle.releasePointerCapture(e.pointerId);
+      };
+
+      handle.addEventListener('pointerdown', onPointerDown);
+      handle.addEventListener('pointermove', onPointerMove);
+      handle.addEventListener('pointerup', onPointerUp);
+      handle.addEventListener('pointercancel', onPointerUp);
+    };
+
+    makeMovable('touch-movable-left', 'left');
+    makeMovable('touch-movable-right', 'right');
+  }
+
+  saveTouchConfig() {
+    try {
+      localStorage.setItem('skyroads_touch_config', JSON.stringify(this.touchConfig));
+    } catch (e) {
+      // safe fallback
     }
   }
 

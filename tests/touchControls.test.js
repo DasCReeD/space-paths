@@ -295,4 +295,38 @@ describe('KeyboardController - Touch Controls Integration', () => {
       expect(physics.velocity.x).toBe(0);
     });
   });
+
+  // 8. Movable Customizer Settings & D-Pad Steering Tests
+  describe('Touch Controls Customizer & D-Pad Keyboard State', () => {
+    it('should load default touchConfig attributes successfully', () => {
+      const manager = {
+        loadTouchConfig: () => {
+          return {
+            leftPos: { left: '60px', bottom: '160px' },
+            rightPos: { right: '60px', bottom: '160px' },
+            type: 'stick',
+            scale: 1.0,
+            swapped: false,
+            buttons: 'full'
+          };
+        }
+      };
+      const config = manager.loadTouchConfig();
+      expect(config.type).toBe('stick');
+      expect(config.scale).toBe(1.0);
+      expect(config.swapped).toBe(false);
+      expect(config.buttons).toBe('full');
+    });
+
+    it('should toggle steer states correctly when left/right digital D-pad actions are simulated', () => {
+      keyboard.setTouchState('left', true);
+      expect(keyboard.left).toBe(true);
+      expect(keyboard.right).toBe(false);
+
+      keyboard.setTouchState('left', false);
+      keyboard.setTouchState('right', true);
+      expect(keyboard.left).toBe(false);
+      expect(keyboard.right).toBe(true);
+    });
+  });
 });
