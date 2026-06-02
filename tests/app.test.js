@@ -110,6 +110,9 @@ vi.mock('../audio.js', () => ({
     startMusic: vi.fn(),
     stopMusic: vi.fn(),
     setMusicEnabled: vi.fn(),
+    setMusicVolume: vi.fn(),
+    setSfxVolume: vi.fn(),
+    setSoundMode: vi.fn(),
     musicSequencer: { musicEnabled: true }
   }
 }));

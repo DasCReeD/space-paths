@@ -94,6 +94,30 @@ class GameManager {
     gameAudio.setMusicEnabled(savedMusic);
     this.updateMusicToggleBtn();
 
+    // Load persisted sound mode setting from localStorage
+    const savedSoundMode = localStorage.getItem('skyroads_sound_mode') || 'synth';
+    gameAudio.setSoundMode(savedSoundMode);
+    this.updateSoundModeToggleBtn();
+
+    // Load persisted music and SFX volume levels
+    const savedMusicVolume = localStorage.getItem('skyroads_music_volume');
+    const musicVol = savedMusicVolume !== null ? parseFloat(savedMusicVolume) : 0.7;
+    gameAudio.setMusicVolume(musicVol);
+
+    const savedSfxVolume = localStorage.getItem('skyroads_sfx_volume');
+    const sfxVol = savedSfxVolume !== null ? parseFloat(savedSfxVolume) : 0.8;
+    gameAudio.setSfxVolume(sfxVol);
+
+    // Sync sliders values with loaded volumes
+    const sliderMusicVolume = document.getElementById('slider-settings-music-volume');
+    if (sliderMusicVolume) {
+      sliderMusicVolume.value = Math.round(musicVol * 100);
+    }
+    const sliderSfxVolume = document.getElementById('slider-settings-sfx-volume');
+    if (sliderSfxVolume) {
+      sliderSfxVolume.value = Math.round(sfxVol * 100);
+    }
+
     // Load persisted model, skin texture, and custom color overlay preferences
     this.selectedModel = localStorage.getItem('skyroads_selected_model') || 'original';
     
@@ -326,6 +350,21 @@ class GameManager {
       btn.classList.add('btn-info');
     } else {
       btn.innerText = 'MUSIC: OFF';
+      btn.classList.remove('btn-info');
+      btn.classList.add('btn-secondary');
+    }
+  }
+
+  updateSoundModeToggleBtn() {
+    const btn = document.getElementById('btn-settings-sound-mode');
+    if (!btn) return;
+    const mode = gameAudio.soundMode || 'synth';
+    if (mode === 'synth') {
+      btn.innerText = 'SOUND: SYNTH';
+      btn.classList.remove('btn-secondary');
+      btn.classList.add('btn-info');
+    } else {
+      btn.innerText = 'SOUND: CLASSIC';
       btn.classList.remove('btn-info');
       btn.classList.add('btn-secondary');
     }
@@ -747,6 +786,36 @@ class GameManager {
           localStorage.setItem('skyroads_music_play', isEnabled);
           this.updateMusicToggleBtn();
         }
+      });
+    }
+
+    const btnSettingsSoundMode = document.getElementById('btn-settings-sound-mode');
+    if (btnSettingsSoundMode) {
+      btnSettingsSoundMode.addEventListener('click', () => {
+        gameAudio.playClick();
+        const currentMode = gameAudio.soundMode || 'synth';
+        const nextMode = currentMode === 'synth' ? 'classic' : 'synth';
+        gameAudio.setSoundMode(nextMode);
+        localStorage.setItem('skyroads_sound_mode', nextMode);
+        this.updateSoundModeToggleBtn();
+      });
+    }
+
+    const sliderMusicVolume = document.getElementById('slider-settings-music-volume');
+    if (sliderMusicVolume) {
+      sliderMusicVolume.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value) / 100;
+        gameAudio.setMusicVolume(val);
+        localStorage.setItem('skyroads_music_volume', val);
+      });
+    }
+
+    const sliderSfxVolume = document.getElementById('slider-settings-sfx-volume');
+    if (sliderSfxVolume) {
+      sliderSfxVolume.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value) / 100;
+        gameAudio.setSfxVolume(val);
+        localStorage.setItem('skyroads_sfx_volume', val);
       });
     }
 

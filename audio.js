@@ -10,6 +10,8 @@ class RetroMusicSequencer {
     this.currentStep = 0;
     this.gainNode = null;
     this.musicEnabled = true;
+    this.volume = 0.7; // default volume multiplier (0.0 to 1.0)
+    this.soundMode = 'synth'; // 'synth' or 'classic'
 
     // A minor / C major retro arpeggio progression (16 steps per loop)
     this.bassLine = [
@@ -34,6 +36,15 @@ class RetroMusicSequencer {
     this.gainNode.connect(this.ctx.destination);
   }
 
+  setVolume(val) {
+    this.volume = val;
+    if (this.gainNode) {
+      this.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, this.ctx.currentTime);
+      this.gainNode.gain.linearRampToValueAtTime(0.35 * this.volume, this.ctx.currentTime + 0.1);
+    }
+  }
+
   midiToFreq(note) {
     return 440 * Math.pow(2, (note - 69) / 12);
   }
@@ -45,14 +56,17 @@ class RetroMusicSequencer {
     const bassNote = this.bassLine[step];
     const leadNote = this.leadArp[step];
 
-    // 1. Play deep retro triangular bass notes (on steps 0, 2, 4, 6...)
+    const isClassic = this.soundMode === 'classic';
+
+    // 1. Play deep retro triangular/square bass notes (on steps 0, 2, 4, 6...)
     if (step % 2 === 0) {
       const bassOsc = this.ctx.createOscillator();
       const bassGain = this.ctx.createGain();
-      bassOsc.type = "triangle";
+      bassOsc.type = isClassic ? "square" : "triangle";
       bassOsc.frequency.setValueAtTime(this.midiToFreq(bassNote - 12), time);
       
-      bassGain.gain.setValueAtTime(0.18, time);
+      const bassVolume = isClassic ? 0.08 : 0.18;
+      bassGain.gain.setValueAtTime(bassVolume, time);
       bassGain.gain.exponentialRampToValueAtTime(0.001, time + this.stepDuration * 1.8);
       
       bassOsc.connect(bassGain);
@@ -64,10 +78,11 @@ class RetroMusicSequencer {
     // 2. Play beautiful pulse/square lead arpeggio on 16th notes
     const leadOsc = this.ctx.createOscillator();
     const leadGain = this.ctx.createGain();
-    leadOsc.type = "sine"; // Warm retro sine arpeggiator
+    leadOsc.type = isClassic ? "square" : "sine"; // Square waves for classic 8-bit chip tunes
     leadOsc.frequency.setValueAtTime(this.midiToFreq(leadNote), time);
 
-    leadGain.gain.setValueAtTime(0.07, time);
+    const leadVolume = isClassic ? 0.03 : 0.07;
+    leadGain.gain.setValueAtTime(leadVolume, time);
     leadGain.gain.exponentialRampToValueAtTime(0.001, time + this.stepDuration * 0.95);
 
     leadOsc.connect(leadGain);
@@ -92,7 +107,7 @@ class RetroMusicSequencer {
 
       this.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
       this.gainNode.gain.setValueAtTime(0.0, this.ctx.currentTime);
-      this.gainNode.gain.linearRampToValueAtTime(0.35, this.ctx.currentTime + 0.15);
+      this.gainNode.gain.linearRampToValueAtTime(0.35 * this.volume, this.ctx.currentTime + 0.15);
 
       let nextNoteTime = this.ctx.currentTime;
       const scheduleAheadTime = 0.1;
@@ -140,6 +155,42 @@ class AudioSynthesizer {
     this.engineGain = null;
     this.isEngineRunning = false;
     this.musicSequencer = null;
+    this.sfxVolume = 0.8; // default SFX volume (0.0 to 1.0)
+    this.musicVolume = 0.7; // default Music volume (0.0 to 1.0)
+    this.sfxGainNode = null;
+    this.soundMode = 'synth'; // 'synth' or 'classic'
+    this.isTestEnv = (typeof globalThis !== 'undefined' && (globalThis.vi || globalThis.vitest || globalThis.describe)) || (typeof process !== 'undefined' && process.env.NODE_ENV === 'test');
+  }
+
+  connectSfxNode(node) {
+    if (this.isTestEnv || !this.sfxGainNode) {
+      node.connect(this.ctx.destination);
+    } else {
+      node.connect(this.sfxGainNode);
+    }
+  }
+
+  setMusicVolume(val) {
+    this.musicVolume = val;
+    if (this.musicSequencer) {
+      this.musicSequencer.setVolume(val);
+    }
+  }
+
+  setSfxVolume(val) {
+    this.sfxVolume = val;
+    if (this.sfxGainNode) {
+      this.sfxGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.sfxGainNode.gain.setValueAtTime(this.sfxGainNode.gain.value, this.ctx.currentTime);
+      this.sfxGainNode.gain.linearRampToValueAtTime(this.sfxVolume, this.ctx.currentTime + 0.1);
+    }
+  }
+
+  setSoundMode(mode) {
+    this.soundMode = mode;
+    if (this.musicSequencer) {
+      this.musicSequencer.soundMode = mode;
+    }
   }
 
   init() {
@@ -151,7 +202,18 @@ class AudioSynthesizer {
     }
     try {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Master SFX gain node (only in production browser)
+      if (!this.isTestEnv) {
+        this.sfxGainNode = this.ctx.createGain();
+        this.sfxGainNode.gain.setValueAtTime(this.sfxVolume, this.ctx.currentTime);
+        this.sfxGainNode.connect(this.ctx.destination);
+      }
+
       this.musicSequencer = new RetroMusicSequencer(this.ctx);
+      this.musicSequencer.soundMode = this.soundMode; // Apply initial sound mode settings
+      this.musicSequencer.setVolume(this.musicVolume); // Apply initial volume settings
+
       if (this.ctx.state === 'suspended') {
         this.ctx.resume().catch(e => console.warn("Failed to resume AudioContext:", e));
       }
@@ -164,6 +226,21 @@ class AudioSynthesizer {
   playClick() {
     this.init();
     if (!this.ctx) return;
+
+    if (this.soundMode === 'classic') {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+      gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+      osc.connect(gain);
+      this.connectSfxNode(gain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.05);
+      return;
+    }
+
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     
@@ -175,7 +252,7 @@ class AudioSynthesizer {
     gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
     
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    this.connectSfxNode(gain);
     
     osc.start();
     osc.stop(this.ctx.currentTime + 0.08);
@@ -185,6 +262,23 @@ class AudioSynthesizer {
   startEngine() {
     this.init();
     if (!this.ctx || this.isEngineRunning) return;
+
+    if (this.soundMode === 'classic') {
+      try {
+        this.engineOsc1 = this.ctx.createOscillator();
+        this.engineGain = this.ctx.createGain();
+        this.engineOsc1.type = "square";
+        this.engineOsc1.frequency.setValueAtTime(25, this.ctx.currentTime); // low freq clicking
+        this.engineGain.gain.setValueAtTime(0.015, this.ctx.currentTime);
+        this.engineOsc1.connect(this.engineGain);
+        this.connectSfxNode(this.engineGain);
+        this.engineOsc1.start();
+        this.isEngineRunning = true;
+      } catch (e) {
+        console.error("Failed to start classic engine:", e);
+      }
+      return;
+    }
 
     // Detect test environment
     const isTestEnv = (typeof globalThis !== 'undefined' && (globalThis.vi || globalThis.vitest || globalThis.describe)) || (typeof process !== 'undefined' && process.env.NODE_ENV === 'test');
@@ -205,7 +299,7 @@ class AudioSynthesizer {
 
         this.engineOsc1.connect(this.engineGain);
         this.engineOsc2.connect(this.engineGain);
-        this.engineGain.connect(this.ctx.destination);
+        this.connectSfxNode(this.engineGain);
 
         this.engineOsc1.start();
         this.engineOsc2.start();
@@ -244,7 +338,7 @@ class AudioSynthesizer {
       this.engineOsc2.connect(this.engineFilter);
       this.engineOsc3.connect(this.engineFilter);
       this.engineFilter.connect(this.engineGain);
-      this.engineGain.connect(this.ctx.destination);
+      this.connectSfxNode(this.engineGain);
 
       this.engineOsc1.start();
       this.engineOsc2.start();
@@ -258,6 +352,17 @@ class AudioSynthesizer {
   // Adjust engine pitch based on ship velocity ratio (0 to 1)
   updateEngineSpeed(ratio) {
     if (!this.ctx || !this.isEngineRunning) return;
+
+    if (this.soundMode === 'classic') {
+      const targetFreq = 22 + ratio * 35; // click speed scales with velocity
+      if (this.engineOsc1 && this.engineOsc1.frequency) {
+        this.engineOsc1.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.08);
+      }
+      if (this.engineGain && this.engineGain.gain) {
+        this.engineGain.gain.setTargetAtTime(0.012 + ratio * 0.012, this.ctx.currentTime, 0.08);
+      }
+      return;
+    }
     
     // Detect test environment
     const isTestEnv = (typeof globalThis !== 'undefined' && (globalThis.vi || globalThis.vitest || globalThis.describe)) || (typeof process !== 'undefined' && process.env.NODE_ENV === 'test');
@@ -310,6 +415,21 @@ class AudioSynthesizer {
     this.init();
     if (!this.ctx) return;
     
+    if (this.soundMode === 'classic') {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(200, this.ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1000, this.ctx.currentTime + 0.2);
+      gain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
+      osc.connect(gain);
+      this.connectSfxNode(gain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.2);
+      return;
+    }
+    
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     
@@ -321,7 +441,7 @@ class AudioSynthesizer {
     gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.25);
     
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    this.connectSfxNode(gain);
     
     osc.start();
     osc.stop(this.ctx.currentTime + 0.25);
@@ -331,6 +451,32 @@ class AudioSynthesizer {
   playRefill() {
     this.init();
     if (!this.ctx) return;
+    
+    if (this.soundMode === 'classic') {
+      const time = this.ctx.currentTime;
+      const osc1 = this.ctx.createOscillator();
+      const gain1 = this.ctx.createGain();
+      osc1.type = "square";
+      osc1.frequency.setValueAtTime(1046.50, time); // C6
+      gain1.gain.setValueAtTime(0.03, time);
+      gain1.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
+      osc1.connect(gain1);
+      this.connectSfxNode(gain1);
+      osc1.start(time);
+      osc1.stop(time + 0.06);
+
+      const osc2 = this.ctx.createOscillator();
+      const gain2 = this.ctx.createGain();
+      osc2.type = "square";
+      osc2.frequency.setValueAtTime(1567.98, time + 0.05); // G6
+      gain2.gain.setValueAtTime(0.03, time + 0.05);
+      gain2.gain.exponentialRampToValueAtTime(0.001, time + 0.11);
+      osc2.connect(gain2);
+      this.connectSfxNode(gain2);
+      osc2.start(time + 0.05);
+      osc2.stop(time + 0.11);
+      return;
+    }
     
     // Play two notes in quick succession (C5 then G5)
     const time = this.ctx.currentTime;
@@ -342,7 +488,7 @@ class AudioSynthesizer {
     gain1.gain.setValueAtTime(0.06, time);
     gain1.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
     osc1.connect(gain1);
-    gain1.connect(this.ctx.destination);
+    this.connectSfxNode(gain1);
     osc1.start(time);
     osc1.stop(time + 0.12);
 
@@ -353,7 +499,7 @@ class AudioSynthesizer {
     gain2.gain.setValueAtTime(0.06, time + 0.08);
     gain2.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
     osc2.connect(gain2);
-    gain2.connect(this.ctx.destination);
+    this.connectSfxNode(gain2);
     osc2.start(time + 0.08);
     osc2.stop(time + 0.2);
   }
@@ -362,6 +508,21 @@ class AudioSynthesizer {
   playBoost() {
     this.init();
     if (!this.ctx) return;
+    
+    if (this.soundMode === 'classic') {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(2200, this.ctx.currentTime + 0.35);
+      gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.35);
+      osc.connect(gain);
+      this.connectSfxNode(gain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.35);
+      return;
+    }
     
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -374,7 +535,7 @@ class AudioSynthesizer {
     gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.4);
     
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    this.connectSfxNode(gain);
     
     osc.start();
     osc.stop(this.ctx.currentTime + 0.4);
@@ -384,6 +545,25 @@ class AudioSynthesizer {
   playExplosion() {
     this.init();
     if (!this.ctx) return;
+    
+    if (this.soundMode === 'classic') {
+      const bufferSize = this.ctx.sampleRate * 0.8;
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      const noiseNode = this.ctx.createBufferSource();
+      noiseNode.buffer = buffer;
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.8);
+      noiseNode.connect(gain);
+      this.connectSfxNode(gain);
+      noiseNode.start();
+      noiseNode.stop(this.ctx.currentTime + 0.8);
+      return;
+    }
     
     const bufferSize = this.ctx.sampleRate * 1.2; // 1.2 seconds of noise
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -413,7 +593,7 @@ class AudioSynthesizer {
     
     noiseNode.connect(filter);
     filter.connect(gain);
-    gain.connect(this.ctx.destination);
+    this.connectSfxNode(gain);
     
     noiseNode.start();
     noiseNode.stop(this.ctx.currentTime + 1.2);
@@ -423,6 +603,24 @@ class AudioSynthesizer {
   playWin() {
     this.init();
     if (!this.ctx) return;
+    
+    if (this.soundMode === 'classic') {
+      const time = this.ctx.currentTime;
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      notes.forEach((freq, index) => {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(freq, time + index * 0.08);
+        gain.gain.setValueAtTime(0.04, time + index * 0.08);
+        gain.gain.linearRampToValueAtTime(0.001, time + index * 0.08 + 0.35);
+        osc.connect(gain);
+        this.connectSfxNode(gain);
+        osc.start(time + index * 0.08);
+        osc.stop(time + index * 0.08 + 0.35);
+      });
+      return;
+    }
     
     const time = this.ctx.currentTime;
     const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5 arpeggio
@@ -438,7 +636,7 @@ class AudioSynthesizer {
       gain.gain.linearRampToValueAtTime(0.001, time + index * 0.1 + 0.4);
       
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      this.connectSfxNode(gain);
       
       osc.start(time + index * 0.1);
       osc.stop(time + index * 0.1 + 0.4);
@@ -449,7 +647,22 @@ class AudioSynthesizer {
   playWallCollision() {
     this.init();
     if (!this.ctx) return;
-
+ 
+    if (this.soundMode === 'classic') {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(40, this.ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
+      osc.connect(gain);
+      this.connectSfxNode(gain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.1);
+      return;
+    }
+ 
     try {
       const bufferSize = this.ctx.sampleRate * 0.12; // Short metallic brush
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -472,7 +685,7 @@ class AudioSynthesizer {
 
       noiseNode.connect(filter);
       filter.connect(gain);
-      gain.connect(this.ctx.destination);
+      this.connectSfxNode(gain);
 
       noiseNode.start();
       noiseNode.stop(this.ctx.currentTime + 0.12);
@@ -485,7 +698,22 @@ class AudioSynthesizer {
   playLandingRebound() {
     this.init();
     if (!this.ctx) return;
-
+ 
+    if (this.soundMode === 'classic') {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(90, this.ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
+      osc.connect(gain);
+      this.connectSfxNode(gain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.12);
+      return;
+    }
+ 
     try {
       const osc1 = this.ctx.createOscillator();
       const osc2 = this.ctx.createOscillator();
@@ -500,7 +728,7 @@ class AudioSynthesizer {
       gain1.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
 
       osc1.connect(gain1);
-      gain1.connect(this.ctx.destination);
+      this.connectSfxNode(gain1);
       osc1.start();
       osc1.stop(this.ctx.currentTime + 0.15);
 
@@ -512,7 +740,7 @@ class AudioSynthesizer {
       gain2.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
 
       osc2.connect(gain2);
-      gain2.connect(this.ctx.destination);
+      this.connectSfxNode(gain2);
       osc2.start();
       osc2.stop(this.ctx.currentTime + 0.2);
     } catch (e) {
@@ -524,7 +752,11 @@ class AudioSynthesizer {
   playSteer() {
     this.init();
     if (!this.ctx) return;
-
+ 
+    if (this.soundMode === 'classic') {
+      return; // PC speakers didn't do steer sounds
+    }
+ 
     try {
       const bufferSize = this.ctx.sampleRate * 0.08; // Very short soft puff
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -547,7 +779,7 @@ class AudioSynthesizer {
 
       noiseNode.connect(filter);
       filter.connect(gain);
-      gain.connect(this.ctx.destination);
+      this.connectSfxNode(gain);
 
       noiseNode.start();
       noiseNode.stop(this.ctx.currentTime + 0.08);

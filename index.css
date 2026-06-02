@@ -910,6 +910,68 @@ body, html {
   fill: currentColor;
 }
 
+/* Custom styling for Settings Volume range inputs */
+.settings-control-row input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 150px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.settings-control-row input[type="range"]:focus {
+  outline: none;
+}
+
+.settings-control-row input[type="range"]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  border: 1px solid rgba(0, 243, 255, 0.2);
+  box-shadow: inset 0 0 5px rgba(0, 243, 255, 0.1);
+}
+
+.settings-control-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -6px;
+  background-color: var(--color-secondary);
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 10px var(--color-secondary), 0 0 5px var(--color-secondary);
+  transition: transform 0.1s ease, background-color 0.1s ease;
+}
+
+.settings-control-row input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background-color: #fff;
+}
+
+.settings-control-row input[type="range"]::-moz-range-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  border: 1px solid rgba(0, 243, 255, 0.2);
+}
+
+.settings-control-row input[type="range"]::-moz-range-thumb {
+  background-color: var(--color-secondary);
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 10px var(--color-secondary), 0 0 5px var(--color-secondary);
+  transition: transform 0.1s ease;
+}
+
+.settings-control-row input[type="range"]::-moz-range-thumb:hover {
+  transform: scale(1.2);
+}
+
 /* Adjustments for smaller screens */
 @media (max-width: 600px) {
   .hud-stat-box {
