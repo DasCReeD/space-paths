@@ -11,7 +11,7 @@
 | **Project**     | SkyRoads Modern WebGL Remake                                   |
 | **Runtime**     | Browser (ES Modules)                                           |
 | **3D Engine**   | [Three.js](https://threejs.org/) v0.160.0                      |
-| **Audio**       | Web Audio API (procedural synthesis, no sample files)          |
+| **Audio**       | Web Audio API (procedural synthesis, plus classic OPL2/DOS assets) |
 | **Build Tool**  | [Vite](https://vitejs.dev/) v5.x                               |
 | **Test Runner** | [Vitest](https://vitest.dev/) v1.x (jsdom environment)        |
 | **Package**     | `skyroads-modern` v1.0.0 (private, ESM)                       |
@@ -82,7 +82,7 @@ graph LR
 ```
 
 > [!NOTE]
-> `audio.js` has **no** external imports — it uses only the browser's native Web Audio API.
+> `audio.js` imports OPL2 FM synthesizer and LZS decompression modules from `./oplSynth.js`.
 > `levels.js` has **no** imports — it is a pure data module.
 
 ---
@@ -241,7 +241,8 @@ Tile = {
 | [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) | 1,675 | 71 KB | Three.js renderer, scene setup, ship mesh, skybox, particles, chase camera, volumetric fragment shaders, city scenery spawners, custom procedural space/nebula particle systems |
 | [physics.js](file:///c:/dev/Sky%20roads/physics.js) | 579 | 24 KB | Three-axis motion integration, collision detection, fuel/oxygen, special tiles terrain effects, keyboard input, dynamic calibrator settings parameters, coyote-time buffers, collision/bounce behaviors |
 | [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) | 955 | 35 KB | Asynchronous geometry compilation, BoxGeometry/rounded archways, palette mappings, finish neon arches, gap/tunnel mesh optimizations |
-| [audio.js](file:///c:/dev/Sky%20roads/audio.js) | 494 | 18 KB | Procedural sound synthesis via Web Audio API, speed-modulated dual-oscillator engine hum, jump sweeps, refill chimes, boost sweeps, wall collisions, landing rebound variations, win arpeggios, background synthesizer music playback |
+| [audio.js](file:///c:/dev/Sky%20roads/audio.js) | 1,060 | 35 KB | Procedural sound synthesis via Web Audio API, speed-modulated engine hum, jump sweeps, and background synthesizer music playback. Manages sound effect triggers and sound mode selection (Synth vs. Classic). |
+| [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) | 631 | 19 KB | Real-time 15-channel OPL2 AdLib FM synthesis engine, DOS LZS decompressor stream parser, and Muzax / SFX sound structure decoders. |
 | [levels.js](file:///c:/dev/Sky%20roads/levels.js) | 76 | 2 KB | Lazy-loading level pack manifest & caching utility to dynamically load `./data/standard_levels.json` and `./data/xmas_levels.json` without bloating initial page loads |
 | [index.html](file:///c:/dev/Sky%20roads/index.html) | 641 | 37 KB | DOM structure: canvas container, HUD overlays, unified next-gen touch controls (left 2D analog stick, right arced action buttons), settings popups with calibration sliders, level select buttons |
 | [index.css](file:///c:/dev/Sky%20roads/index.css) | 1,869 | 49 KB | Synthwave design system: glassmorphic styles, neon glow micro-animations, full-scale layouts, landscape/portrait media query scaling, PS2-style circular virtual joystick, and right-side arced button layouts |
@@ -260,9 +261,12 @@ The project deliberately avoids SPA frameworks. `app.js` serves as a thin orches
 
 All level pack files (~6.3 MB JSON data) are dynamically lazy-loaded via `fetch` when starting standard or xmas level packs. The `levels.js` module exposes an asynchronous `loadLevelPack(packName)` function that caches data once fetched. This reduces the initial JS bundle size from 6MB+ to just ~2KB, ensuring fast loading and saving initial network bandwidth.
 
-### 3. Procedural Audio & Music (No Asset Files)
+### 3. Dual-Mode Audio System: Procedural & Classic FM Emulation
 
-All sound effects (jump sweeps, engine rumble, refills, crashes, landing bounds, and steering clicks) and synth wave background tracks are synthesized in real-time using audio oscillators, custom gain envelopes, biquad filters, and custom white/brown noise buffers from the Web Audio API. This means **zero external audio assets to download**, keeping the project fully offline-capable, highly performant, and self-contained.
+The audio engine features a dual-mode sound system selectable in Settings:
+1. **Synth Mode**: Generates all sound effects (jump sweeps, engine rumble, refills, crashes) and chiptune loops on-the-fly using browser oscillators, filters, noise nodes, and ADSR gain envelopes.
+2. **Classic Mode**: Fetches original DOS assets (`MUZAX.LZS`, `SFX.SND`, `INTRO.SND`) dynamically. A client-side LZSS decompressor decodes these binary resources in the browser, extracting raw 8kHz 8-bit unsigned PCM sound effects and FM registers. A custom 15-channel OPL2 AdLib FM software synthesizer (`OplSynthJS`) emulates AdLib FM registers, scheduling notes and outputting samples directly to a Web Audio `ScriptProcessorNode` to reproduce the authentic 1993 game soundtrack.
+If DOS asset fetches fail (e.g. in offline environments or JSDOM test runners), the engine gracefully falls back to Synth Mode to prevent breakage.
 
 ### 4. Global Window State for Cross-Module Communication
 

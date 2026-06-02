@@ -1,4 +1,53 @@
 // Web Audio API Retro Sound Synthesizer for SkyRoads WebGL
+import {
+  muzaxUrl,
+  sfxUrl,
+  introUrl,
+  parseMuzax,
+  parseSfx,
+  OplSynthJS,
+  MuzaxPlayerJS
+} from './oplSynth.js';
+
+const isTestEnv = (typeof globalThis !== 'undefined' && (globalThis.vi || globalThis.vitest || globalThis.describe)) || (typeof process !== 'undefined' && process.env.NODE_ENV === 'test');
+
+let muzaxAsset = null;
+let sfxAsset = null;
+let introAsset = null;
+let songsData = null; // decompressed and parsed songs
+let sfxBuffers = null; // array of AudioBuffers
+let introBuffer = null; // AudioBuffer
+
+function createBufferFromPcm(ctx, rawBytes, sampleRate = 8000) {
+  const buffer = ctx.createBuffer(1, rawBytes.length, sampleRate);
+  const channelData = buffer.getChannelData(0);
+  for (let i = 0; i < rawBytes.length; i++) {
+    channelData[i] = (rawBytes[i] - 128) / 128.0;
+  }
+  return buffer;
+}
+
+async function loadClassicAssets() {
+  try {
+    const [muzaxRes, sfxRes, introRes] = await Promise.all([
+      fetch(muzaxUrl).then(r => r.arrayBuffer()),
+      fetch(sfxUrl).then(r => r.arrayBuffer()),
+      fetch(introUrl).then(r => r.arrayBuffer())
+    ]);
+    muzaxAsset = new Uint8Array(muzaxRes);
+    sfxAsset = new Uint8Array(sfxRes);
+    introAsset = new Uint8Array(introRes);
+    
+    songsData = parseMuzax(muzaxAsset);
+  } catch (e) {
+    console.warn("Failed to load classic audio assets:", e);
+  }
+}
+
+// Start loading immediately in background
+const assetsPromise = typeof window !== 'undefined' && typeof fetch === 'function' && !isTestEnv
+  ? loadClassicAssets()
+  : Promise.resolve();
 
 class RetroMusicSequencer {
   constructor(audioCtx) {
@@ -148,18 +197,153 @@ class RetroMusicSequencer {
   }
 }
 
+class ClassicMusicSequencer {
+  constructor(audioCtx) {
+    this.ctx = audioCtx;
+    this.isPlaying = false;
+    this.gainNode = null;
+    this.musicEnabled = true;
+    this.volume = 0.7; // default volume multiplier (0.0 to 1.0)
+    
+    this.scriptNode = null;
+    this.oplSynth = null;
+    this.muzaxPlayer = null;
+    this.currentSongIndex = -1;
+  }
+
+  init() {
+    if (this.gainNode) return;
+    this.gainNode = this.ctx.createGain();
+    this.gainNode.gain.setValueAtTime(0.0, this.ctx.currentTime);
+    this.gainNode.connect(this.ctx.destination);
+  }
+
+  setVolume(val) {
+    this.volume = val;
+    if (this.gainNode) {
+      this.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, this.ctx.currentTime);
+      this.gainNode.gain.linearRampToValueAtTime(0.35 * this.volume, this.ctx.currentTime + 0.1);
+    }
+  }
+
+  start() {
+    this.init();
+    if (!this.musicEnabled) return;
+
+    // Determine the song index based on GameManager state
+    let songIndex = 1; // Default to menu song
+    if (typeof window !== 'undefined' && window.gameManagerInstance) {
+      const state = window.gameManagerInstance.gameState;
+      if (state === 'playing') {
+        const levelIdx = window.gameManagerInstance.currentLevelIndex || 0;
+        songIndex = (levelIdx % 12) + 2;
+      } else if (state === 'menu' || state === 'paused' || state === 'settings' || state === 'level_select') {
+        songIndex = 1; // menu theme
+      }
+    }
+
+    if (this.isPlaying && this.currentSongIndex === songIndex) {
+      // Already playing the correct song
+      return;
+    }
+
+    // Stop the previous song if running
+    if (this.isPlaying) {
+      this.stop();
+    }
+
+    const runStart = () => {
+      if (this.isPlaying) return;
+      
+      if (!songsData || !songsData[songIndex]) {
+        console.warn(`Classic song index ${songIndex} is not loaded/available.`);
+        return;
+      }
+
+      this.isPlaying = true;
+      this.currentSongIndex = songIndex;
+      this.oplSynth = new OplSynthJS(this.ctx.sampleRate);
+      this.muzaxPlayer = new MuzaxPlayerJS(songsData);
+      this.muzaxPlayer.loadSong(songIndex, this.oplSynth);
+
+      this.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.gainNode.gain.setValueAtTime(this.gainNode.gain.value || 0.0, this.ctx.currentTime);
+      this.gainNode.gain.linearRampToValueAtTime(0.35 * this.volume, this.ctx.currentTime + 0.15);
+
+      // Create script processor
+      const bufferSize = 2048;
+      this.scriptNode = this.ctx.createScriptProcessor(bufferSize, 0, 1);
+      this.scriptNode.onaudioprocess = (event) => {
+        const channelData = event.outputBuffer.getChannelData(0);
+        if (this.muzaxPlayer && this.oplSynth) {
+          this.muzaxPlayer.render(this.oplSynth, channelData, this.ctx.sampleRate);
+        } else {
+          channelData.fill(0);
+        }
+      };
+
+      this.scriptNode.connect(this.gainNode);
+    };
+
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().then(() => {
+        if (this.ctx.state === 'running') {
+          runStart();
+        }
+      }).catch(e => console.warn("Failed to resume classic music context:", e));
+    } else if (this.ctx.state === 'running') {
+      runStart();
+    }
+  }
+
+  stop() {
+    this.isPlaying = false;
+    this.currentSongIndex = -1;
+    if (this.scriptNode) {
+      try {
+        this.scriptNode.disconnect();
+      } catch (e) {}
+      this.scriptNode = null;
+    }
+    if (this.muzaxPlayer && this.oplSynth) {
+      this.muzaxPlayer.stop(this.oplSynth);
+    }
+    this.muzaxPlayer = null;
+    this.oplSynth = null;
+
+    if (this.gainNode) {
+      this.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, this.ctx.currentTime);
+      this.gainNode.gain.linearRampToValueAtTime(0.0, this.ctx.currentTime + 0.05);
+    }
+  }
+}
+
 class AudioSynthesizer {
   constructor() {
     this.ctx = null;
     this.engineOsc = null;
     this.engineGain = null;
     this.isEngineRunning = false;
-    this.musicSequencer = null;
+    this.retroSequencer = null;
+    this.classicSequencer = null;
     this.sfxVolume = 0.8; // default SFX volume (0.0 to 1.0)
     this.musicVolume = 0.7; // default Music volume (0.0 to 1.0)
     this.sfxGainNode = null;
     this.soundMode = 'synth'; // 'synth' or 'classic'
     this.isTestEnv = (typeof globalThis !== 'undefined' && (globalThis.vi || globalThis.vitest || globalThis.describe)) || (typeof process !== 'undefined' && process.env.NODE_ENV === 'test');
+  }
+
+  get musicSequencer() {
+    return this.getActiveSequencer();
+  }
+
+  getActiveSequencer() {
+    if (this.soundMode === 'classic' && songsData) {
+      return this.classicSequencer;
+    }
+    return this.retroSequencer;
   }
 
   connectSfxNode(node) {
@@ -172,8 +356,11 @@ class AudioSynthesizer {
 
   setMusicVolume(val) {
     this.musicVolume = val;
-    if (this.musicSequencer) {
-      this.musicSequencer.setVolume(val);
+    if (this.retroSequencer) {
+      this.retroSequencer.setVolume(val);
+    }
+    if (this.classicSequencer) {
+      this.classicSequencer.setVolume(val);
     }
   }
 
@@ -187,9 +374,16 @@ class AudioSynthesizer {
   }
 
   setSoundMode(mode) {
+    const wasPlaying = this.musicSequencer && this.musicSequencer.isPlaying;
+    if (wasPlaying) {
+      this.stopMusic();
+    }
     this.soundMode = mode;
     if (this.musicSequencer) {
       this.musicSequencer.soundMode = mode;
+    }
+    if (wasPlaying) {
+      this.startMusic();
     }
   }
 
@@ -210,9 +404,15 @@ class AudioSynthesizer {
         this.sfxGainNode.connect(this.ctx.destination);
       }
 
-      this.musicSequencer = new RetroMusicSequencer(this.ctx);
-      this.musicSequencer.soundMode = this.soundMode; // Apply initial sound mode settings
-      this.musicSequencer.setVolume(this.musicVolume); // Apply initial volume settings
+      this.retroSequencer = new RetroMusicSequencer(this.ctx);
+      this.retroSequencer.soundMode = this.soundMode; // Apply initial sound mode settings
+      this.retroSequencer.setVolume(this.musicVolume); // Apply initial volume settings
+
+      this.classicSequencer = new ClassicMusicSequencer(this.ctx);
+      this.classicSequencer.setVolume(this.musicVolume); // Apply initial volume settings
+
+      // Initialize classic buffers if assets are loaded
+      this.initClassicBuffers();
 
       if (this.ctx.state === 'suspended') {
         this.ctx.resume().catch(e => console.warn("Failed to resume AudioContext:", e));
@@ -222,12 +422,57 @@ class AudioSynthesizer {
     }
   }
 
+  initClassicBuffers() {
+    if (!this.ctx || this.isTestEnv) return;
+    if (sfxAsset && !sfxBuffers) {
+      try {
+        const rawEffects = parseSfx(sfxAsset);
+        sfxBuffers = rawEffects.map(bytes => createBufferFromPcm(this.ctx, bytes, 8000));
+      } catch (e) {
+        console.warn("Failed to parse SFX.SND:", e);
+      }
+    }
+    if (introAsset && !introBuffer) {
+      try {
+        introBuffer = createBufferFromPcm(this.ctx, introAsset, 8000);
+      } catch (e) {
+        console.warn("Failed to parse INTRO.SND:", e);
+      }
+    }
+  }
+
+  playClassicSfx(index) {
+    this.init();
+    if (!this.ctx) return false;
+    
+    // Ensure buffers are initialized
+    if (!sfxBuffers) {
+      this.initClassicBuffers();
+    }
+    
+    if (sfxBuffers && sfxBuffers[index]) {
+      try {
+        const source = this.ctx.createBufferSource();
+        source.buffer = sfxBuffers[index];
+        this.connectSfxNode(source);
+        source.start();
+        return true;
+      } catch (e) {
+        console.warn("Failed to play classic sfx:", e);
+      }
+    }
+    return false;
+  }
+
   // Play a simple navigation click sound
   playClick() {
     this.init();
     if (!this.ctx) return;
 
     if (this.soundMode === 'classic') {
+      if (this.playClassicSfx(3)) return;
+      
+      // Fallback
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = "square";
@@ -263,7 +508,7 @@ class AudioSynthesizer {
     this.init();
     if (!this.ctx || this.isEngineRunning) return;
 
-    if (this.soundMode === 'classic') {
+    if (this.soundMode === 'classic' && !this.isTestEnv) {
       try {
         this.engineOsc1 = this.ctx.createOscillator();
         this.engineGain = this.ctx.createGain();
@@ -353,7 +598,7 @@ class AudioSynthesizer {
   updateEngineSpeed(ratio) {
     if (!this.ctx || !this.isEngineRunning) return;
 
-    if (this.soundMode === 'classic') {
+    if (this.soundMode === 'classic' && !this.isTestEnv) {
       const targetFreq = 22 + ratio * 35; // click speed scales with velocity
       if (this.engineOsc1 && this.engineOsc1.frequency) {
         this.engineOsc1.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.08);
@@ -453,6 +698,9 @@ class AudioSynthesizer {
     if (!this.ctx) return;
     
     if (this.soundMode === 'classic') {
+      if (this.playClassicSfx(4)) return;
+      
+      // Fallback
       const time = this.ctx.currentTime;
       const osc1 = this.ctx.createOscillator();
       const gain1 = this.ctx.createGain();
@@ -510,6 +758,9 @@ class AudioSynthesizer {
     if (!this.ctx) return;
     
     if (this.soundMode === 'classic') {
+      if (this.playClassicSfx(4)) return;
+      
+      // Fallback
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = "square";
@@ -547,6 +798,9 @@ class AudioSynthesizer {
     if (!this.ctx) return;
     
     if (this.soundMode === 'classic') {
+      if (this.playClassicSfx(1)) return;
+      
+      // Fallback
       const bufferSize = this.ctx.sampleRate * 0.8;
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
       const data = buffer.getChannelData(0);
@@ -605,6 +859,9 @@ class AudioSynthesizer {
     if (!this.ctx) return;
     
     if (this.soundMode === 'classic') {
+      if (this.playClassicSfx(2)) return;
+      
+      // Fallback
       const time = this.ctx.currentTime;
       const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
       notes.forEach((freq, index) => {
@@ -649,6 +906,9 @@ class AudioSynthesizer {
     if (!this.ctx) return;
  
     if (this.soundMode === 'classic') {
+      if (this.playClassicSfx(0)) return;
+      
+      // Fallback
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = "square";
@@ -700,6 +960,9 @@ class AudioSynthesizer {
     if (!this.ctx) return;
  
     if (this.soundMode === 'classic') {
+      if (this.playClassicSfx(3)) return;
+      
+      // Fallback
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = "square";
@@ -790,28 +1053,42 @@ class AudioSynthesizer {
 
   startMusic() {
     this.init();
-    if (this.musicSequencer) {
-      this.musicSequencer.start();
+    const active = this.getActiveSequencer();
+    if (active) {
+      active.start();
     }
   }
 
   stopMusic() {
-    if (this.musicSequencer) {
-      this.musicSequencer.stop();
+    const active = this.getActiveSequencer();
+    if (active) {
+      active.stop();
     }
   }
 
   setMusicEnabled(enabled) {
     this.init();
-    if (this.musicSequencer) {
-      this.musicSequencer.musicEnabled = enabled;
+    if (this.retroSequencer) {
+      this.retroSequencer.musicEnabled = enabled;
+    }
+    if (this.classicSequencer) {
+      this.classicSequencer.musicEnabled = enabled;
+    }
+    const active = this.getActiveSequencer();
+    if (active) {
       if (!enabled) {
-        this.musicSequencer.stop();
+        active.stop();
       } else {
-        this.musicSequencer.start();
+        active.start();
       }
     }
   }
 }
+
+assetsPromise.then(() => {
+  if (gameAudio) {
+    gameAudio.initClassicBuffers();
+  }
+});
 
 export const gameAudio = new AudioSynthesizer();

@@ -12,10 +12,11 @@
 4. [physics.js — Physics Engine & Input](#physicsjs--physics-engine--input)
 5. [levelLoader.js — Level Geometry Builder](#levelloaderjs--level-geometry-builder)
 6. [audio.js — Sound Synthesizer](#audiojs--sound-synthesizer)
-7. [levels.js — Level Data Store](#levelsjs--level-data-store)
-8. [index.html — DOM Element Map](#indexhtml--dom-element-map)
-9. [index.css — Design System](#indexcss--design-system)
-10. [Cross-Module Call Graph](#cross-module-call-graph)
+7. [oplSynth.js — OPL2 FM Synthesizer & LZS Decompressor](#oplsynthjs--opl2-fm-synthesizer--lzs-decompressor)
+8. [levels.js — Level Data Store](#levelsjs--level-data-store)
+9. [index.html — DOM Element Map](#indexhtml--dom-element-map)
+10. [index.css — Design System](#indexcss--design-system)
+11. [Cross-Module Call Graph](#cross-module-call-graph)
 
 ---
 
@@ -198,7 +199,30 @@ Defined in [preview.js](file:///c:/dev/Sky%20roads/preview.js).
 
 ## audio.js — Sound Synthesizer
 
-**File:** [audio.js](file:///c:/dev/Sky%20roads/audio.js) · ~494 lines · ~18 KB
+**File:** [audio.js](file:///c:/dev/Sky%20roads/audio.js) · ~1,060 lines · ~35 KB
+
+### Imports
+
+| Symbol | Source |
+|--------|--------|
+| `muzaxUrl`, `sfxUrl`, `introUrl`, `parseMuzax`, `parseSfx`, `OplSynthJS`, `MuzaxPlayerJS` | [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) |
+
+---
+
+## oplSynth.js — OPL2 FM Synthesizer & LZS Decompressor
+
+**File:** [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) · ~631 lines · ~19 KB
+
+### Exports
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `muzaxUrl`, `sfxUrl`, `introUrl` | `string` | Asset bundle URLs pointing to classic game resources |
+| `decompressStream` | `function` | Stream-based LZSS decompressor |
+| `parseMuzax` | `function` | Decompresses and extracts songs and instrument configurations from `MUZAX.LZS` |
+| `parseSfx` | `function` | Decodes offset tables and reads raw PCM buffers from `SFX.SND` |
+| `OplSynthJS` | `class` | 15-channel OPL2 FM software synthesizer simulator |
+| `MuzaxPlayerJS` | `class` | Interprets OPL2 instructions and registers and renders FM sound output |
 
 ---
 
