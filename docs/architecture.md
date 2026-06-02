@@ -83,7 +83,7 @@ graph LR
 
 > [!NOTE]
 > `audio.js` imports OPL2 FM synthesizer and LZS decompression modules from `./oplSynth.js`.
-> `levels.js` has **no** imports — it is a pure data module.
+> `levels.js` imports static level JSON URLs using Vite asset URL queries.
 
 ---
 

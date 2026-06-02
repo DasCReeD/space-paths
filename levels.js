@@ -1,6 +1,5 @@
-// SkyRoads Level Pack Loader
-// Level data is lazy-loaded from JSON files to avoid blocking the main thread
-// with a 6MB+ inline module.
+import standardLevelsUrl from './data/standard_levels.json?url';
+import xmasLevelsUrl from './data/xmas_levels.json?url';
 
 // Cache for loaded packs (prevents duplicate fetches)
 const packCache = {};
@@ -18,8 +17,8 @@ export async function loadLevelPack(packName) {
   }
 
   const fileMap = {
-    standard: './data/standard_levels.json',
-    xmas: './data/xmas_levels.json',
+    standard: standardLevelsUrl,
+    xmas: xmasLevelsUrl,
   };
 
   if (packName === 'standard') {
