@@ -871,6 +871,43 @@ body, html {
   color: var(--color-text-muted);
   text-align: center;
   margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--color-secondary);
+  text-decoration: none;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 6px 14px;
+  background: rgba(0, 243, 255, 0.05);
+  border: 1px solid rgba(0, 243, 255, 0.2);
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.github-link:hover {
+  color: #fff;
+  background: rgba(0, 243, 255, 0.15);
+  border-color: rgba(0, 243, 255, 0.6);
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.octocat-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 /* Adjustments for smaller screens */
