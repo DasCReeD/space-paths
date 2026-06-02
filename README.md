@@ -5,6 +5,8 @@
 [![Tech Stack](https://img.shields.io/badge/tech--stack-Vite%20%7C%20Three.js%20%7C%20Web%20Audio-blueviolet.svg)](#architecture)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 
+🚀 **[Play the Live WebGL Demo Here!](https://dascreed.github.io/space-paths/)**
+
 A modern, high-performance 3D WebGL clone of the classic 1993 DOS game **Sky Roads**, built using vanilla ES Modules, **Three.js** for hardware-accelerated 3D rendering, **Web Audio API** for real-time procedural sound synthesis, and **Vite** for a modern build pipeline.
 
 Enjoy the classic high-speed stellar navigation with a polished, fully-responsive cyberpunk/synthwave user interface, interactive ship customized color/skin pickers, dynamic scenery, smooth chase camera logic, and procedural audio with absolutely zero external assets to download!
