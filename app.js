@@ -869,7 +869,7 @@ class GameManager {
           if (this.preSettingsState === 'playing') {
             this.gameState = 'playing';
             gameAudio.startEngine();
-            gameAudio.startMusic();
+            gameAudio.startMusic(true);
           } else {
             this.gameState = this.preSettingsState;
           }
@@ -1322,7 +1322,7 @@ class GameManager {
 
     // 6. Trigger Continuous Sound Hum
     gameAudio.startEngine();
-    gameAudio.startMusic();
+    gameAudio.startMusic(true);
 
     this.gameState = 'playing';
     this.lastTime = performance.now();
@@ -1339,7 +1339,7 @@ class GameManager {
     if (touchHud) touchHud.classList.add('hidden');
 
     gameAudio.stopEngine();
-    gameAudio.startMusic();
+    gameAudio.startMusic(false);
     this.showScreen('menu-screen');
   }
 
@@ -1360,7 +1360,7 @@ class GameManager {
     this.gameState = 'playing';
     this.lastTime = performance.now();
     gameAudio.startEngine();
-    gameAudio.startMusic();
+    gameAudio.startMusic(true);
     
     const btnInGamePause = document.getElementById('btn-in-game-pause');
     if (btnInGamePause) btnInGamePause.classList.remove('hidden');
@@ -1466,7 +1466,7 @@ class GameManager {
       if (this.preSettingsState === 'playing') {
         this.gameState = 'playing';
         gameAudio.startEngine();
-        gameAudio.startMusic();
+        gameAudio.startMusic(true);
       } else {
         this.gameState = this.preSettingsState;
       }

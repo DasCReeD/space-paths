@@ -227,19 +227,39 @@ class ClassicMusicSequencer {
     }
   }
 
-  start() {
+  start(isGameplay) {
     this.init();
     if (!this.musicEnabled) return;
 
-    // Determine the song index based on GameManager state
+    if (!songsData) {
+      // Assets are still loading, wait for them to finish, then retry starting
+      assetsPromise.then(() => {
+        if (this.musicEnabled && !this.isPlaying) {
+          this.start(isGameplay);
+        }
+      });
+      return;
+    }
+
+    // Determine the song index based on GameManager state or direct argument
     let songIndex = 1; // Default to menu song
-    if (typeof window !== 'undefined' && window.gameManagerInstance) {
-      const state = window.gameManagerInstance.gameState;
-      if (state === 'playing') {
-        const levelIdx = window.gameManagerInstance.currentLevelIndex || 0;
-        songIndex = (levelIdx % 12) + 2;
-      } else if (state === 'menu' || state === 'paused' || state === 'settings' || state === 'level_select') {
-        songIndex = 1; // menu theme
+    if (isGameplay === true) {
+      const levelIdx = (typeof window !== 'undefined' && window.gameManagerInstance)
+        ? (window.gameManagerInstance.currentLevelIndex || 0)
+        : 0;
+      songIndex = (levelIdx % 12) + 2;
+    } else if (isGameplay === false) {
+      songIndex = 1;
+    } else {
+      // Automatic detection fallback
+      if (typeof window !== 'undefined' && window.gameManagerInstance) {
+        const state = window.gameManagerInstance.gameState;
+        if (state === 'playing' || state === 'loading') {
+          const levelIdx = window.gameManagerInstance.currentLevelIndex || 0;
+          songIndex = (levelIdx % 12) + 2;
+        } else {
+          songIndex = 1;
+        }
       }
     }
 
@@ -1051,11 +1071,11 @@ class AudioSynthesizer {
     }
   }
 
-  startMusic() {
+  startMusic(isGameplay) {
     this.init();
     const active = this.getActiveSequencer();
     if (active) {
-      active.start();
+      active.start(isGameplay);
     }
   }
 
