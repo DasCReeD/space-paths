@@ -52,7 +52,7 @@ class RetroMusicSequencer {
       bassOsc.type = "triangle";
       bassOsc.frequency.setValueAtTime(this.midiToFreq(bassNote - 12), time);
       
-      bassGain.gain.setValueAtTime(0.04, time);
+      bassGain.gain.setValueAtTime(0.18, time);
       bassGain.gain.exponentialRampToValueAtTime(0.001, time + this.stepDuration * 1.8);
       
       bassOsc.connect(bassGain);
@@ -67,7 +67,7 @@ class RetroMusicSequencer {
     leadOsc.type = "sine"; // Warm retro sine arpeggiator
     leadOsc.frequency.setValueAtTime(this.midiToFreq(leadNote), time);
 
-    leadGain.gain.setValueAtTime(0.012, time);
+    leadGain.gain.setValueAtTime(0.07, time);
     leadGain.gain.exponentialRampToValueAtTime(0.001, time + this.stepDuration * 0.95);
 
     leadOsc.connect(leadGain);
@@ -80,33 +80,55 @@ class RetroMusicSequencer {
 
   start() {
     this.init();
-    if (this.isPlaying || !this.musicEnabled) return;
-    this.isPlaying = true;
-    this.currentStep = 0;
-    this.gainNode.gain.setTargetAtTime(0.35, this.ctx.currentTime, 0.1);
+    if (!this.musicEnabled) return;
+    
+    // If already playing, do nothing
+    if (this.isPlaying) return;
 
-    let nextNoteTime = this.ctx.currentTime;
-    const scheduleAheadTime = 0.1;
+    const runStart = () => {
+      if (this.isPlaying) return;
+      this.isPlaying = true;
+      this.currentStep = 0;
 
-    const scheduler = () => {
-      while (nextNoteTime < this.ctx.currentTime + scheduleAheadTime) {
-        this.playStep(nextNoteTime);
-        nextNoteTime += this.stepDuration;
-      }
+      this.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.gainNode.gain.setValueAtTime(0.0, this.ctx.currentTime);
+      this.gainNode.gain.linearRampToValueAtTime(0.35, this.ctx.currentTime + 0.15);
+
+      let nextNoteTime = this.ctx.currentTime;
+      const scheduleAheadTime = 0.1;
+
+      const scheduler = () => {
+        if (!this.isPlaying) return;
+        while (nextNoteTime < this.ctx.currentTime + scheduleAheadTime) {
+          this.playStep(nextNoteTime);
+          nextNoteTime += this.stepDuration;
+        }
+      };
+
+      this.intervalId = setInterval(scheduler, 25);
     };
 
-    this.intervalId = setInterval(scheduler, 25);
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().then(() => {
+        if (this.ctx.state === 'running') {
+          runStart();
+        }
+      }).catch(e => console.warn("Failed to resume music context:", e));
+    } else if (this.ctx.state === 'running') {
+      runStart();
+    }
   }
 
   stop() {
-    if (!this.isPlaying) return;
     this.isPlaying = false;
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
     if (this.gainNode) {
-      this.gainNode.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.05);
+      this.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, this.ctx.currentTime);
+      this.gainNode.gain.linearRampToValueAtTime(0.0, this.ctx.currentTime + 0.05);
     }
   }
 }
