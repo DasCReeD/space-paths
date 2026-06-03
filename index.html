@@ -314,6 +314,10 @@
           <button id="btn-settings-stick-throttle" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">STICK THROTTLE: OFF</button>
         </div>
         <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">LANE SNAP</span>
+          <button id="btn-settings-lane-snap" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">LANE SNAP: ON</button>
+        </div>
+        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">GAMEPAD</span>
           <button id="btn-settings-gamepad" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">CONFIGURE 🎮</button>
         </div>
@@ -479,6 +483,14 @@
                 <span id="val-dragSteer" class="slider-value">28.0</span>
               </div>
               <input type="range" id="input-dragSteer" min="5" max="80" step="1" value="28">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">LANE SNAP STRENGTH</span>
+                <span id="val-laneSnapStrength" class="slider-value">4.0</span>
+              </div>
+              <input type="range" id="input-laneSnapStrength" min="0.5" max="15.0" step="0.5" value="4.0">
             </div>
 
             <div class="slider-row">

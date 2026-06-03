@@ -71,6 +71,7 @@ export class PhysicsEngine {
       maxSteerSpeed: 10.0,
       steerAccel: 35.0,
       dragSteer: 28.0,
+      laneSnapStrength: 4.0,
 
       // Easy Mode Front Collision Rebounds
       easyCollisionBounceVel: 10.0,
@@ -243,14 +244,14 @@ export class PhysicsEngine {
       // Smart Lane Snapping/Magnetism:
       // Applies when using touch controls, the user is not actively steering (joystick is neutral/released),
       // the ship is on the ground, and it is not dead.
-      if (keyboard.touchControlsEnabled && !activeSteering && this.onGround && !this.isDead) {
+      if (keyboard.touchControlsEnabled && keyboard.laneSnapEnabled && !activeSteering && this.onGround && !this.isDead) {
         // Road is 7 lanes, TILE_WIDTH is 2.0. Lanes centered at -6, -4, -2, 0, 2, 4, 6.
         const nearestLaneX = Math.max(-6.0, Math.min(6.0, Math.round(this.position.x / 2.0) * 2.0));
         const distToLane = nearestLaneX - this.position.x;
         
         // Only pull if we are within a reasonable distance (e.g. less than 1.0 unit / half tile width)
         if (Math.abs(distToLane) < 1.0) {
-          const snapStrength = 4.0; // Tight, organic spring snapping pull
+          const snapStrength = (this.settings && this.settings.laneSnapStrength !== undefined) ? this.settings.laneSnapStrength : 4.0;
           targetSteerSpeed = distToLane * snapStrength;
         }
       }
@@ -628,6 +629,7 @@ export class KeyboardController {
     this.mouseControlsEnabled = false;
     this.touchControlsEnabled = false;
     this.touchJoystickThrottleEnabled = false;
+    this.laneSnapEnabled = true;
 
     this.gamepadConnected = false;
     this.gamepad = {
