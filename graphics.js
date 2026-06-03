@@ -23,6 +23,11 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import fighterObjUrl from './fighter1.obj?url';
+import fighterClassUrl from './assets/models/fighter.obj?url';
+import haulerClassUrl from './assets/models/hauler.obj?url';
+import scoutClassUrl from './assets/models/scout.obj?url';
+import dreadnoughtClassUrl from './assets/models/dreadnought.obj?url';
+import cruiserClassUrl from './assets/models/cruiser.obj?url';
 import uvMapUrl from './uvmap.jpg';
 import cityFbxUrl from './futuristic low poly city by niko.fbx?url';
 import skyboxGltfUrl from './assets/free_colorful_sci_fi_skybox_gltf/scene.gltf?url';
@@ -49,27 +54,36 @@ import freeBattleTexUrl from './SBS - Seamless Abstract Pack - 512x512/Free Batt
 
 const MAJADROID_BASE = './SBS - Seamless Abstract Pack - 512x512/LowPoly-Spaceships-By-Majadroid';
 
+export const LEGACY_MODEL_ALIASES = {
+  original: 'fighter',
+  corvette1: 'fighter',
+  ship1: 'fighter',
+  ship2: 'fighter',
+  
+  corvette2: 'scout',
+  corvette4: 'scout',
+  frigate4: 'scout',
+  
+  corvette3: 'cruiser',
+  frigate2: 'cruiser',
+  frigate3: 'cruiser',
+  ship3: 'cruiser',
+  
+  corvette5: 'hauler',
+  frigate1: 'hauler',
+  ship4: 'hauler',
+  
+  frigate5: 'dreadnought',
+  ship5: 'dreadnought'
+};
+
 export const SHIP_MODELS = {
-  original: fighterObjUrl, // legacy fallback for tests
-  
-  // Pack A: Corvettes & Frigates
-  corvette1: corvette1Url,
-  corvette2: corvette2Url,
-  corvette3: corvette3Url,
-  corvette4: corvette4Url,
-  corvette5: corvette5Url,
-  frigate1: frigate1Url,
-  frigate2: frigate2Url,
-  frigate3: frigate3Url,
-  frigate4: frigate4Url,
-  frigate5: frigate5Url,
-  
-  // Pack B: MajadroidOBJ Fighters
-  ship1: `${MAJADROID_BASE}/obj-files/obj-ships/material-01/m1-ship1.obj`,
-  ship2: `${MAJADROID_BASE}/obj-files/obj-ships/material-01/m1-ship2.obj`,
-  ship3: `${MAJADROID_BASE}/obj-files/obj-ships/material-01/m1-ship3.obj`,
-  ship4: `${MAJADROID_BASE}/obj-files/obj-ships/material-01/m1-ship4.obj`,
-  ship5: `${MAJADROID_BASE}/obj-files/obj-ships/material-01/m1-ship5.obj`
+  // Custom Hovercraft Classes
+  fighter: fighterClassUrl,
+  hauler: haulerClassUrl,
+  scout: scoutClassUrl,
+  dreadnought: dreadnoughtClassUrl,
+  cruiser: cruiserClassUrl
 };
 
 export const SHIP_SKINS = {
@@ -93,28 +107,11 @@ export const SHIP_SKINS = {
 };
 
 export const SHIP_METRICS = {
-  original: { offset: 0.25, height: 0.20, rotationY: -Math.PI / 2 },
-  
-  // Corvettes
-  corvette1: { offset: 0.28, height: 0.18, rotationY: -Math.PI / 2 },
-  corvette2: { offset: 0.30, height: 0.16, rotationY: -Math.PI / 2 },
-  corvette3: { offset: 0.26, height: 0.18, rotationY: -Math.PI / 2 },
-  corvette4: { offset: 0.34, height: 0.15, rotationY: -Math.PI / 2 },
-  corvette5: { offset: 0.32, height: 0.17, rotationY: -Math.PI / 2 },
-  
-  // Frigates
-  frigate1: { offset: 0.38, height: 0.22, rotationY: -Math.PI / 2 },
-  frigate2: { offset: 0.40, height: 0.20, rotationY: -Math.PI / 2 },
-  frigate3: { offset: 0.36, height: 0.22, rotationY: -Math.PI / 2 },
-  frigate4: { offset: 0.44, height: 0.18, rotationY: -Math.PI / 2 },
-  frigate5: { offset: 0.42, height: 0.21, rotationY: -Math.PI / 2 },
-  
-  // Majadroid
-  ship1: { offset: 0.52, height: 0.19, rotationY: -Math.PI / 2 },
-  ship2: { offset: 0.25, height: 0.21, rotationY: -Math.PI / 2 },
-  ship3: { offset: 0.20, height: 0.26, rotationY: -Math.PI / 2 },
-  ship4: { offset: 0.36, height: 0.20, rotationY: -Math.PI / 2 },
-  ship5: { offset: 0.46, height: 0.18, rotationY: -Math.PI / 2 }
+  fighter: { offset: 0.25, height: 0.20, rotationY: -Math.PI / 2 },
+  hauler: { offset: 0.38, height: 0.22, rotationY: -Math.PI / 2 },
+  scout: { offset: 0.30, height: 0.16, rotationY: -Math.PI / 2 },
+  dreadnought: { offset: 0.42, height: 0.21, rotationY: -Math.PI / 2 },
+  cruiser: { offset: 0.26, height: 0.18, rotationY: -Math.PI / 2 }
 };
 
 export const BASE_TEXTURES = {
@@ -905,7 +902,8 @@ export class GraphicsEngine {
     if (!skinName) skinName = 'default';
     if (!colorHex) colorHex = '#ffffff';
 
-    const modelUrl = SHIP_MODELS[modelName] || fighterObjUrl;
+    const mappedModelName = LEGACY_MODEL_ALIASES[modelName] || modelName;
+    const modelUrl = SHIP_MODELS[mappedModelName] || fighterClassUrl;
     const isFbx = modelUrl.toLowerCase().includes('.fbx') || modelUrl.toLowerCase().includes('fbx-files') || modelUrl.toLowerCase().includes('battle');
     
     const applyTextureToModel = (texture, obj) => {
@@ -951,7 +949,8 @@ export class GraphicsEngine {
     const skinUrl = this.skins[skinName] || uvMapUrl;
 
     if (colorHex && colorHex.toLowerCase() !== '#ffffff') {
-      const isPackA = modelName.startsWith('corvette') || modelName.startsWith('frigate');
+      const mappedModelName = LEGACY_MODEL_ALIASES[modelName] || modelName;
+      const isPackA = mappedModelName.startsWith('corvette') || mappedModelName.startsWith('frigate');
       getCachedImage(skinUrl, (img) => {
         if (img) {
           const canvas = swapTextureColor(img, colorHex, isPackA);
@@ -1240,22 +1239,53 @@ export class GraphicsEngine {
 
     // Asynchronously load the premium spaceship model
     try {
-      this.loadModelAndTexture(this.currentModelName, this.currentSkinName, this.currentSkinColor, (obj) => {
+      const mappedModelName = LEGACY_MODEL_ALIASES[this.currentModelName] || this.currentModelName;
+      this.loadModelAndTexture(mappedModelName, this.currentSkinName, this.currentSkinColor, (obj) => {
         obj.position.set(0, 0, 0);
-        const metrics = SHIP_METRICS[this.currentModelName] || SHIP_METRICS.original;
-        const rotationY = metrics.rotationY !== undefined ? metrics.rotationY : -Math.PI / 2;
+        const modelUrl = SHIP_MODELS[mappedModelName] || fighterClassUrl;
+        const isFbx = modelUrl.toLowerCase().includes('.fbx') || modelUrl.toLowerCase().includes('fbx-files') || modelUrl.toLowerCase().includes('battle');
+        const rotationY = isFbx ? -Math.PI / 2 : Math.PI;
         obj.rotation.y = rotationY; // Face forward
 
-        const initialBox = new THREE.Box3().setFromObject(obj);
+        obj.updateMatrixWorld(true);
+        const initialBox = new THREE.Box3();
+        let hasValidMesh = false;
+        obj.traverse((child) => {
+          if (child.isMesh) {
+            const nameLower = child.name.toLowerCase();
+            if (!nameLower.includes('helper') && !nameLower.includes('collision') && !nameLower.includes('dummy') && !nameLower.includes('camera') && !nameLower.includes('light')) {
+              initialBox.expandByObject(child);
+              hasValidMesh = true;
+            }
+          }
+        });
+        if (!hasValidMesh) {
+          initialBox.setFromObject(obj);
+        }
+
         const initialSize = new THREE.Vector3();
         initialBox.getSize(initialSize);
 
         const targetWidth = 1.4;
-        const scaleFactor = targetWidth / initialSize.x;
+        const scaleFactor = targetWidth / (initialSize.x || 1.0);
         obj.scale.setScalar(scaleFactor);
 
         obj.updateMatrixWorld(true);
-        const finalBox = new THREE.Box3().setFromObject(obj);
+        const finalBox = new THREE.Box3();
+        let hasValidMeshFinal = false;
+        obj.traverse((child) => {
+          if (child.isMesh) {
+            const nameLower = child.name.toLowerCase();
+            if (!nameLower.includes('helper') && !nameLower.includes('collision') && !nameLower.includes('dummy') && !nameLower.includes('camera') && !nameLower.includes('light')) {
+              finalBox.expandByObject(child);
+              hasValidMeshFinal = true;
+            }
+          }
+        });
+        if (!hasValidMeshFinal) {
+          finalBox.setFromObject(obj);
+        }
+
         const finalCenter = new THREE.Vector3();
         finalBox.getCenter(finalCenter);
 
@@ -1378,23 +1408,55 @@ export class GraphicsEngine {
       }
     }
 
+    const mappedModelName = LEGACY_MODEL_ALIASES[modelName] || modelName;
+
     try {
-      this.loadModelAndTexture(modelName, skinName, colorHex, (obj) => {
+      this.loadModelAndTexture(mappedModelName, skinName, colorHex, (obj) => {
         obj.position.set(0, 0, 0);
-        const metrics = SHIP_METRICS[modelName] || SHIP_METRICS.original;
-        const rotationY = metrics.rotationY !== undefined ? metrics.rotationY : -Math.PI / 2;
+        const modelUrl = SHIP_MODELS[mappedModelName] || fighterClassUrl;
+        const isFbx = modelUrl.toLowerCase().includes('.fbx') || modelUrl.toLowerCase().includes('fbx-files') || modelUrl.toLowerCase().includes('battle');
+        const rotationY = isFbx ? -Math.PI / 2 : Math.PI;
         obj.rotation.y = rotationY;
 
-        const initialBox = new THREE.Box3().setFromObject(obj);
+        obj.updateMatrixWorld(true);
+        const initialBox = new THREE.Box3();
+        let hasValidMesh = false;
+        obj.traverse((child) => {
+          if (child.isMesh) {
+            const nameLower = child.name.toLowerCase();
+            if (!nameLower.includes('helper') && !nameLower.includes('collision') && !nameLower.includes('dummy') && !nameLower.includes('camera') && !nameLower.includes('light')) {
+              initialBox.expandByObject(child);
+              hasValidMesh = true;
+            }
+          }
+        });
+        if (!hasValidMesh) {
+          initialBox.setFromObject(obj);
+        }
+
         const initialSize = new THREE.Vector3();
         initialBox.getSize(initialSize);
 
         const targetWidth = 1.4;
-        const scaleFactor = targetWidth / initialSize.x;
+        const scaleFactor = targetWidth / (initialSize.x || 1.0);
         obj.scale.setScalar(scaleFactor);
 
         obj.updateMatrixWorld(true);
-        const finalBox = new THREE.Box3().setFromObject(obj);
+        const finalBox = new THREE.Box3();
+        let hasValidMeshFinal = false;
+        obj.traverse((child) => {
+          if (child.isMesh) {
+            const nameLower = child.name.toLowerCase();
+            if (!nameLower.includes('helper') && !nameLower.includes('collision') && !nameLower.includes('dummy') && !nameLower.includes('camera') && !nameLower.includes('light')) {
+              finalBox.expandByObject(child);
+              hasValidMeshFinal = true;
+            }
+          }
+        });
+        if (!hasValidMeshFinal) {
+          finalBox.setFromObject(obj);
+        }
+
         const finalCenter = new THREE.Vector3();
         finalBox.getCenter(finalCenter);
 
@@ -1474,7 +1536,8 @@ export class GraphicsEngine {
       idealCamTarget.y = physics.position.y + scaledTargetOffset.y;
     } else if (this.cameraMode === 'cockpit') {
       // Cockpit mode: place camera exactly inside the cabin / at the nose of the ship pointing forward!
-      const metrics = SHIP_METRICS[this.currentModelName] || SHIP_METRICS.original;
+      const mappedModelName = LEGACY_MODEL_ALIASES[this.currentModelName] || this.currentModelName;
+      const metrics = SHIP_METRICS[mappedModelName] || SHIP_METRICS.fighter;
       // Retrieve custom cockpit camera offsets from physics settings
       const offsetX = physics.settings.cockpitOffsetX !== undefined ? physics.settings.cockpitOffsetX : 0.0;
       const offsetY = physics.settings.cockpitOffsetY !== undefined ? physics.settings.cockpitOffsetY : 0.0;
@@ -1648,7 +1711,8 @@ export class GraphicsEngine {
     // Implement Spaceship Exhaust/Wing Trails (Milestone 4):
     // Track wingtip history (15 points), create Ribbon Mesh with additive blending and opacity gradients.
     if (!this.isTestEnv && this.shipMesh && !physics.isDead) {
-      const metrics = SHIP_METRICS[this.currentModelName] || SHIP_METRICS.original;
+      const mappedModelName = LEGACY_MODEL_ALIASES[this.currentModelName] || this.currentModelName;
+      const metrics = SHIP_METRICS[mappedModelName] || SHIP_METRICS.fighter;
       
       // Calculate precise left and right wingtip absolute coordinates in world space
       const shipPos = physics.position.clone();
@@ -1747,27 +1811,35 @@ export class GraphicsEngine {
       updateRibbonTrail(this.wingtipHistory.right, 'right');
     }
 
-    // ── NEON pulsing TRACK MATERIAL PATHWAYS ──
-    // Implement neon pulsing pathways using shader animation inside the active scene meshes
+    // ── NEON pulsing TRACK MATERIAL PATHWAYS & COMFYUI DECALS ──
     if (!this.isTestEnv && this.scene) {
       const pulseVal = Math.sin(this.uTimeAccumulator * 4.5) * 0.35 + 0.65;
       
       this.scene.traverse((child) => {
         // Find road meshes and pulse their emissive intensity
         if (child.isMesh && child.material && child.material.emissive) {
-          // If the material has standard name/properties, pulse it!
           if (child.material.emissiveIntensity !== undefined) {
             // Emissive glow zones get pulsed extra brightly
             if (child.material.emissiveIntensity > 1.0) {
-              // Special effect hazard blocks: Highly pronounced, fast cosmic pulsing glow cycle
               child.material.emissiveIntensity = 3.5 + Math.sin(this.uTimeAccumulator * 8.0) * 2.0;
             } else {
-              // Standard road blocks: Completely static, no breathing pulsing
               child.material.emissiveIntensity = 0.35;
             }
           }
         }
       });
+
+      // Animate custom decal texture offsets and pulsing glow intensities
+      if (this.scene.userData.animatedDecals) {
+        this.scene.userData.animatedDecals.forEach((decalMat) => {
+          if (decalMat.map && decalMat.userData && decalMat.userData.isAnimated) {
+            decalMat.map.offset.y += decalMat.userData.speed * dt;
+            if (decalMat.userData.pulse) {
+              decalMat.emissiveIntensity = decalMat.userData.baseIntensity + Math.sin(this.uTimeAccumulator * 8.0) * 1.5;
+            }
+          }
+        });
+      }
     }
 
     if (this.cockpitConsole3D) {
@@ -1822,7 +1894,8 @@ export class GraphicsEngine {
 
         // Spawn from engines - dynamically align with the custom OBJ model's wider nozzles (using SHIP_METRICS per model) if loaded, or fall back to procedural quad jet nozzles
         const isObjLoaded = !this.isTestEnv && !!this.isObjLoaded;
-        const metrics = SHIP_METRICS[this.currentModelName] || SHIP_METRICS.original;
+        const mappedModelName = LEGACY_MODEL_ALIASES[this.currentModelName] || this.currentModelName;
+        const metrics = SHIP_METRICS[mappedModelName] || SHIP_METRICS.fighter;
         const engineOffset = Math.random() < 0.5 
           ? (isObjLoaded ? -metrics.offset : -0.16) 
           : (isObjLoaded ? metrics.offset : 0.16);
@@ -1841,22 +1914,31 @@ export class GraphicsEngine {
         });
         const pMesh = new THREE.Mesh(pGeom, pMat);
         
-        // Spawn slightly behind engine nozzles
-        pMesh.position.set(
-          physics.position.x + engineOffset + (Math.random() * 0.05 - 0.025),
-          physics.position.y + verticalOffset + (Math.random() * 0.05 - 0.025),
-          physics.position.z + SHIP_LENGTH / 2 + 0.1
+        // Spawn slightly behind engine nozzles (with ship rotation applied)
+        const particleOffset = new THREE.Vector3(
+          engineOffset + (Math.random() * 0.05 - 0.025),
+          verticalOffset + (Math.random() * 0.05 - 0.025),
+          SHIP_LENGTH / 2 + 0.1
         );
+        
+        const particleVel = new THREE.Vector3(
+          Math.random() * 0.4 - 0.2,
+          Math.random() * 0.4 - 0.2,
+          5.0 + Math.random() * 5.0 // shoot particles backward (positive Z)
+        );
+
+        if (this.shipMesh) {
+          particleOffset.applyEuler(this.shipMesh.rotation);
+          particleVel.applyEuler(this.shipMesh.rotation);
+        }
+
+        pMesh.position.copy(physics.position).add(particleOffset);
 
         this.scene.add(pMesh);
 
         this.particles.push({
           mesh: pMesh,
-          velocity: new THREE.Vector3(
-            Math.random() * 0.4 - 0.2,
-            Math.random() * 0.4 - 0.2,
-            5.0 + Math.random() * 5.0 // shoot particles backward (positive Z)
-          ),
+          velocity: particleVel,
           life: 0.35, // short life
           maxLife: 0.35
         });

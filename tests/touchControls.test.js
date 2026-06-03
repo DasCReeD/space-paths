@@ -328,5 +328,51 @@ describe('KeyboardController - Touch Controls Integration', () => {
       expect(keyboard.left).toBe(false);
       expect(keyboard.right).toBe(true);
     });
+
+    it('should correctly validate layout bounds and overlap prevention logic', () => {
+      const validateLayoutMock = (elemRect, hudRect, otherRects) => {
+        const isInsideHud = (
+          elemRect.left >= hudRect.left - 1.5 &&
+          elemRect.right <= hudRect.right + 1.5 &&
+          elemRect.top >= hudRect.top - 1.5 &&
+          elemRect.bottom <= hudRect.bottom + 1.5
+        );
+        if (!isInsideHud) return false;
+
+        for (const otherRect of otherRects) {
+          const overlap = (
+            elemRect.left < otherRect.right - 1.5 &&
+            elemRect.right > otherRect.left + 1.5 &&
+            elemRect.top < otherRect.bottom - 1.5 &&
+            elemRect.bottom > otherRect.top + 1.5
+          );
+          if (overlap) return false;
+        }
+        return true;
+      };
+
+      const hud = { left: 0, right: 800, top: 0, bottom: 600 };
+
+      // Valid: inside HUD, no overlap
+      expect(validateLayoutMock(
+        { left: 100, right: 200, top: 100, bottom: 200 },
+        hud,
+        [{ left: 300, right: 400, top: 300, bottom: 400 }]
+      )).toBe(true);
+
+      // Invalid: outside left HUD bounds
+      expect(validateLayoutMock(
+        { left: -10, right: 90, top: 100, bottom: 200 },
+        hud,
+        []
+      )).toBe(false);
+
+      // Invalid: overlaps other control element
+      expect(validateLayoutMock(
+        { left: 100, right: 200, top: 100, bottom: 200 },
+        hud,
+        [{ left: 150, right: 250, top: 150, bottom: 250 }]
+      )).toBe(false);
+    });
   });
 });

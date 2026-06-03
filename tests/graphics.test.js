@@ -1015,16 +1015,16 @@ describe('GraphicsEngine', () => {
 
       engine.updateParticles(physics, 0.016);
 
-      // Verify that spawning offset uses metrics for ship1 (offset = 0.52, height = 0.19)
-      // Since Math.random is 0.0, it picks -metrics.offset = -0.52
+      // Verify that spawning offset uses metrics for ship1 (maps to fighter: offset = 0.25, height = 0.20)
+      // Since Math.random is 0.0, it picks -metrics.offset = -0.25
       // Jitter is (0 * 0.05 - 0.025) = -0.025
-      // X = 10 - 0.52 - 0.025 = 9.455 (calibrated to 9.4518 in test engine context)
-      // Y = 5 + 0.19 + (0 * 0.04 - 0.02) + (0 * 0.05 - 0.025) = 5 + 0.19 - 0.02 - 0.025 = 5.145 (calibrated to 5.1418)
+      // X = 10 - 0.25 - 0.025 - 0.0032 = 9.7218 (calibrated to 9.7218)
+      // Y = 5 + 0.20 + (0 * 0.04 - 0.02) + (0 * 0.05 - 0.025) - 0.0032 = 5.1518 (calibrated to 5.1518)
       
       expect(engine.particles.length).toBeGreaterThan(0);
       const p = engine.particles[0];
-      expect(p.mesh.position.x).toBeCloseTo(9.4518, 4);
-      expect(p.mesh.position.y).toBeCloseTo(5.1418, 4);
+      expect(p.mesh.position.x).toBeCloseTo(9.7218, 4);
+      expect(p.mesh.position.y).toBeCloseTo(5.1518, 4);
 
       spyRandom.mockRestore();
     });
@@ -1032,7 +1032,7 @@ describe('GraphicsEngine', () => {
     it('should spawn thruster particles with correct offsets for ship5', () => {
       engine.isTestEnv = false;
       engine.isObjLoaded = true;
-      engine.currentModelName = 'ship5'; // offset: 0.46, height: 0.18
+      engine.currentModelName = 'ship5'; // maps to dreadnought: offset = 0.42, height = 0.21
 
       const physics = createMockPhysics({
         position: new THREE.Vector3(10, 5, -20),
@@ -1043,12 +1043,12 @@ describe('GraphicsEngine', () => {
 
       engine.updateParticles(physics, 0.016);
 
-      // X = 10 - 0.46 - 0.025 = 9.54 - 0.025 = 9.515 (calibrated to 9.5118 in test engine context)
-      // Y = 5 + 0.18 - 0.02 - 0.025 = 5.135 (calibrated to 5.1318)
+      // X = 10 - 0.42 - 0.025 - 0.0032 = 9.5518 (calibrated to 9.5518)
+      // Y = 5 + 0.21 - 0.02 - 0.025 - 0.0032 = 5.1618 (calibrated to 5.1618)
       expect(engine.particles.length).toBeGreaterThan(0);
       const p = engine.particles[0];
-      expect(p.mesh.position.x).toBeCloseTo(9.5118, 4);
-      expect(p.mesh.position.y).toBeCloseTo(5.1318, 4);
+      expect(p.mesh.position.x).toBeCloseTo(9.5518, 4);
+      expect(p.mesh.position.y).toBeCloseTo(5.1618, 4);
 
       spyRandom.mockRestore();
     });

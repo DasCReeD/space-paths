@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-import fighterObjUrl from './fighter1.obj?url';
+import fighterClassUrl from './assets/models/fighter.obj?url';
+import haulerClassUrl from './assets/models/hauler.obj?url';
+import scoutClassUrl from './assets/models/scout.obj?url';
+import dreadnoughtClassUrl from './assets/models/dreadnought.obj?url';
+import cruiserClassUrl from './assets/models/cruiser.obj?url';
 import uvMapUrl from './uvmap.jpg';
 import freelancerSkinUrl from './freelancer.jpg';
 import lordshadowSkinUrl from './lordshadow.jpg';
@@ -26,27 +30,36 @@ import freeBattleTexUrl from './SBS - Seamless Abstract Pack - 512x512/Free Batt
 
 const MAJADROID_BASE = './SBS - Seamless Abstract Pack - 512x512/LowPoly-Spaceships-By-Majadroid';
 
+export const LEGACY_MODEL_ALIASES = {
+  original: 'fighter',
+  corvette1: 'fighter',
+  ship1: 'fighter',
+  ship2: 'fighter',
+  
+  corvette2: 'scout',
+  corvette4: 'scout',
+  frigate4: 'scout',
+  
+  corvette3: 'cruiser',
+  frigate2: 'cruiser',
+  frigate3: 'cruiser',
+  ship3: 'cruiser',
+  
+  corvette5: 'hauler',
+  frigate1: 'hauler',
+  ship4: 'hauler',
+  
+  frigate5: 'dreadnought',
+  ship5: 'dreadnought'
+};
+
 export const SHIP_MODELS = {
-  original: fighterObjUrl,
-  
-  // Pack A: Corvettes & Frigates
-  corvette1: corvette1Url,
-  corvette2: corvette2Url,
-  corvette3: corvette3Url,
-  corvette4: corvette4Url,
-  corvette5: corvette5Url,
-  frigate1: frigate1Url,
-  frigate2: frigate2Url,
-  frigate3: frigate3Url,
-  frigate4: frigate4Url,
-  frigate5: frigate5Url,
-  
-  // Pack B: Majadroid
-  ship1: `${MAJADROID_BASE}/obj-files/obj-ships/material-01/m1-ship1.obj`,
-  ship2: `${MAJADROID_BASE}/obj-files/obj-ships/material-01/m1-ship2.obj`,
-  ship3: `${MAJADROID_BASE}/obj-files/obj-ships/material-01/m1-ship3.obj`,
-  ship4: `${MAJADROID_BASE}/obj-files/obj-ships/material-01/m1-ship4.obj`,
-  ship5: `${MAJADROID_BASE}/obj-files/obj-ships/material-01/m1-ship5.obj`
+  // Custom Hovercraft Classes
+  fighter: fighterClassUrl,
+  hauler: haulerClassUrl,
+  scout: scoutClassUrl,
+  dreadnought: dreadnoughtClassUrl,
+  cruiser: cruiserClassUrl
 };
 
 export const SHIP_SKINS = {
@@ -70,28 +83,11 @@ export const SHIP_SKINS = {
 };
 
 export const SHIP_METRICS = {
-  original: { offset: 0.25, height: 0.20, rotationY: -Math.PI / 2 },
-  
-  // Corvettes
-  corvette1: { offset: 0.28, height: 0.18, rotationY: -Math.PI / 2 },
-  corvette2: { offset: 0.30, height: 0.16, rotationY: -Math.PI / 2 },
-  corvette3: { offset: 0.26, height: 0.18, rotationY: -Math.PI / 2 },
-  corvette4: { offset: 0.34, height: 0.15, rotationY: -Math.PI / 2 },
-  corvette5: { offset: 0.32, height: 0.17, rotationY: -Math.PI / 2 },
-  
-  // Frigates
-  frigate1: { offset: 0.38, height: 0.22, rotationY: -Math.PI / 2 },
-  frigate2: { offset: 0.40, height: 0.20, rotationY: -Math.PI / 2 },
-  frigate3: { offset: 0.36, height: 0.22, rotationY: -Math.PI / 2 },
-  frigate4: { offset: 0.44, height: 0.18, rotationY: -Math.PI / 2 },
-  frigate5: { offset: 0.42, height: 0.21, rotationY: -Math.PI / 2 },
-  
-  // Majadroid
-  ship1: { offset: 0.52, height: 0.19, rotationY: -Math.PI / 2 },
-  ship2: { offset: 0.25, height: 0.21, rotationY: -Math.PI / 2 },
-  ship3: { offset: 0.20, height: 0.26, rotationY: -Math.PI / 2 },
-  ship4: { offset: 0.36, height: 0.20, rotationY: -Math.PI / 2 },
-  ship5: { offset: 0.46, height: 0.18, rotationY: -Math.PI / 2 }
+  fighter: { offset: 0.25, height: 0.20, rotationY: -Math.PI / 2 },
+  hauler: { offset: 0.38, height: 0.22, rotationY: -Math.PI / 2 },
+  scout: { offset: 0.30, height: 0.16, rotationY: -Math.PI / 2 },
+  dreadnought: { offset: 0.42, height: 0.21, rotationY: -Math.PI / 2 },
+  cruiser: { offset: 0.26, height: 0.18, rotationY: -Math.PI / 2 }
 };
 
 export const BASE_TEXTURES = {
@@ -255,6 +251,11 @@ export class ShipPreviewEngine {
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.shadowMap.enabled = true;
+    if (THREE.SRGBColorSpace !== undefined) {
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    } else if (THREE.sRGBEncoding !== undefined) {
+      this.renderer.outputEncoding = THREE.sRGBEncoding;
+    }
     container.appendChild(this.renderer.domElement);
 
     // Premium gallery lighting
@@ -273,7 +274,7 @@ export class ShipPreviewEngine {
 
     // Subtle overhead spotlight
     const topLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    topLight.position.set(0, 8, -2);
+    topLight.position.set(0, 8, 4);
     this.scene.add(topLight);
 
     // Create the ship preview mesh
@@ -320,7 +321,8 @@ export class ShipPreviewEngine {
     if (!skinName) skinName = 'default';
     if (!colorHex) colorHex = '#ffffff';
 
-    const modelUrl = SHIP_MODELS[modelName] || fighterObjUrl;
+    const mappedModelName = LEGACY_MODEL_ALIASES[modelName] || modelName;
+    const modelUrl = SHIP_MODELS[mappedModelName] || fighterClassUrl;
     const isFbx = modelUrl.toLowerCase().includes('.fbx') || modelUrl.toLowerCase().includes('fbx-files') || modelUrl.toLowerCase().includes('battle');
     
     const applyTextureToModel = (texture, obj) => {
@@ -366,7 +368,8 @@ export class ShipPreviewEngine {
     const skinUrl = this.skins[skinName] || uvMapUrl;
 
     if (colorHex && colorHex.toLowerCase() !== '#ffffff') {
-      const isPackA = modelName.startsWith('corvette') || modelName.startsWith('frigate');
+      const mappedModelName = LEGACY_MODEL_ALIASES[modelName] || modelName;
+      const isPackA = mappedModelName.startsWith('corvette') || mappedModelName.startsWith('frigate');
       getCachedImage(skinUrl, (img) => {
         if (img) {
           const canvas = swapTextureColor(img, colorHex, isPackA);
@@ -417,21 +420,52 @@ export class ShipPreviewEngine {
     this.scene.add(this.shipMesh);
 
     try {
-      this.loadModelAndTexture(modelName, skinName, colorHex, (obj) => {
+      const mappedModelName = LEGACY_MODEL_ALIASES[modelName] || modelName;
+      this.loadModelAndTexture(mappedModelName, skinName, colorHex, (obj) => {
         obj.position.set(0, 0, 0);
-        const metrics = SHIP_METRICS[modelName] || SHIP_METRICS.original;
-        const rotationY = metrics.rotationY !== undefined ? metrics.rotationY : -Math.PI / 2;
+        const modelUrl = SHIP_MODELS[mappedModelName] || fighterClassUrl;
+        const isFbx = modelUrl.toLowerCase().includes('.fbx') || modelUrl.toLowerCase().includes('fbx-files') || modelUrl.toLowerCase().includes('battle');
+        const rotationY = isFbx ? -Math.PI / 2 : Math.PI;
         obj.rotation.y = rotationY; // face forward
 
-        const box = new THREE.Box3().setFromObject(obj);
+        obj.updateMatrixWorld(true);
+        const box = new THREE.Box3();
+        let hasValidMesh = false;
+        obj.traverse((child) => {
+          if (child.isMesh) {
+            const nameLower = child.name.toLowerCase();
+            if (!nameLower.includes('helper') && !nameLower.includes('collision') && !nameLower.includes('dummy') && !nameLower.includes('camera') && !nameLower.includes('light')) {
+              box.expandByObject(child);
+              hasValidMesh = true;
+            }
+          }
+        });
+        if (!hasValidMesh) {
+          box.setFromObject(obj);
+        }
+
         const size = new THREE.Vector3();
         box.getSize(size);
 
-        const scaleFactor = 1.4 / size.x;
+        const scaleFactor = 1.4 / (size.x || 1.0);
         obj.scale.setScalar(scaleFactor);
 
         obj.updateMatrixWorld(true);
-        const finalBox = new THREE.Box3().setFromObject(obj);
+        const finalBox = new THREE.Box3();
+        let hasValidMeshFinal = false;
+        obj.traverse((child) => {
+          if (child.isMesh) {
+            const nameLower = child.name.toLowerCase();
+            if (!nameLower.includes('helper') && !nameLower.includes('collision') && !nameLower.includes('dummy') && !nameLower.includes('camera') && !nameLower.includes('light')) {
+              finalBox.expandByObject(child);
+              hasValidMeshFinal = true;
+            }
+          }
+        });
+        if (!hasValidMeshFinal) {
+          finalBox.setFromObject(obj);
+        }
+
         const finalCenter = new THREE.Vector3();
         finalBox.getCenter(finalCenter);
 

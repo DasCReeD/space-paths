@@ -2036,10 +2036,48 @@ body, html {
   box-shadow: 0 0 15px rgba(0, 255, 204, 0.15);
 }
 
+.customizing .touch-control-group.selected {
+  border-color: #ff00ff !important;
+  background-color: rgba(255, 0, 255, 0.08) !important;
+  box-shadow: 0 0 25px rgba(255, 0, 255, 0.45) !important;
+}
+
 .customizing .joystick-outer-wrap,
-.customizing .right-buttons-arc,
-.customizing .dpad-hybrid-container {
-  pointer-events: none !important; /* Disable button clicks during customizer layout dragging */
+.customizing .dpad-hybrid-container,
+.customizing .touch-btn {
+  pointer-events: none !important; /* Disable interaction during customization dragging/scaling */
+}
+
+.touch-control-group .touch-btn {
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  margin-top: 5px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--color-text);
+  background: rgba(12, 16, 25, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 3px rgba(255, 255, 255, 0.1);
+  user-select: none;
+}
+
+.touch-control-group .touch-btn:active,
+.touch-control-group .touch-btn.pressed {
+  transform: scale(0.9) !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) !important;
 }
 
 /* D-Pad Buttons Type styling modifications */
@@ -2125,17 +2163,35 @@ body, html {
 
 @media (max-width: 520px), (orientation: portrait) {
   /* Dedicated vertical stacks for menus on mobile / portrait views */
-  .menu-screen .glass-card {
+  #menu-screen.glass-card, #menu-screen .glass-card, .menu-screen .glass-card {
     width: 90% !important;
     max-width: 360px !important;
     padding: 25px 15px !important;
   }
 
-  .menu-screen .btn {
+  #menu-screen .btn, .menu-screen .btn {
     width: 100% !important;
     max-width: 280px !important;
     font-size: 0.72rem !important;
     padding: 10px 16px !important;
+  }
+
+  /* Success Screen vertical columns and scroll */
+  .success-columns-container {
+    flex-direction: column !important;
+    gap: 15px !important;
+  }
+  
+  #success-screen {
+    max-height: 95vh !important;
+    overflow-y: auto !important;
+    padding: 20px 15px !important;
+  }
+
+  /* Unified Settings scroll */
+  #settings-screen {
+    max-height: 95vh !important;
+    overflow-y: auto !important;
   }
 
   /* Level select grid columns compressed to 2 in portrait */
@@ -2654,6 +2710,32 @@ body, html {
 #input-score-initials:focus {
   border-color: #ff00ff !important;
   box-shadow: 0 0 8px rgba(255, 0, 255, 0.6) !important;
+}
+
+/* Mobile viewport layout fixes: stack control triggers vertically and scale physics calibrator */
+@media (max-width: 600px) {
+  .btn-settings-gear-trigger {
+    top: 80px !important;
+    left: 20px !important;
+  }
+  
+  .btn-settings-physics-trigger {
+    top: 140px !important;
+    left: 20px !important;
+  }
+  
+  .physics-floating-calibrator {
+    width: 260px !important;
+    left: 10px !important;
+    height: calc(100vh - 220px) !important;
+    top: 200px !important;
+    font-size: 0.85rem !important;
+    transform: scale(0.85) translateX(-340px) !important;
+  }
+  
+  .physics-floating-calibrator.active {
+    transform: scale(0.85) translateX(0) !important;
+  }
 }
 
 

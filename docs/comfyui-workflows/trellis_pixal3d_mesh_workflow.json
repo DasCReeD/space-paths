@@ -1,0 +1,168 @@
+{
+  "last_node_id": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [100, 200],
+      "size": [210, 260],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [1],
+          "slot_index": 0
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "NodeNameForList": "Load Image"
+      },
+      "widgets_values": [
+        "input_spaceship_fighter.png",
+        "image"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "TRELLISModelLoader",
+      "pos": [100, 500],
+      "size": [210, 150],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "TRELLIS_MODEL",
+          "type": "TRELLIS_MODEL",
+          "links": [2],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "NodeNameForList": "TRELLIS Model Loader"
+      },
+      "widgets_values": [
+        "JeffreyXiang/TRELLIS-image-to-3d",
+        "NF4_GGUF",
+        "FP8_e4m3fn",
+        true
+      ]
+    },
+    {
+      "id": 3,
+      "type": "TRELLISImageTo3D",
+      "pos": [400, 250],
+      "size": [250, 300],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        },
+        {
+          "name": "trellis_model",
+          "type": "TRELLIS_MODEL",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "TRELLIS_LATENT",
+          "type": "TRELLIS_LATENT",
+          "links": [3],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "NodeNameForList": "TRELLIS Image to 3D Latent"
+      },
+      "widgets_values": [
+        256,
+        30,
+        7.5,
+        12,
+        42,
+        "randomize"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "TRELLISMeshExporter",
+      "pos": [750, 250],
+      "size": [250, 220],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "trellis_latent",
+          "type": "TRELLIS_LATENT",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MESH",
+          "type": "MESH",
+          "links": [4],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "NodeNameForList": "TRELLIS Mesh Exporter"
+      },
+      "widgets_values": [
+        "MarchingCubes",
+        0.5,
+        true,
+        0.1,
+        "Negative_Z_Forward",
+        "Y_Up"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "Save3DMesh",
+      "pos": [1100, 250],
+      "size": [220, 120],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mesh",
+          "type": "MESH",
+          "link": 4
+        }
+      ],
+      "properties": {
+        "NodeNameForList": "Save 3D Mesh"
+      },
+      "widgets_values": [
+        "spaceships/fighter_raw",
+        "glb"
+      ]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 3, 0, "IMAGE"],
+    [2, 2, 0, 3, 1, "TRELLIS_MODEL"],
+    [3, 3, 0, 4, 0, "TRELLIS_LATENT"],
+    [4, 4, 0, 5, 0, "MESH"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

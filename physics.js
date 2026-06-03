@@ -12,6 +12,69 @@ export const SHIP_WIDTH = 0.6;
 export const SHIP_HEIGHT = 0.4;
 export const SHIP_LENGTH = 1.8;
 
+export const CLASS_PRESETS = {
+  fighter: {
+    maxSpeedNormal: 35.0,
+    maxSpeedBoost: 65.0,
+    accelForward: 20.0,
+    decelBrakes: 38.0,
+    maxSteerSpeed: 11.0,
+    steerAccel: 38.0,
+    dragZ: 4.0,
+    fuelConsumptionRate: 30.0
+  },
+  hauler: {
+    maxSpeedNormal: 25.0,
+    maxSpeedBoost: 50.0,
+    accelForward: 12.0,
+    decelBrakes: 30.0,
+    maxSteerSpeed: 8.0,
+    steerAccel: 28.0,
+    dragZ: 5.0,
+    fuelConsumptionRate: 40.0
+  },
+  scout: {
+    maxSpeedNormal: 40.0,
+    maxSpeedBoost: 75.0,
+    accelForward: 15.0,
+    decelBrakes: 35.0,
+    maxSteerSpeed: 13.0,
+    steerAccel: 42.0,
+    dragZ: 3.5,
+    fuelConsumptionRate: 15.0
+  },
+  dreadnought: {
+    maxSpeedNormal: 28.0,
+    maxSpeedBoost: 55.0,
+    accelForward: 10.0,
+    decelBrakes: 25.0,
+    maxSteerSpeed: 7.0,
+    steerAccel: 24.0,
+    dragZ: 4.5,
+    fuelConsumptionRate: 50.0
+  },
+  cruiser: {
+    maxSpeedNormal: 32.0,
+    maxSpeedBoost: 60.0,
+    accelForward: 18.0,
+    decelBrakes: 35.0,
+    maxSteerSpeed: 10.0,
+    steerAccel: 35.0,
+    dragZ: 4.0,
+    fuelConsumptionRate: 25.0
+  },
+  original: {
+    maxSpeedNormal: 32.0,
+    maxSpeedBoost: 60.0,
+    accelForward: 18.0,
+    decelBrakes: 35.0,
+    maxSteerSpeed: 10.0,
+    steerAccel: 35.0,
+    dragZ: 4.0,
+    fuelConsumptionRate: 25.0
+  }
+};
+
 export class PhysicsEngine {
   constructor() {
     this.position = new THREE.Vector3(0, 0.2, 0); // Start at lane 3 (x=0), on the ground
@@ -54,11 +117,13 @@ export class PhysicsEngine {
     
     this.oxygen = 100;
     this.fuel = 10000;
+    this.fuelConsumptionRate = 25.0;
 
     this.settings = {
       bounceFactor: 1.0,
       gravityFactor: 1.0,
       jumpFactor: 1.0,
+      fuelConsumptionRate: 25.0,
       
       // Configurable Throttle
       maxSpeedNormal: 32.0,
@@ -89,6 +154,13 @@ export class PhysicsEngine {
       showCockpitBezel: 0.0
     };
     this.boatThrottleEnabled = false;
+    
+    if (typeof localStorage !== 'undefined') {
+      const savedModel = localStorage.getItem('skyroads_selected_model');
+      if (savedModel) {
+        this.applyShipClass(savedModel);
+      }
+    }
   }
 
   reset(startFuel, startOxygen) {
@@ -154,7 +226,8 @@ export class PhysicsEngine {
 
     // 1. Consume Fuel & Oxygen
     if (Math.abs(this.velocity.z) > 0.5) {
-      this.fuel = Math.max(0, this.fuel - dt * 25.0 * (this.activeEffects.boost ? 2.5 : 1.0));
+      const rate = this.fuelConsumptionRate !== undefined ? this.fuelConsumptionRate : 25.0;
+      this.fuel = Math.max(0, this.fuel - dt * rate * (this.activeEffects.boost ? 2.5 : 1.0));
     }
     this.oxygen = Math.max(0, this.oxygen - dt * 1.0); // 1 unit per second
 
@@ -587,6 +660,63 @@ export class PhysicsEngine {
           this.triggerRefillAudio = true;
         }
       }
+    }
+  }
+
+  applyShipClass(className) {
+    const LEGACY_MODEL_ALIASES = {
+      original: 'fighter',
+      corvette1: 'fighter',
+      ship1: 'fighter',
+      ship2: 'fighter',
+      
+      corvette2: 'scout',
+      corvette4: 'scout',
+      frigate4: 'scout',
+      
+      corvette3: 'cruiser',
+      frigate2: 'cruiser',
+      frigate3: 'cruiser',
+      ship3: 'cruiser',
+      
+      corvette5: 'hauler',
+      frigate1: 'hauler',
+      ship4: 'hauler',
+      
+      frigate5: 'dreadnought',
+      ship5: 'dreadnought'
+    };
+    const mappedClass = LEGACY_MODEL_ALIASES[className] || className;
+    this.shipClass = mappedClass;
+    const stats = CLASS_PRESETS[mappedClass] || CLASS_PRESETS.original;
+    this.fuelConsumptionRate = stats.fuelConsumptionRate || 25.0;
+    
+    for (const key in stats) {
+      this.settings[key] = stats[key];
+      if (this[key] !== undefined) {
+        this[key] = stats[key];
+      }
+    }
+    
+    if (typeof localStorage !== 'undefined') {
+      const activePreset = localStorage.getItem('skyroads_physics_active_preset') || 'snappy';
+      const presetKey = `skyroads_physics_preset_${activePreset}`;
+      let presetData = {};
+      try {
+        const saved = localStorage.getItem(presetKey);
+        if (saved) {
+          presetData = JSON.parse(saved);
+        }
+      } catch (e) {
+        // ignore
+      }
+      
+      for (const key in stats) {
+        presetData[key] = stats[key];
+      }
+      
+      localStorage.setItem(presetKey, JSON.stringify(presetData));
+      localStorage.setItem('skyroads_selected_model', className);
     }
   }
 }

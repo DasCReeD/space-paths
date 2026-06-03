@@ -66,7 +66,35 @@ class GameManager {
 
   init() {
     // Load persisted model, skin texture, and custom color overlay preferences FIRST
-    this.selectedModel = localStorage.getItem('skyroads_selected_model') || 'original';
+    const LEGACY_MODEL_ALIASES = {
+      original: 'fighter',
+      corvette1: 'fighter',
+      ship1: 'fighter',
+      ship2: 'fighter',
+      
+      corvette2: 'scout',
+      corvette4: 'scout',
+      frigate4: 'scout',
+      
+      corvette3: 'cruiser',
+      frigate2: 'cruiser',
+      frigate3: 'cruiser',
+      ship3: 'cruiser',
+      
+      corvette5: 'hauler',
+      frigate1: 'hauler',
+      ship4: 'hauler',
+      
+      frigate5: 'dreadnought',
+      ship5: 'dreadnought'
+    };
+    
+    let savedModel = localStorage.getItem('skyroads_selected_model') || 'fighter';
+    if (LEGACY_MODEL_ALIASES[savedModel]) {
+      savedModel = LEGACY_MODEL_ALIASES[savedModel];
+      localStorage.setItem('skyroads_selected_model', savedModel);
+    }
+    this.selectedModel = savedModel;
     
     let savedSkin = localStorage.getItem('skyroads_selected_skin');
     let savedColor = localStorage.getItem('skyroads_selected_color');
@@ -450,7 +478,7 @@ class GameManager {
   openShipPicker() {
     this.prePickerState = this.gameState;
     this.gameState = 'ship_picker';
-    this.tempSelectedModel = this.selectedModel || 'original';
+    this.tempSelectedModel = this.selectedModel || 'fighter';
     this.tempSelectedSkin = this.selectedSkin || 'default';
     this.tempSelectedColor = this.selectedColor || '#ffffff';
     this.showScreen('ship-picker-screen');
@@ -670,6 +698,10 @@ class GameManager {
       
       // Dynamically load geometry and skin maps in active gameplay meshes
       this.graphics.changeShipModel(this.selectedModel, this.selectedSkin, this.selectedColor);
+      
+      if (this.physics && typeof this.physics.applyShipClass === 'function') {
+        this.physics.applyShipClass(this.selectedModel);
+      }
     }
 
     if (this.previewEngine) {
@@ -1672,14 +1704,17 @@ class GameManager {
         let dy = e.clientY - centerY;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist > maxDist) {
-          dx = (dx / dist) * maxDist;
-          dy = (dy / dist) * maxDist;
+        const ctrlScale = (this.touchConfig && this.touchConfig.controls && this.touchConfig.controls.steer && this.touchConfig.controls.steer.scale) || 1.0;
+        const dynamicMaxDist = maxDist * ctrlScale;
+
+        if (dist > dynamicMaxDist) {
+          dx = (dx / dist) * dynamicMaxDist;
+          dy = (dy / dist) * dynamicMaxDist;
         }
 
-        joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-        this.keyboard.setTouchSteerAmount(dx / maxDist);
-        this.keyboard.setTouchJoystickY(dy / maxDist);
+        joystickKnob.style.transform = `translate(${dx / ctrlScale}px, ${dy / ctrlScale}px)`;
+        this.keyboard.setTouchSteerAmount(dx / dynamicMaxDist);
+        this.keyboard.setTouchJoystickY(dy / dynamicMaxDist);
       };
 
       const handleEnd = (e) => {
@@ -2412,13 +2447,35 @@ class GameManager {
       type: 'stick',
       scale: 1.0,
       swapped: false,
-      buttons: 'full'
+      buttons: 'full',
+      controls: {
+        steer: { left: '60px', right: '', bottom: '160px', scale: 1.0 },
+        brake: { left: '', right: '180px', bottom: '160px', scale: 1.0 },
+        jump: { left: '', right: '110px', bottom: '250px', scale: 1.0 },
+        thrust: { left: '', right: '40px', bottom: '160px', scale: 1.0 }
+      }
     };
 
     try {
       const saved = localStorage.getItem('skyroads_touch_config');
       if (saved) {
-        Object.assign(this.touchConfig, JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        if (parsed.controls) {
+          Object.assign(this.touchConfig, parsed);
+        } else {
+          // Migrate old legacy config structure
+          const scale = parsed.scale || 1.0;
+          const swapped = parsed.swapped || false;
+          this.touchConfig.type = parsed.type || 'stick';
+          this.touchConfig.swapped = swapped;
+          this.touchConfig.buttons = parsed.buttons || 'full';
+          this.touchConfig.controls = {
+            steer: { left: swapped ? '' : '60px', right: swapped ? '60px' : '', bottom: '160px', scale: scale },
+            brake: { left: swapped ? '180px' : '', right: swapped ? '' : '180px', bottom: '160px', scale: scale },
+            jump: { left: swapped ? '110px' : '', right: swapped ? '' : '110px', bottom: '250px', scale: scale },
+            thrust: { left: swapped ? '40px' : '', right: swapped ? '' : '40px', bottom: '160px', scale: scale }
+          };
+        }
       }
     } catch (e) {
       // safe fallback
@@ -2428,20 +2485,27 @@ class GameManager {
   }
 
   applyTouchConfig() {
-    const leftGroup = document.getElementById('touch-movable-left');
-    const rightGroup = document.getElementById('touch-movable-right');
-    if (!leftGroup || !rightGroup) return;
+    const containers = [
+      { id: 'touch-steer-container', key: 'steer' },
+      { id: 'touch-brake-container', key: 'brake' },
+      { id: 'touch-jump-container', key: 'jump' },
+      { id: 'touch-thrust-container', key: 'thrust' }
+    ];
 
-    // Apply positions (absolute offsets)
-    leftGroup.style.left = this.touchConfig.swapped ? '' : this.touchConfig.leftPos.left || '60px';
-    leftGroup.style.right = this.touchConfig.swapped ? this.touchConfig.leftPos.right || '60px' : '';
-    leftGroup.style.bottom = this.touchConfig.leftPos.bottom || '160px';
+    containers.forEach(c => {
+      const el = document.getElementById(c.id);
+      if (!el) return;
 
-    rightGroup.style.right = this.touchConfig.swapped ? '' : this.touchConfig.rightPos.right || '60px';
-    rightGroup.style.left = this.touchConfig.swapped ? this.touchConfig.rightPos.left || '60px' : '';
-    rightGroup.style.bottom = this.touchConfig.rightPos.bottom || '160px';
+      const ctrl = this.touchConfig.controls[c.key];
+      if (!ctrl) return;
 
-    // Apply type (joystick vs dpad)
+      el.style.left = ctrl.left || '';
+      el.style.right = ctrl.right || '';
+      el.style.bottom = ctrl.bottom || '160px';
+      el.style.transform = `scale(${ctrl.scale || 1.0})`;
+    });
+
+    // Apply steer type (joystick vs dpad)
     const joyView = document.getElementById('touch-joystick-view');
     const dpadView = document.getElementById('touch-dpad-view');
     if (joyView && dpadView) {
@@ -2454,20 +2518,16 @@ class GameManager {
       }
     }
 
-    // Apply scale factor
-    leftGroup.style.transform = `scale(${this.touchConfig.scale})`;
-    rightGroup.style.transform = `scale(${this.touchConfig.scale})`;
-
     // Apply action buttons complexity (full vs simple)
-    const actionsFull = document.getElementById('touch-actions-full');
-    const actionsSimple = document.getElementById('touch-actions-simple');
-    if (actionsFull && actionsSimple) {
+    const brakeCont = document.getElementById('touch-brake-container');
+    const thrustCont = document.getElementById('touch-thrust-container');
+    if (brakeCont && thrustCont) {
       if (this.touchConfig.buttons === 'simple') {
-        actionsFull.classList.add('hidden');
-        actionsSimple.classList.remove('hidden');
+        brakeCont.classList.add('hidden');
+        thrustCont.classList.add('hidden');
       } else {
-        actionsFull.classList.remove('hidden');
-        actionsSimple.classList.add('hidden');
+        brakeCont.classList.remove('hidden');
+        thrustCont.classList.remove('hidden');
       }
     }
 
@@ -2475,14 +2535,138 @@ class GameManager {
     const btnType = document.getElementById('btn-cust-type');
     if (btnType) btnType.innerText = `TYPE: ${this.touchConfig.type.toUpperCase()}`;
 
-    const btnScale = document.getElementById('btn-cust-scale');
-    if (btnScale) btnScale.innerText = `SCALE: ${this.touchConfig.scale.toFixed(1)}x`;
-
     const btnSwap = document.getElementById('btn-cust-swap');
     if (btnSwap) btnSwap.innerText = `SWAP SIDES: ${this.touchConfig.swapped ? 'ON' : 'OFF'}`;
 
     const btnButtons = document.getElementById('btn-cust-buttons');
     if (btnButtons) btnButtons.innerText = `BUTTONS: ${this.touchConfig.buttons.toUpperCase()}`;
+
+    this.updateCustomizerDashboardInfo();
+  }
+
+  validateLayout(elemId) {
+    const elem = document.getElementById(elemId);
+    const hud = document.getElementById('mobile-touch-hud');
+    if (!elem || !hud) return true;
+
+    const elemRect = elem.getBoundingClientRect();
+    const hudRect = hud.getBoundingClientRect();
+
+    // Check bounds: must be fully inside hud (with 1.5px subpixel tolerance)
+    const isInsideHud = (
+      elemRect.left >= hudRect.left - 1.5 &&
+      elemRect.right <= hudRect.right + 1.5 &&
+      elemRect.top >= hudRect.top - 1.5 &&
+      elemRect.bottom <= hudRect.bottom + 1.5
+    );
+
+    if (!isInsideHud) {
+      return false;
+    }
+
+    // Check overlap with other active/visible controls
+    const containers = [
+      'touch-steer-container',
+      'touch-brake-container',
+      'touch-jump-container',
+      'touch-thrust-container'
+    ];
+
+    for (const otherId of containers) {
+      if (otherId === elemId) continue;
+      const otherEl = document.getElementById(otherId);
+      if (otherEl && !otherEl.classList.contains('hidden') && otherEl.style.display !== 'none') {
+        const otherRect = otherEl.getBoundingClientRect();
+        // Check AABB overlap (overlap if: A.left < B.right && A.right > B.left && A.top < B.bottom && A.bottom > B.top)
+        const overlap = (
+          elemRect.left < otherRect.right - 1.5 &&
+          elemRect.right > otherRect.left + 1.5 &&
+          elemRect.top < otherRect.bottom - 1.5 &&
+          elemRect.bottom > otherRect.top + 1.5
+        );
+        if (overlap) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  validateCandidateRect(elemId, candidateRect, initialOverlapMap) {
+    const hud = document.getElementById('mobile-touch-hud');
+    if (!hud) return true;
+
+    const hudRect = hud.getBoundingClientRect();
+
+    // Check bounds: must be fully inside hud (with 1.5px subpixel tolerance)
+    const isInsideHud = (
+      candidateRect.left >= hudRect.left - 1.5 &&
+      candidateRect.right <= hudRect.right + 1.5 &&
+      candidateRect.top >= hudRect.top - 1.5 &&
+      candidateRect.bottom <= hudRect.bottom + 1.5
+    );
+
+    if (!isInsideHud) {
+      return false;
+    }
+
+    // Check overlap with other active/visible controls
+    const containers = [
+      'touch-steer-container',
+      'touch-brake-container',
+      'touch-jump-container',
+      'touch-thrust-container'
+    ];
+
+    for (const otherId of containers) {
+      if (otherId === elemId) continue;
+      const otherEl = document.getElementById(otherId);
+      if (otherEl && !otherEl.classList.contains('hidden') && otherEl.style.display !== 'none') {
+        const otherRect = otherEl.getBoundingClientRect();
+        // Check AABB overlap
+        const overlap = (
+          candidateRect.left < otherRect.right - 1.5 &&
+          candidateRect.right > otherRect.left + 1.5 &&
+          candidateRect.top < otherRect.bottom - 1.5 &&
+          candidateRect.bottom > otherRect.top + 1.5
+        );
+        if (overlap) {
+          // If they were already overlapping initially, allow movement if they are moving apart
+          if (initialOverlapMap && initialOverlapMap[otherId]) {
+            const elem = document.getElementById(elemId);
+            if (elem) {
+              const startRect = elem.getBoundingClientRect();
+              const initialCenterDist = Math.hypot(
+                (startRect.left + startRect.width / 2) - (otherRect.left + otherRect.width / 2),
+                (startRect.top + startRect.height / 2) - (otherRect.top + otherRect.height / 2)
+              );
+              const candidateCenterDist = Math.hypot(
+                (candidateRect.left + candidateRect.width / 2) - (otherRect.left + otherRect.width / 2),
+                (candidateRect.top + candidateRect.height / 2) - (otherRect.top + otherRect.height / 2)
+              );
+              if (candidateCenterDist > initialCenterDist) {
+                continue;
+              }
+            }
+          }
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  updateCustomizerDashboardInfo() {
+    const infoLabel = document.getElementById('selected-control-info');
+    if (!infoLabel) return;
+    if (this.selectedControlKey && this.touchConfig.controls[this.selectedControlKey]) {
+      const ctrl = this.touchConfig.controls[this.selectedControlKey];
+      infoLabel.innerText = `${this.selectedControlKey.toUpperCase()}: ${ctrl.scale.toFixed(1)}x`;
+    } else {
+      infoLabel.innerText = 'SELECT A CONTROL';
+    }
   }
 
   setupTouchCustomizerEvents() {
@@ -2492,6 +2676,13 @@ class GameManager {
 
     if (!btnCustomize || !customizerDashboard || !touchHud) return;
 
+    const containersList = [
+      { id: 'touch-steer-container', key: 'steer' },
+      { id: 'touch-brake-container', key: 'brake' },
+      { id: 'touch-jump-container', key: 'jump' },
+      { id: 'touch-thrust-container', key: 'thrust' }
+    ];
+
     btnCustomize.addEventListener('click', () => {
       gameAudio.playClick();
       const isActive = touchHud.classList.contains('customizing');
@@ -2500,13 +2691,46 @@ class GameManager {
         customizerDashboard.classList.add('hidden');
         btnCustomize.innerText = '🔧 CUSTOMIZE';
         btnCustomize.classList.remove('active');
+        // Clear all selected highlights on exit
+        containersList.forEach(c => {
+          const el = document.getElementById(c.id);
+          if (el) el.classList.remove('selected');
+        });
         this.saveTouchConfig();
       } else {
         touchHud.classList.add('customizing');
         customizerDashboard.classList.remove('hidden');
         btnCustomize.innerText = '💾 SAVE';
         btnCustomize.classList.add('active');
+
+        // Select steer by default when entering customize mode
+        this.selectedControlKey = 'steer';
+        containersList.forEach(c => {
+          const el = document.getElementById(c.id);
+          if (el) {
+            el.classList.toggle('selected', c.key === 'steer');
+          }
+        });
+        this.updateCustomizerDashboardInfo();
       }
+    });
+
+    // Handle selection when clicking/tapping on any container
+    containersList.forEach(c => {
+      const el = document.getElementById(c.id);
+      if (!el) return;
+      el.addEventListener('pointerdown', (e) => {
+        if (!touchHud.classList.contains('customizing')) return;
+        
+        this.selectedControlKey = c.key;
+        containersList.forEach(other => {
+          const otherEl = document.getElementById(other.id);
+          if (otherEl) {
+            otherEl.classList.toggle('selected', other.key === c.key);
+          }
+        });
+        this.updateCustomizerDashboardInfo();
+      });
     });
 
     const btnType = document.getElementById('btn-cust-type');
@@ -2515,18 +2739,7 @@ class GameManager {
         gameAudio.playClick();
         this.touchConfig.type = this.touchConfig.type === 'stick' ? 'dpad' : 'stick';
         this.applyTouchConfig();
-      });
-    }
-
-    const btnScale = document.getElementById('btn-cust-scale');
-    if (btnScale) {
-      btnScale.addEventListener('click', () => {
-        gameAudio.playClick();
-        const scales = [0.8, 1.0, 1.2];
-        let idx = scales.indexOf(this.touchConfig.scale);
-        if (idx === -1) idx = 1;
-        this.touchConfig.scale = scales[(idx + 1) % scales.length];
-        this.applyTouchConfig();
+        this.saveTouchConfig();
       });
     }
 
@@ -2535,7 +2748,17 @@ class GameManager {
       btnSwap.addEventListener('click', () => {
         gameAudio.playClick();
         this.touchConfig.swapped = !this.touchConfig.swapped;
+        
+        // Swap horizontal positions of all controls
+        for (const key in this.touchConfig.controls) {
+          const ctrl = this.touchConfig.controls[key];
+          const temp = ctrl.left;
+          ctrl.left = ctrl.right;
+          ctrl.right = temp;
+        }
+
         this.applyTouchConfig();
+        this.saveTouchConfig();
       });
     }
 
@@ -2545,22 +2768,59 @@ class GameManager {
         gameAudio.playClick();
         this.touchConfig.buttons = this.touchConfig.buttons === 'full' ? 'simple' : 'full';
         this.applyTouchConfig();
+        this.saveTouchConfig();
       });
+    }
+
+    const btnDec = document.getElementById('btn-cust-scale-dec');
+    const btnInc = document.getElementById('btn-cust-scale-inc');
+
+    const handleScaleChange = (change) => {
+      gameAudio.playClick();
+      if (!this.selectedControlKey) return;
+      const ctrl = this.touchConfig.controls[this.selectedControlKey];
+      if (!ctrl) return;
+      const prevScale = ctrl.scale;
+      const nextScale = Math.max(0.6, Math.min(2.0, Math.round((prevScale + change) * 10) / 10));
+      if (nextScale === prevScale) return;
+
+      const elemId = `touch-${this.selectedControlKey}-container`;
+      const elem = document.getElementById(elemId);
+      if (!elem) return;
+
+      const prevTransform = elem.style.transform;
+      elem.style.transform = `scale(${nextScale})`;
+
+      if (!this.validateLayout(elemId)) {
+        // Revert style if invalid (overlap or out of bounds)
+        elem.style.transform = prevTransform;
+      } else {
+        ctrl.scale = nextScale;
+        this.updateCustomizerDashboardInfo();
+        this.saveTouchConfig();
+      }
+    };
+
+    if (btnDec) {
+      btnDec.addEventListener('click', () => handleScaleChange(-0.1));
+    }
+    if (btnInc) {
+      btnInc.addEventListener('click', () => handleScaleChange(0.1));
     }
 
     const btnReset = document.getElementById('btn-cust-reset');
     if (btnReset) {
       btnReset.addEventListener('click', () => {
         gameAudio.playClick();
-        this.touchConfig = {
-          leftPos: { left: '60px', bottom: '160px' },
-          rightPos: { right: '60px', bottom: '160px' },
-          type: 'stick',
-          scale: 1.0,
-          swapped: false,
-          buttons: 'full'
+        const swapped = this.touchConfig.swapped;
+        this.touchConfig.controls = {
+          steer: { left: swapped ? '' : '60px', right: swapped ? '60px' : '', bottom: '160px', scale: 1.0 },
+          brake: { left: swapped ? '180px' : '', right: swapped ? '' : '180px', bottom: '160px', scale: 1.0 },
+          jump: { left: swapped ? '110px' : '', right: swapped ? '' : '110px', bottom: '250px', scale: 1.0 },
+          thrust: { left: swapped ? '40px' : '', right: swapped ? '' : '40px', bottom: '160px', scale: 1.0 }
         };
         this.applyTouchConfig();
+        this.saveTouchConfig();
       });
     }
 
@@ -2572,11 +2832,15 @@ class GameManager {
         customizerDashboard.classList.add('hidden');
         btnCustomize.innerText = '🔧 CUSTOMIZE';
         btnCustomize.classList.remove('active');
+        containersList.forEach(c => {
+          const el = document.getElementById(c.id);
+          if (el) el.classList.remove('selected');
+        });
         this.saveTouchConfig();
       });
     }
 
-    const makeMovable = (elemId, posKey) => {
+    const makeMovable = (elemId, key) => {
       const elem = document.getElementById(elemId);
       if (!elem) return;
       const handle = elem.querySelector('.drag-handle');
@@ -2584,7 +2848,11 @@ class GameManager {
 
       let isDragging = false;
       let startX, startY;
-      let initialLeft, initialTop;
+      let startRect = null;
+      let initialLeftVal = 0;
+      let initialRightVal = 0;
+      let initialBottomVal = 0;
+      let initialOverlapMap = {};
 
       const onPointerDown = (e) => {
         if (!touchHud.classList.contains('customizing')) return;
@@ -2594,56 +2862,89 @@ class GameManager {
         startX = e.clientX;
         startY = e.clientY;
 
-        const rect = elem.getBoundingClientRect();
-        const parentRect = touchHud.getBoundingClientRect();
-        initialLeft = rect.left - parentRect.left;
-        initialTop = rect.top - parentRect.top;
+        startRect = elem.getBoundingClientRect();
+
+        const ctrl = this.touchConfig.controls[key];
+        initialLeftVal = ctrl.left ? parseFloat(ctrl.left) : 0;
+        initialRightVal = ctrl.right ? parseFloat(ctrl.right) : 0;
+        initialBottomVal = parseFloat(ctrl.bottom);
+
+        // Find initial overlapping elements
+        initialOverlapMap = {};
+        const containers = [
+          'touch-steer-container',
+          'touch-brake-container',
+          'touch-jump-container',
+          'touch-thrust-container'
+        ];
+        containers.forEach(otherId => {
+          if (otherId === elemId) return;
+          const otherEl = document.getElementById(otherId);
+          if (otherEl && !otherEl.classList.contains('hidden') && otherEl.style.display !== 'none') {
+            const otherRect = otherEl.getBoundingClientRect();
+            const overlap = (
+              startRect.left < otherRect.right - 1.5 &&
+              startRect.right > otherRect.left + 1.5 &&
+              startRect.top < otherRect.bottom - 1.5 &&
+              startRect.bottom > otherRect.top + 1.5
+            );
+            if (overlap) {
+              initialOverlapMap[otherId] = true;
+            }
+          }
+        });
 
         e.preventDefault();
       };
 
       const onPointerMove = (e) => {
-        if (!isDragging) return;
+        if (!isDragging || !startRect) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
 
-        const parentRect = touchHud.getBoundingClientRect();
-        let nextLeft = initialLeft + dx;
-        let nextTop = initialTop + dy;
+        // 1. Mathematically predict candidate visual bounding rect (no DOM writes)
+        const candidateRect = {
+          left: startRect.left + dx,
+          right: startRect.right + dx,
+          top: startRect.top + dy,
+          bottom: startRect.bottom + dy,
+          width: startRect.width,
+          height: startRect.height
+        };
 
-        nextLeft = Math.max(0, Math.min(parentRect.width - 150, nextLeft));
-        nextTop = Math.max(0, Math.min(parentRect.height - 150, nextTop));
+        // 2. Perform layout validation against predicted coordinates
+        if (this.validateCandidateRect(elemId, candidateRect, initialOverlapMap)) {
+          const ctrl = this.touchConfig.controls[key];
+          const hasLeft = ctrl.left !== '';
 
-        const nextBottom = parentRect.height - nextTop - 150;
+          // 3. Update logical values relative to client pointer move delta
+          let nextLeft = initialLeftVal + dx;
+          let nextRight = initialRightVal - dx;
+          let nextBottom = initialBottomVal - dy;
 
-        if (this.touchConfig.swapped) {
-          if (posKey === 'left') {
-            elem.style.left = '';
-            elem.style.right = `${parentRect.width - nextLeft - 150}px`;
-            this.touchConfig.leftPos = { right: elem.style.right, bottom: `${nextBottom}px` };
-          } else {
+          if (hasLeft) {
             elem.style.right = '';
             elem.style.left = `${nextLeft}px`;
-            this.touchConfig.rightPos = { left: elem.style.left, bottom: `${nextBottom}px` };
-          }
-        } else {
-          if (posKey === 'left') {
-            elem.style.right = '';
-            elem.style.left = `${nextLeft}px`;
-            this.touchConfig.leftPos = { left: elem.style.left, bottom: `${nextBottom}px` };
+            ctrl.left = elem.style.left;
+            ctrl.right = '';
           } else {
             elem.style.left = '';
-            elem.style.right = `${parentRect.width - nextLeft - 150}px`;
-            this.touchConfig.rightPos = { right: elem.style.right, bottom: `${nextBottom}px` };
+            elem.style.right = `${nextRight}px`;
+            ctrl.left = '';
+            ctrl.right = elem.style.right;
           }
+          elem.style.bottom = `${nextBottom}px`;
+          ctrl.bottom = elem.style.bottom;
         }
-        elem.style.bottom = `${nextBottom}px`;
       };
 
       const onPointerUp = (e) => {
         if (!isDragging) return;
         isDragging = false;
+        startRect = null;
+        initialOverlapMap = {};
         handle.releasePointerCapture(e.pointerId);
+        this.saveTouchConfig();
       };
 
       handle.addEventListener('pointerdown', onPointerDown);
@@ -2652,12 +2953,27 @@ class GameManager {
       handle.addEventListener('pointercancel', onPointerUp);
     };
 
-    makeMovable('touch-movable-left', 'left');
-    makeMovable('touch-movable-right', 'right');
+    makeMovable('touch-steer-container', 'steer');
+    makeMovable('touch-brake-container', 'brake');
+    makeMovable('touch-jump-container', 'jump');
+    makeMovable('touch-thrust-container', 'thrust');
   }
 
   saveTouchConfig() {
     try {
+      if (this.touchConfig.controls) {
+        this.touchConfig.scale = this.touchConfig.controls.steer.scale;
+        this.touchConfig.leftPos = {
+          left: this.touchConfig.controls.steer.left,
+          right: this.touchConfig.controls.steer.right,
+          bottom: this.touchConfig.controls.steer.bottom
+        };
+        this.touchConfig.rightPos = {
+          left: this.touchConfig.controls.thrust.left,
+          right: this.touchConfig.controls.thrust.right,
+          bottom: this.touchConfig.controls.thrust.bottom
+        };
+      }
       localStorage.setItem('skyroads_touch_config', JSON.stringify(this.touchConfig));
     } catch (e) {
       // safe fallback

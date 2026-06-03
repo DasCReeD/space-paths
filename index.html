@@ -243,7 +243,7 @@
         <button id="btn-toggle-mouse" class="btn btn-info btn-glow" style="display: none !important;">MOUSE PLAY: OFF</button>
         <button id="btn-toggle-touch" class="btn btn-info btn-glow" style="display: none !important;">TOUCH CONTROLS: OFF</button>
         <button id="btn-toggle-boat-throttle" class="btn btn-info btn-glow" style="display: none !important;">BOAT THROTTLE: OFF</button>
-        <button id="btn-open-picker" class="btn btn-info btn-glow" style="display: none !important;">SPACESHIP GARAGE</button>
+        <button id="btn-open-picker" class="btn btn-info btn-glow" style="display: none !important;">HOVERCRAFT GARAGE</button>
         <button id="btn-how-to" class="btn btn-info">HOW TO PLAY</button>
       </div>
 
@@ -322,7 +322,7 @@
           <button id="btn-settings-gamepad" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">CONFIGURE 🎮</button>
         </div>
         <div class="settings-control-row" style="margin-top: 10px; width: 100%;">
-          <button id="btn-settings-picker" class="btn btn-secondary btn-glow" style="width: 100%; font-size: 0.8rem; padding: 10px 15px; margin: 0;">SPACESHIP GARAGE</button>
+          <button id="btn-settings-picker" class="btn btn-secondary btn-glow" style="width: 100%; font-size: 0.8rem; padding: 10px 15px; margin: 0;">HOVERCRAFT GARAGE</button>
         </div>
         <div class="settings-control-row" style="margin-top: 5px; width: 100%;">
           <button id="btn-settings-calibrator" class="btn btn-secondary btn-glow" style="width: 100%; font-size: 0.8rem; padding: 10px 15px; margin: 0; background: linear-gradient(135deg, #a100ff 0%, #ff007f 100%);">PHYSICS CALIBRATOR ⚙️</button>
@@ -640,7 +640,7 @@
     <!-- DEATH SCREEN -->
     <div id="death-screen" class="overlay-screen hidden glass-card status-card">
       <h2 class="status-title text-danger">OUT OF ROADS</h2>
-      <p id="death-reason" class="status-msg">Your ship exploded in a spectacular burst of sparks.</p>
+      <p id="death-reason" class="status-msg">Your hovercraft exploded in a spectacular burst of sparks.</p>
       
       <div class="menu-buttons">
         <button id="btn-death-retry" class="btn btn-primary btn-glow">TRY AGAIN</button>
@@ -773,7 +773,7 @@
     <div id="ship-picker-screen" class="overlay-screen hidden glass-card">
       <div class="overlay-header">
         <button id="btn-picker-back" class="btn-icon">&larr; BACK</button>
-        <h2 class="screen-title">SPACESHIP GARAGE</h2>
+        <h2 class="screen-title">HOVERCRAFT GARAGE</h2>
       </div>
 
       <div class="ship-picker-container">
@@ -784,38 +784,20 @@
         <div class="ship-skins-sidebar">
           <div class="sidebar-section-title">FLEET SELECTOR</div>
           <div class="ship-models-list">
-            <div class="model-option active" data-model="original">
-              <div class="model-name">STARFIRE FIGHTER</div>
+            <div class="model-option active" data-model="fighter">
+              <div class="model-name">HOVERCRAFT FIGHTER</div>
             </div>
-            <div class="model-option" data-model="corvette1">
-              <div class="model-name">CORVETTE STALWART</div>
+            <div class="model-option" data-model="hauler">
+              <div class="model-name">HOVERCRAFT HAULER</div>
             </div>
-            <div class="model-option" data-model="corvette2">
-              <div class="model-name">CORVETTE VIGILANT</div>
+            <div class="model-option" data-model="scout">
+              <div class="model-name">HOVERCRAFT SCOUT</div>
             </div>
-            <div class="model-option" data-model="corvette3">
-              <div class="model-name">CORVETTE INTRUDER</div>
+            <div class="model-option" data-model="dreadnought">
+              <div class="model-name">HOVERCRAFT DREADNOUGHT</div>
             </div>
-            <div class="model-option" data-model="corvette4">
-              <div class="model-name">CORVETTE DEVASTATOR</div>
-            </div>
-            <div class="model-option" data-model="corvette5">
-              <div class="model-name">CORVETTE COMMANDER</div>
-            </div>
-            <div class="model-option" data-model="frigate1">
-              <div class="model-name">FRIGATE SWIFT</div>
-            </div>
-            <div class="model-option" data-model="frigate2">
-              <div class="model-name">FRIGATE GALAXY</div>
-            </div>
-            <div class="model-option" data-model="frigate3">
-              <div class="model-name">FRIGATE TEMPEST</div>
-            </div>
-            <div class="model-option" data-model="frigate4">
-              <div class="model-name">FRIGATE WARP</div>
-            </div>
-            <div class="model-option" data-model="frigate5">
-              <div class="model-name">FRIGATE DREADNOUGHT</div>
+            <div class="model-option" data-model="cruiser">
+              <div class="model-name">HOVERCRAFT CRUISER</div>
             </div>
           </div>
 
@@ -891,14 +873,10 @@
         </div>
       </div>
 
-      <button id="btn-picker-select" class="btn btn-primary btn-glow">EQUIP SPACESHIP</button>
+      <button id="btn-picker-select" class="btn btn-primary btn-glow">EQUIP HOVERCRAFT</button>
     </div>
 
   </div>
-
-  <script type="module" src="./app.js"></script>
-</body>
-</html>
 
 <!-- Mobile Touch HUD Overlay -->
 <div id="mobile-touch-hud" class="touch-hud hidden pointer-events-none">
@@ -921,7 +899,9 @@
     <div class="customizer-title">HUD CONTROL CUSTOMIZER</div>
     <div class="customizer-options">
       <button id="btn-cust-type" class="cust-btn">TYPE: JOYSTICK</button>
-      <button id="btn-cust-scale" class="cust-btn">SCALE: 1.0x</button>
+      <span id="selected-control-info" style="font-family: var(--font-display); font-size: 0.72rem; font-weight: 700; color: #00ffcc; text-shadow: 0 0 5px rgba(0,255,204,0.5); display: flex; align-items: center; min-width: 125px; justify-content: center; border: 1px solid rgba(0, 255, 204, 0.3); border-radius: 6px; padding: 6px 10px; background: rgba(0, 255, 204, 0.05);">STEER: 1.0x</span>
+      <button id="btn-cust-scale-dec" class="cust-btn" style="min-width: 40px; font-weight: bold;">-</button>
+      <button id="btn-cust-scale-inc" class="cust-btn" style="min-width: 40px; font-weight: bold;">+</button>
       <button id="btn-cust-swap" class="cust-btn">SWAP SIDES: OFF</button>
       <button id="btn-cust-buttons" class="cust-btn">BUTTONS: FULL</button>
     </div>
@@ -931,10 +911,9 @@
     </div>
   </div>
 
-  <!-- Movable Touch Controls Group Left -->
-  <div id="touch-movable-left" class="touch-control-group pointer-events-auto" style="left: 60px; bottom: 160px;">
-    <div class="drag-handle">◀ DRAG HUG ▶</div>
-    
+  <!-- Independent Touch Control Group 1: Steer -->
+  <div id="touch-steer-container" class="touch-control-group pointer-events-auto" style="left: 60px; bottom: 160px;">
+    <div class="drag-handle">◀ STEER ▶</div>
     <!-- Joystick Type View -->
     <div id="touch-joystick-view" class="joystick-outer-wrap">
       <div id="joystick-base" class="joystick-base">
@@ -957,32 +936,34 @@
     </div>
   </div>
 
-  <!-- Movable Touch Controls Group Right -->
-  <div id="touch-movable-right" class="touch-control-group pointer-events-auto" style="right: 60px; bottom: 160px;">
-    <div class="drag-handle">◀ DRAG HUG ▶</div>
-    
-    <!-- Curved Action Buttons -->
-    <div id="touch-actions-full" class="right-buttons-arc">
-      <button class="touch-btn action-brake" data-action="backward">
-        <span class="btn-icon-lbl">▼</span>
-        BRAKE
-      </button>
-      <button class="touch-btn action-jump" data-action="jump">
-        <span class="btn-icon-lbl">▲</span>
-        JUMP
-      </button>
-      <button class="touch-btn action-throttle" data-action="forward">
-        <span class="btn-icon-lbl">⚡</span>
-        THRUST
-      </button>
-    </div>
+  <!-- Independent Touch Control Group 2: Brake -->
+  <div id="touch-brake-container" class="touch-control-group pointer-events-auto" style="right: 180px; bottom: 160px;">
+    <div class="drag-handle">◀ BRAKE ▶</div>
+    <button class="touch-btn action-brake" data-action="backward">
+      <span class="btn-icon-lbl">▼</span>
+      BRAKE
+    </button>
+  </div>
 
-    <!-- Simple Jump Only Buttons -->
-    <div id="touch-actions-simple" class="right-buttons-arc hidden">
-      <button class="touch-btn action-jump" data-action="jump" style="position: static; width: 100px; height: 100px; font-size: 0.8rem;">
-        <span class="btn-icon-lbl" style="font-size: 1.5rem;">▲</span>
-        JUMP ONLY
-      </button>
-    </div>
+  <!-- Independent Touch Control Group 3: Jump -->
+  <div id="touch-jump-container" class="touch-control-group pointer-events-auto" style="right: 110px; bottom: 250px;">
+    <div class="drag-handle">◀ JUMP ▶</div>
+    <button class="touch-btn action-jump" data-action="jump">
+      <span class="btn-icon-lbl">▲</span>
+      JUMP
+    </button>
+  </div>
+
+  <!-- Independent Touch Control Group 4: Thrust -->
+  <div id="touch-thrust-container" class="touch-control-group pointer-events-auto" style="right: 40px; bottom: 160px;">
+    <div class="drag-handle">◀ THRUST ▶</div>
+    <button class="touch-btn action-throttle" data-action="forward">
+      <span class="btn-icon-lbl">⚡</span>
+      THRUST
+    </button>
   </div>
 </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
