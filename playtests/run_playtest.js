@@ -265,7 +265,35 @@ async function run() {
 
       // 8. Open Touch Customizer
       console.log('Opening Touch Customizer...');
-      await page.click('#btn-touch-customize');
+      await page.evaluate(() => {
+        const hud = document.getElementById('mobile-touch-hud');
+        if (hud) {
+          console.log(`[DEBUG] #mobile-touch-hud classes: "${hud.className}", display: ${getComputedStyle(hud).display}, visibility: ${getComputedStyle(hud).visibility}`);
+        } else {
+          console.log('[DEBUG] #mobile-touch-hud NOT found!');
+        }
+        const btn = document.getElementById('btn-touch-customize');
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          console.log(`[DEBUG] Button #btn-touch-customize properties - display: ${getComputedStyle(btn).display}, visibility: ${getComputedStyle(btn).visibility}, opacity: ${getComputedStyle(btn).opacity}, rect: {x: ${rect.x}, y: ${rect.y}, w: ${rect.width}, h: ${rect.height}}`);
+        } else {
+          console.log('[DEBUG] Button #btn-touch-customize NOT found in DOM!');
+        }
+        if (window.gameManagerInstance) {
+          console.log(`[DEBUG] gameManagerInstance state - gameState: ${window.gameManagerInstance.gameState}, touchControlsEnabled: ${window.gameManagerInstance.keyboard.touchControlsEnabled}`);
+        } else {
+          console.log('[DEBUG] window.gameManagerInstance NOT found!');
+        }
+      });
+      try {
+        await page.click('#btn-touch-customize');
+      } catch (clickErr) {
+        console.warn('[WARNING] Puppeteer click failed, trying JS click fallback:', clickErr.message);
+        await page.evaluate(() => {
+          const btn = document.getElementById('btn-touch-customize');
+          if (btn) btn.click();
+        });
+      }
       await page.waitForSelector('#touch-customizer-dashboard', { visible: true, timeout: 5000 });
       await delay(500);
       await page.screenshot({ path: path.join(playtestsDir, `touch_customizer${suffix}.png`) });

@@ -1,413 +1,593 @@
-# SkyRoads WebGL — Module Map & Symbol Reference
+# SkyRoads WebGL — Module Map
 
-> Detailed per-module code maps with exported symbols, function signatures, constants, call relationships, and DOM/CSS references.
+> **Last updated:** 2026-06-05
+> Authoritative code map for all source modules, their exports, dependencies, and relationships.
 
 ---
 
 ## Table of Contents
 
-1. [app.js — Game Orchestrator](#appjs--game-orchestrator)
-2. [graphics.js — Rendering Engine](#graphicsjs--rendering-engine)
-3. [preview.js — 3D Garage Preview Engine](#previewjs--3d-garage-preview-engine)
-4. [physics.js — Physics Engine & Input](#physicsjs--physics-engine--input)
-5. [levelLoader.js — Level Geometry Builder](#levelloaderjs--level-geometry-builder)
-6. [audio.js — Sound Synthesizer](#audiojs--sound-synthesizer)
-7. [oplSynth.js — OPL2 FM Synthesizer & LZS Decompressor](#oplsynthjs--opl2-fm-synthesizer--lzs-decompressor)
-8. [levels.js — Level Data Store](#levelsjs--level-data-store)
-9. [index.html — DOM Element Map](#indexhtml--dom-element-map)
-10. [index.css — Design System](#indexcss--design-system)
-11. [Cross-Module Call Graph](#cross-module-call-graph)
+1. [Summary Table](#summary-table)
+2. [app.js — Game Orchestrator](#appjs)
+3. [graphics.js — Rendering Engine](#graphicsjs)
+4. [physics.js — Physics & Controls](#physicsjs)
+5. [levelLoader.js — Level Builder](#levelloaderjs)
+6. [worldBuilder.js — Procedural Generator](#worldbuilderjs)
+7. [audio.js — Audio System](#audiojs)
+8. [cockpitConsole.js — Cockpit HUD](#cockpitconsolejs)
+9. [preview.js — Garage Preview](#previewjs)
+10. [oplSynth.js — OPL2 FM Synth](#oplsynthjs)
+11. [levels.js — Level Pack Loader](#levelsjs)
+12. [generate_textures.js — Texture Generator](#generate_texturesjs)
+13. [debug_coords.js — Debug Overlay](#debug_coordsjs)
+14. [vitest.setup.js — Test Setup](#vitestsetupjs)
+15. [index.html — UI Structure](#indexhtml)
+16. [index.css — Design System](#indexcss)
+17. [vite.config.js — Build Config](#viteconfigjs)
+18. [package.json — Project Metadata](#packagejson)
+19. [Cross-Module Dependency Graph](#cross-module-dependency-graph)
+20. [Theme System](#theme-system)
+21. [Asset Structure](#asset-structure)
+22. [Data Files](#data-files)
 
 ---
 
-## app.js — Game Orchestrator
+## Summary Table
 
-**File:** [app.js](file:///c:/dev/Sky%20roads/app.js) · ~1,990 lines · ~81 KB
-
-### Imports
-
-| Symbol | Source |
-|--------|--------|
-| `LEVEL_PACKS` | [levels.js](file:///c:/dev/Sky%20roads/levels.js) |
-| `GraphicsEngine` | [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) |
-| `ShipPreviewEngine`, `SHIP_SKINS`, `SHIP_MODELS` | [preview.js](file:///c:/dev/Sky%20roads/preview.js) |
-| `PhysicsEngine`, `KeyboardController`, `SHIP_LENGTH` | [physics.js](file:///c:/dev/Sky%20roads/physics.js) |
-| `buildLevel` | [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) |
-| `gameAudio` | [audio.js](file:///c:/dev/Sky%20roads/audio.js) |
-
-### Exports
-
-> **None** — `app.js` is the entry point. It self-initializes via `DOMContentLoaded` event.
-
-### Class: `GameManager`
-
-Defined in [app.js](file:///c:/dev/Sky%20roads/app.js). Not exported; instantiated at module load.
-
-#### Constructor Properties (Ship Garage Specifics)
-
-| Property | Type | Initial Value | Purpose |
-|----------|------|---------------|---------|
-| `selectedModel` | `string` | `'original'` | Active equipped fleet model name |
-| `selectedSkin` | `string` | `'default'` | Active equipped base skin texture name |
-| `selectedColor` | `string` | `'#ffffff'` | Active equipped paint color hex overlay |
-| `tempSelectedModel` | `string` | `'original'` | Editor state model choice before save |
-| `tempSelectedSkin` | `string` | `'default'` | Editor state skin choice before save |
-| `tempSelectedColor` | `string` | `'#ffffff'` | Editor state paint color overlay before save |
-| `previewEngine` | `ShipPreviewEngine \| null` | `null` | 3D WebGL garage editor preview viewport |
-
-#### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| [init](file:///c:/dev/Sky%20roads/app.js#L66) | `init(): void` | Initializes graphics, loads/migrates persisted ship preferences, binds UI listeners, starts animation loop |
-| [openShipPicker](file:///c:/dev/Sky%20roads/app.js#L309) | `openShipPicker(): void` | Pauses game, opens garage screen, reads storage attributes, initializes `ShipPreviewEngine` |
-| [selectModelInPicker](file:///c:/dev/Sky%20roads/app.js#L409) | `selectModelInPicker(modelName: string): void` | Sets active model choice in UI and refreshes 3D preview |
-| [selectTextureInPicker](file:///c:/dev/Sky%20roads/app.js#L419) | `selectTextureInPicker(skinName: string): void` | Sets active base skin texture card in UI and refreshes 3D preview |
-| [selectColorInPicker](file:///c:/dev/Sky%20roads/app.js#L429) | `selectColorInPicker(hexColor: string): void` | Sets active custom paint overlay in UI and refreshes 3D preview |
-| [updateModelPickerSidebarSelection](file:///c:/dev/Sky%20roads/app.js#L435) | `updateModelPickerSidebarSelection(): void` | Sets `.active` classes on HTML model grid nodes |
-| [updateTexturePickerSidebarSelection](file:///c:/dev/Sky%20roads/app.js#L446) | `updateTexturePickerSidebarSelection(): void` | Sets `.active` classes on HTML base skin cards |
-| [updateColorPickerUISelection](file:///c:/dev/Sky%20roads/app.js#L457) | `updateColorPickerUISelection(): void` | Sets `.active` classes on color swatch presets |
-| [closeShipPicker](file:///c:/dev/Sky%20roads/app.js#L469) | `closeShipPicker(saveSelection: boolean): void` | Saves/persists ship models, skins, and color overlays to localStorage, changes main ship mesh, destroys preview viewport, resumes game state |
+| File | Size | Lines (approx) | Purpose |
+|------|------|-----------------|---------|
+| [app.js](file:///c:/dev/Sky%20roads/app.js) | 120 KB | ~3,044 | GameManager — state machine, UI, game loop, input, garage, settings |
+| [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) | 93 KB | ~1,800 | Three.js rendering, particles, skybox, theming, ship models |
+| [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) | 88 KB | ~2,200 | Level geometry builder, themed textures, async building |
+| [index.css](file:///c:/dev/Sky%20roads/index.css) | 68 KB | ~2,744 | Retro-futuristic glassmorphism design system |
+| [index.html](file:///c:/dev/Sky%20roads/index.html) | 61 KB | ~975 | Full game UI — menus, HUD, settings, garage, touch controls |
+| [worldBuilder.js](file:///c:/dev/Sky%20roads/worldBuilder.js) | 50 KB | ~1,695 | Procedural level generation (standalone Node.js CLI) |
+| [physics.js](file:///c:/dev/Sky%20roads/physics.js) | 42 KB | ~850 | Physics engine, collision detection, keyboard/gamepad controller |
+| [audio.js](file:///c:/dev/Sky%20roads/audio.js) | 41 KB | ~1,281 | Web Audio API synthesizer, music sequencer, SFX |
+| [cockpitConsole.js](file:///c:/dev/Sky%20roads/cockpitConsole.js) | 35 KB | ~400 | 3D cockpit dashboard HUD + path scanner minimap |
+| [preview.js](file:///c:/dev/Sky%20roads/preview.js) | 23 KB | ~600 | Ship garage preview engine (isolated Three.js scene) |
+| [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) | 19 KB | ~637 | OPL2 FM synthesis (Yamaha YM3812) + LZS decompressor |
+| [generate_textures.js](file:///c:/dev/Sky%20roads/generate_textures.js) | 18 KB | ~511 | Procedural PNG texture generator (standalone Node.js) |
+| [debug_coords.js](file:///c:/dev/Sky%20roads/debug_coords.js) | 7 KB | ~220 | Puppeteer-based UI debug automation script |
+| [levels.js](file:///c:/dev/Sky%20roads/levels.js) | 2 KB | ~78 | Level pack fetch + cache loader |
+| [vitest.setup.js](file:///c:/dev/Sky%20roads/vitest.setup.js) | 4 KB | ~103 | Test harness — asset stub generation + Python runners |
+| [vite.config.js](file:///c:/dev/Sky%20roads/vite.config.js) | <1 KB | ~20 | Build + test configuration |
 
 ---
 
-## graphics.js — Rendering Engine
+## app.js
 
-**File:** [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) · ~2,185 lines · ~84 KB
+**Purpose:** Central GameManager singleton that wires together all subsystems. Manages the game state machine, all UI events, localStorage persistence, input modes (keyboard, gamepad, touch, mouse), scoring, ship garage, physics calibrator, and the main requestAnimationFrame game loop.
 
-### Imports
+**Stats:** ~3,044 lines · 120 KB
 
-| Symbol | Source |
-|--------|--------|
-| `* as THREE` | `three` (npm) |
-| `SHIP_WIDTH`, `SHIP_HEIGHT`, `SHIP_LENGTH` | [physics.js](file:///c:/dev/Sky%20roads/physics.js) |
-| `CockpitConsole3D` | [cockpitConsole.js](file:///c:/dev/Sky%20roads/cockpitConsole.js) |
-
-### Exports
+**Exports:** None (side-effect module — instantiates `GameManager` and attaches to `window.gameManagerInstance`)
 
 | Symbol | Type | Description |
 |--------|------|-------------|
-| `GraphicsEngine` | `class` | Complete Three.js rendering pipeline |
-| `SHIP_SKINS` | `object` | Map of all 12 skin presets pointing to image URLs |
+| `GameManager` | class | Core orchestrator singleton |
+| `GameManager.states` | enum | `menu`, `levelSelect`, `loading`, `playing`, `paused`, `dead`, `success` |
+| `GameManager.initGame()` | method | Bootstrap: Three.js, physics, audio, UI event listeners |
+| `GameManager.gameLoop(ts)` | method | rAF loop: physics update, render, input processing |
+| `GameManager.showMainMenu()` | method | Main menu with animated starfield |
+| `GameManager.showLevelSelect()` | method | Level/world grid with progress indicators |
+| `GameManager.showGarage()` | method | Ship garage: model/texture/color picker, class presets, cockpit preview |
+| `GameManager.showSettings()` | method | Settings: audio, controls, display, physics presets |
+| `GameManager.startLevel(w, l)` | method | Loads and starts a specific level |
+| `GameManager.saveGameState()` | method | LocalStorage persistence: progress, settings, ship config |
+| `GameManager.loadGameState()` | method | Restores state from localStorage |
+| `GameManager.toggleFullscreen()` | method | Fullscreen API toggle |
+| `GameManager.updateAutoLaneSnap()` | method | Autolane snapping toggle + strength slider |
+| `GamepadManager` | class (internal) | Xbox/generic gamepad polling, button mapping, deadzone config |
+| `TouchControlManager` | class (internal) | Virtual analog stick, D-pad, throttle axis, layout customizer |
+| `SKIN_DETAILS` | const object | Display names and descriptions for ship skins |
 
-### Class: `GraphicsEngine`
-
-Defined in [graphics.js](file:///c:/dev/Sky%20roads/graphics.js).
-
-#### Constructor Properties
-
-| Property | Type | Initial Value | Purpose |
-|----------|------|---------------|---------|
-| `currentModelName` | `string` | `'original'` | Active ship model catalog name |
-| `currentSkinName` | `string` | `'default'` | Active base skin texture name |
-| `currentSkinColor` | `string` | `'#ffffff'` | Active paint accent color hex overlay |
-| `skins` | `object` | `SHIP_SKINS` | Map of registered skin textures |
-
-#### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| [optimizeShipTexture](file:///c:/dev/Sky%20roads/graphics.js#L870) | `optimizeShipTexture(texture: THREE.Texture): void` | Sets edge wrapping, enables maximum hardware anisotropy, configures linear mipmapping, sets sRGB color space, and forces GPU update |
-| [loadModelAndTexture](file:///c:/dev/Sky%20roads/graphics.js#L890) | `loadModelAndTexture(model: string, skin: string, color: string, onComplete: Function): void` | Asynchronously loads GLTF/OBJ model, creates materials, queries base skin texture, applies dynamic paint color overlays via canvas replacement filter, and triggers callback |
-| [changeShipSkin](file:///c:/dev/Sky%20roads/graphics.js#L1273) | `changeShipSkin(skinName: string, colorHex: string): void` | Real-time skin swapping during active gameplay, supports dynamic dual overlay swaps |
-| [changeShipModel](file:///c:/dev/Sky%20roads/graphics.js#L1310) | `changeShipModel(model: string, skin: string, color: string): void` | Swaps 3D fleet geometry and re-textures mesh, keeping original vertical offset and centering bounds intact |
+**Dependencies:**
+- [levels.js](file:///c:/dev/Sky%20roads/levels.js) → `loadLevelPack`, `getCachedPack`
+- [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) → `GraphicsEngine`
+- [physics.js](file:///c:/dev/Sky%20roads/physics.js) → `PhysicsEngine`, `KeyboardController`, `SHIP_LENGTH`
+- [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) → `buildLevelAsync`, `disposeUnusedThemes`, `getActiveThemeIndex`
+- [audio.js](file:///c:/dev/Sky%20roads/audio.js) → `gameAudio`
+- [preview.js](file:///c:/dev/Sky%20roads/preview.js) → `ShipPreviewEngine`
+- `three` (npm)
 
 ---
 
-## preview.js — 3D Garage Preview Engine
+## graphics.js
 
-**File:** [preview.js](file:///c:/dev/Sky%20roads/preview.js) · ~596 lines · ~20 KB
+**Purpose:** Three.js-based rendering pipeline. Manages 3D scene, camera, lighting, skybox shader, ship model loading (OBJ/FBX/GLB), skin texture painting, cockpit overlay, particle effects (exhaust, explosions, sparks), and camera modes (Fixed, Chase, Cockpit, Free).
 
-### Imports
-
-| Symbol | Source |
-|--------|--------|
-| `* as THREE` | `three` (npm) |
-| `OBJLoader` | `three/addons/loaders/OBJLoader.js` |
-| `FBXLoader` | `three/addons/loaders/FBXLoader.js` |
-
-### Exports
+**Stats:** ~1,800 lines · 93 KB
 
 | Symbol | Type | Description |
 |--------|------|-------------|
-| `ShipPreviewEngine` | `class` | Sandboxed 3D editor preview viewport |
-| `SHIP_SKINS` | `object` | Map of 12 skin presets pointing to image URLs (parity copy) |
-| `SHIP_MODELS` | `object` | Map of 15 OBJ/FBX models pointing to file paths |
+| `GraphicsEngine` | class | Main rendering engine |
+| `GraphicsEngine.constructor(container)` | method | Creates scene, renderer, camera, lights, skybox |
+| `GraphicsEngine.loadShipModel(model, skin, accent)` | method | Loads 3D ship with texture + accent color |
+| `GraphicsEngine.paintShipAccent(color)` | method | Dynamic accent overlay via canvas |
+| `GraphicsEngine.update(physicsState, dt)` | method | Updates camera, ship position/rotation, particles, cockpit |
+| `GraphicsEngine.setCameraMode(mode)` | method | Fixed / Chase / Cockpit / Free |
+| `GraphicsEngine.cycleCamera()` | method | Cycles through camera modes |
+| `GraphicsEngine.setZoom(level)` | method | Near / Med / Far |
+| `GraphicsEngine.createExplosionParticles()` | method | Death explosion effect |
+| `GraphicsEngine.dispose()` | method | Cleanup GPU resources |
+| `SHIP_MODELS` | const object | Model catalog: fighter, hauler, scout, dreadnought, cruiser, racer |
+| `SHIP_SKINS` | const object | Skin texture catalog: default, freelancer, lordshadow, psionic, shadee, thor |
+| `SHIP_METRICS` | const object | Per-model scale/offset positioning metrics |
+| `BASE_TEXTURES` | const object | Named texture presets (hull, road, skins) |
+| `LEGACY_MODEL_ALIASES` | const object | Legacy model name → current model mappings |
 
-### Class: `ShipPreviewEngine`
-
-Defined in [preview.js](file:///c:/dev/Sky%20roads/preview.js).
-
-#### Constructor Properties
-
-| Property | Type | Initial Value | Purpose |
-|----------|------|---------------|---------|
-| `scene` | `THREE.Scene \| null` | `null` | Isolated scene viewport |
-| `camera` | `THREE.PerspectiveCamera \| null` | `null` | Sandboxed preview camera |
-| `renderer` | `THREE.WebGLRenderer \| null` | `null` | WebGL renderer with high-DPI scaling |
-| `shipMesh` | `THREE.Group \| null` | `null` | Loaded geometry preview holder |
-| `currentModelName` | `string` | `'original'` | Selected model catalog name |
-| `currentSkinName` | `string` | `'default'` | Selected base skin texture name |
-| `currentSkinColor` | `string` | `'#ffffff'` | Selected custom paint hex overlay |
-
-#### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| [init](file:///c:/dev/Sky%20roads/preview.js#L241) | `init(container: HTMLElement, model: string, skin: string, color: string): void` | Spawns scene, sets full device pixel ratio scaling, positions studio lighting, loads initial previews, starts spin animation |
-| [optimizeShipTexture](file:///c:/dev/Sky%20roads/preview.js#L286) | `optimizeShipTexture(texture: THREE.Texture): void` | Sets edge wrapping, generates mipmaps, enforces linear-anisotropic filtering, and forces GPU update |
-| [loadModelAndTexture](file:///c:/dev/Sky%20roads/preview.js#L305) | `loadModelAndTexture(model: string, skin: string, color: string, onComplete: Function): void` | Asynchronously loads geometries and custom textures, applies real-time paint swatches, and triggers callback |
-| [createPreviewShip](file:///c:/dev/Sky%20roads/preview.js#L370) | `createPreviewShip(model: string, skin: string, color: string): void` | Instantiates meshes, scales ship uniformly, centers physical bounds, and points camera at object |
-| [changeModel](file:///c:/dev/Sky%20roads/preview.js#L413) | `changeModel(model: string, skin: string, color: string): void` | Disposes previous meshes/geometries, loads new fleet model, re-textures preview |
-| [changeSkin](file:///c:/dev/Sky%20roads/preview.js#L432) | `changeSkin(skin: string, color: string): void` | Dynamic real-time skin and paint color swaps on preview canvas |
-| [animate](file:///c:/dev/Sky%20roads/preview.js#L475) | `animate(): void` | Render loop — spins preview model slowly around Y axis and adds floating hover effect |
-| [destroy](file:///c:/dev/Sky%20roads/preview.js#L500) | `destroy(): void` | Safely disposes all preview meshes, textures, geometries, materials, cancels animation frames, and unmounts canvas |
+**Dependencies:**
+- `three` (+ OBJLoader, FBXLoader, GLTFLoader)
+- [physics.js](file:///c:/dev/Sky%20roads/physics.js) → `SHIP_WIDTH`, `SHIP_HEIGHT`, `SHIP_LENGTH`
+- [cockpitConsole.js](file:///c:/dev/Sky%20roads/cockpitConsole.js) → `CockpitConsole3D`
+- [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) → `getLevelObjUrl`, `getLevelAssetUrl`, `getActiveThemeIndex`, `THEMES`
+- Static assets: ship textures (`.jpg`), hull/road textures (`.png`), cockpit images (`.jfif`), skybox GLTF
 
 ---
 
-## physics.js — Physics Engine & Input
+## physics.js
 
-**File:** [physics.js](file:///c:/dev/Sky%20roads/physics.js) · ~729 lines · ~27 KB
+**Purpose:** Kinematics engine for ship movement, gravity, jumping (coyote time, variable jump, asymmetric fall gravity), AABB collision detection with ramp height interpolation, wall rebounds, tile effects, and ship class presets. Also contains the `KeyboardController` for keyboard + gamepad input.
 
-### Imports
-
-| Symbol | Source |
-|--------|--------|
-| `* as THREE` | `three` (npm) |
-
-### Exports
+**Stats:** ~850 lines · 42 KB
 
 | Symbol | Type | Description |
 |--------|------|-------------|
-| `ROAD_WIDTH_LANES` | `const number` | `7` — lanes per row |
-| `TILE_WIDTH` | `const number` | `2.0` — world units per tile width |
-| `TILE_LENGTH` | `const number` | `4.0` — world units per tile depth |
-| `TOTAL_ROAD_WIDTH` | `const number` | `14.0` — total road width (`7 × 2.0`) |
-| `SHIP_WIDTH` | `const number` | `0.6` — ship bounding box width |
-| `SHIP_HEIGHT` | `const number` | `0.4` — ship bounding box height |
-| `SHIP_LENGTH` | `const number` | `1.8` — ship bounding box length |
-| `PhysicsEngine` | `class` | Core physics simulation |
-| `KeyboardController` | `class` | Keyboard input state manager |
+| `PhysicsEngine` | class | Main physics simulation |
+| `PhysicsEngine.constructor(levelData, config)` | method | Initializes from calibration config |
+| `PhysicsEngine.update(dt, inputs)` | method | Throttle, steering, gravity, jump, collision, tile effects |
+| `PhysicsEngine.getState()` | method | Returns position, velocity, speed, grounded, oxygen, fuel, progress |
+| `PhysicsEngine.checkCollisions()` | method | AABB collision with ramp height interpolation |
+| `PhysicsEngine.applyTileEffects()` | method | Boost, sticky, slippery, explosive, refill |
+| `PhysicsEngine.jump()` | method | Variable-height jump with coyote time buffer |
+| `PhysicsEngine.reset()` | method | Reset to start position |
+| `KeyboardController` | class | Keyboard + gamepad input handler |
+| `KeyboardController.getInputs()` | method | Returns `{ forward, backward, left, right, jump }` |
+| `KeyboardController.setGamepadMapping(m)` | method | Configure gamepad button bindings |
+| `KeyboardController.pollGamepad()` | method | Reads Gamepad API state |
+| `CLASS_PRESETS` | const object | VGA Classic, Modern Snappy, Lunar Float, Custom Slot |
+| `ROAD_WIDTH_LANES` | const `7` | Number of lanes |
+| `TILE_WIDTH` | const `2.0` | Width of one road tile (m) |
+| `TILE_LENGTH` | const `4.0` | Length of one road tile (m) |
+| `TOTAL_ROAD_WIDTH` | const `14.0` | Total road width |
+| `SHIP_WIDTH` | const `0.6` | Ship collision box width |
+| `SHIP_HEIGHT` | const `0.4` | Ship collision box height |
+| `SHIP_LENGTH` | const `1.8` | Ship collision box length |
 
-### Class: `PhysicsEngine`
-
-#### Key Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| [update](file:///c:/dev/Sky%20roads/physics.js#L119) | `update(dt: number, keyboard: object, levelInfo: object): void` | Simulates engine speed, fuel/oxygen depletion, terrain special effects, inputs, coyote-time jumps, ground and wall collisions, sloped ramp height interpolation, side collisions on ramps, and tunnel transition collision overrides |
+**Dependencies:**
+- `three` (Vector3, Box3)
 
 ---
 
-## levelLoader.js — Level Geometry Builder
+## levelLoader.js
 
-**File:** [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) · ~1,404 lines · ~52 KB
+**Purpose:** Transforms level JSON data structures into Three.js 3D geometry. Handles themed texture loading across 14 themes, decal overlays, dynamic UV mapping for non-uniform blocks, tunnel archway placement, ramp geometry, and progressive async building with progress callbacks. Also manages texture caching and VRAM disposal.
 
-### Imports
-
-| Symbol | Source |
-|--------|--------|
-| `* as THREE` | `three` (npm) |
-
-### Exports
+**Stats:** ~2,200 lines · 88 KB
 
 | Symbol | Type | Description |
 |--------|------|-------------|
-| `TILE_WIDTH` | `const number` | `2.0` — tile width |
-| `TILE_LENGTH` | `const number` | `4.0` — tile length |
-| `ROAD_WIDTH_LANES` | `const number` | `7` — road width in lanes |
-| `TOTAL_ROAD_WIDTH` | `const number` | `14.0` — total road width |
-| `THEMES` | `const array` | List of texture configurations for each skin theme |
-| `getActiveThemeIndex` | `function` | Determines the theme index from level meta |
-| `buildLevel` | `function` | Synchronous geometry generator and level compiler |
-| `buildLevelAsync` | `function` | Asynchronous parser loading levels incrementally with worker/tick scheduling |
+| `buildLevel(levelData, scene, zOffset, isInfinite)` | function | Synchronous level geometry builder |
+| `buildLevelAsync(levelData, scene, onProgress, zOffset, isInfinite)` | function | Async level builder with progress callback |
+| `disposeUnusedThemes(activeThemeIndex)` | function | Disposes GPU textures for inactive themes |
+| `getActiveThemeIndex(levelData)` | function | Determines which theme for a level |
+| `getCustomAssetUrl(filename)` | function | Resolves custom asset path via import.meta.glob |
+| `getLevelAssetUrl(levelIndex, filename)` | function | Resolves per-level custom asset URL |
+| `getLevelObjUrl(levelIndex, filename)` | function | Resolves per-level OBJ model URL |
+| `THEMES` | const array | 4 theme definitions with all texture URLs |
+| `textureCache` | Map | Primary loaded texture cache |
+| `loadedTextureCache` | Map | Secondary theme texture cache |
+| `TILE_WIDTH` | const `2.0` | Road tile width (redeclared) |
+| `TILE_LENGTH` | const `4.0` | Road tile length (redeclared) |
+| `ROAD_WIDTH_LANES` | const `7` | Lane count |
+| `TOTAL_ROAD_WIDTH` | const `14.0` | Total road width |
 
-### Key Helper Functions (Internal)
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `preprocessLevelRamps` | `preprocessLevelRamps(levelData: object): void` | Pre-scans level rows, auto-generating and injecting `ramp: true` tiles immediately preceding elevated tunnels |
-| `createRampGeometry` | `createRampGeometry(w: number, l: number, yBottom: number, y1: number, y2: number): THREE.BufferGeometry` | Generates a 3D triangular wedge geometry with customized UV maps mapping textures seamlessly on vertical and sloped faces |
-| `processTile` | `processTile(tile: object, r: number, c: number, ...): void` | Instantiates meshes, binds textures, compiles bounding boxes, and registers collidables/obstacles (including specialized ramp block configurations) |
-
----
-
-## audio.js — Sound Synthesizer
-
-**File:** [audio.js](file:///c:/dev/Sky%20roads/audio.js) · ~1,060 lines · ~35 KB
-
-### Imports
-
-| Symbol | Source |
-|--------|--------|
-| `muzaxUrl`, `sfxUrl`, `introUrl`, `parseMuzax`, `parseSfx`, `OplSynthJS`, `MuzaxPlayerJS` | [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) |
+**Dependencies:**
+- `three` (+ `RoundedBoxGeometry` addon)
+- ~60+ static asset imports (themed textures via Vite static imports)
+- `import.meta.glob` for dynamic custom asset discovery
 
 ---
 
-## oplSynth.js — OPL2 FM Synthesizer & LZS Decompressor
+## worldBuilder.js
 
-**File:** [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) · ~631 lines · ~19 KB
+**Purpose:** Standalone Node.js CLI script that procedurally generates 30 playable levels across 10 biomes. Uses seeded PRNG (Mulberry32), pattern-based construction from `level_patterns.json`, and a static physics solver to verify each level is fully traversable before accepting it. Outputs `data/generated_levels.json`.
 
-### Exports
+**Stats:** ~1,695 lines · 50 KB
 
 | Symbol | Type | Description |
 |--------|------|-------------|
-| `muzaxUrl`, `sfxUrl`, `introUrl` | `string` | Asset bundle URLs pointing to classic game resources |
-| `decompressStream` | `function` | Stream-based LZSS decompressor |
-| `parseMuzax` | `function` | Decompresses and extracts songs and instrument configurations from `MUZAX.LZS` |
-| `parseSfx` | `function` | Decodes offset tables and reads raw PCM buffers from `SFX.SND` |
-| `OplSynthJS` | `class` | 15-channel OPL2 FM software synthesizer simulator |
-| `MuzaxPlayerJS` | `class` | Interprets OPL2 instructions and registers and renders FM sound output |
+| `createRng(seed)` | function (internal) | Seeded Mulberry32 PRNG |
+| `generateLevelData(idx, biome, seed)` | function (internal) | Creates level data structure |
+| `solveLevel(levelData)` | function (internal) | Static physics simulation to verify completability |
+| `BIOME_PALETTES` | const (internal) | 10 biome × color scheme mappings |
+
+**Exports:** None (standalone script, not imported by other modules)
+
+**Dependencies:**
+- `fs`, `path` (Node.js builtins)
+- [data/level_patterns.json](file:///c:/dev/Sky%20roads/data/level_patterns.json) (loaded at startup)
 
 ---
 
-## levels.js — Level Data Store
+## audio.js
 
-**File:** [levels.js](file:///c:/dev/Sky%20roads/levels.js) · ~76 lines · ~2 KB
+**Purpose:** Web Audio API wrapper providing both a custom retro synthesizer (procedural SFX: engine hum, boost, jump, explosion, landing) and integration with the OPL2 FM synthesizer for authentic 1993 SkyRoads music playback. Manages AudioContext lifecycle, volume control, track selection, and test environment detection.
 
----
+**Stats:** ~1,281 lines · 41 KB
 
-## index.html — DOM Element Map
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `gameAudio` | const `AudioSynthesizer` | Singleton audio manager instance |
+| `.init()` | method | Creates AudioContext on first user interaction |
+| `.playEngineHum(speed)` | method | Continuous engine sound |
+| `.playSfx(name)` | method | Trigger named SFX (boost, jump, crash, land, etc.) |
+| `.startMusic(trackIndex)` | method | OPL2 music playback |
+| `.stopMusic()` | method | Stops current track |
+| `.setMusicVolume(v)` | method | Music volume (0–1) |
+| `.setSfxVolume(v)` | method | SFX volume (0–1) |
+| `.setSoundMode(mode)` | method | Toggle 'synth' vs 'opl' modes |
+| `.nextTrack()` | method | Cycle available music tracks |
 
-**File:** [index.html](file:///c:/dev/Sky%20roads/index.html) · ~796 lines · ~46 KB
-
-### Element ID Reference
-
-| ID | Element | Used By | Purpose |
-|----|---------|---------|---------|
-| `ship-picker-screen` | `div` | `showScreen()`, `openShipPicker()` | Spaceship Garage modal panel overlay |
-| `ship-preview-container` | `div` | `openShipPicker()` | 3D WebGL editor preview viewport mount point |
-| `ship-color-picker` | `input[type="color"]` | `openShipPicker()`, `selectColorInPicker()` | Custom paint overlay picker color input wheel |
-| `btn-picker-select` | `button` | `setupUIListeners()` | Equips model + skin texture + accent overlay combination |
-| `btn-picker-back` | `button` | `setupUIListeners()` | Returns back to settings/menu without saving |
-| `mobile-touch-hud` | `div` | `GameManager.init()`, `resumeGame()` | Translucent overlay container holding touch input controls |
-| `joystick-base` | `div` | `setupTouchControlsDOMEvents()` | Circular bounding base tracking dragging coordinates |
-| `joystick-knob` | `div` | `setupTouchControlsDOMEvents()` | 2D clamped interactive analog stick knob |
-
----
-
-## index.css — Design System
-
-**File:** [index.css](file:///c:/dev/Sky%20roads/index.css) · ~2,389 lines · ~57 KB
-
-### Spaceship Garage Styles
-
-| Selector | Properties | Purpose |
-|----------|------------|---------|
-| `#ship-picker-screen` | `max-width: 1100px`, `width: 95%` | Centered glassmorphic modal bounds |
-| `.ship-picker-container` | `display: grid`, `grid-template-columns: 1.25fr 1fr`, `height: 560px` | Side-by-side gallery layout grid |
-| `#ship-preview-container` | `width: 100%`, `height: 100%`, `border-radius: 16px` | 3D WebGL sandboxed viewport border |
-| `.ship-textures-list` | `display: grid`, `grid-template-columns: repeat(4, 1fr)`, `max-height: 200px`, `overflow-y: auto` | Scrollable grid wrapper for 12 skin cards |
-| `.texture-option` | `background: rgba(255,255,255,0.02)`, `border-radius: 6px`, `cursor: pointer` | Option card container |
-| `.texture-option.active` | `border-color: var(--color-secondary)`, `box-shadow: active-glow` | Selected texture card glow highlight |
-| `.texture-preview` | `width: 100%`, `aspect-ratio: 1`, `background-size: cover` | Thumbnail graphic container for each texture |
-
-### Mobile HUD Styles
-
-| Selector | Properties | Purpose |
-|----------|------------|---------|
-| `.touch-hud-main-container` | `display: flex`, `justify-content: space-between`, `bottom: 160px` | Positions touch controls on side margins above cockpit dashboard |
-| `.joystick-base` | `width: 150px`, `height: 150px`, `border-radius: 50%` | Circular glassmorphic analog tracker backdrop |
-| `.joystick-knob` | `width: 74px`, `height: 74px`, concentric ridges | Concentric ridged PS2 style rubber thumbstick |
-| `.right-buttons-arc` | `width: 260px`, `height: 200px` | Curved positioning box for arced button sweep |
-| `.action-brake`, `.action-jump`, `.action-throttle` | `position: absolute`, circular buttons, neon glows | Ergonomic controls styled with custom interactive glows |
+**Dependencies:**
+- [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) → `muzaxUrl`, `sfxUrl`, `introUrl`, `parseMuzax`, `parseSfx`, `OplSynthJS`, `MuzaxPlayerJS`
 
 ---
 
-## Cross-Module Call Graph
+## cockpitConsole.js
 
-This diagram shows the complete data-flow relationships between modules, including the newly added `preview.js` spaceship customization flow:
+**Purpose:** Provides a 2D path scanner minimap (rendered to canvas, showing upcoming road layout) and a 3D cockpit console object placed in the Three.js scene during first-person cockpit camera mode. Includes gauge needles, LCD readouts, and themed materials.
+
+**Stats:** ~400 lines · 35 KB
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `PathScannerMinimap` | class | 2D canvas minimap showing upcoming road tiles |
+| `PathScannerMinimap.update(levelData, shipZ, shipX)` | method | Redraws minimap based on position |
+| `PathScannerMinimap.setTheme(themeIndex)` | method | Color scheme matching level theme |
+| `CockpitConsole3D` | class | 3D mesh group for cockpit interior dashboard |
+| `CockpitConsole3D.update(physicsState)` | method | Animates gauge needles, LCD readouts |
+| `CockpitConsole3D.setVisible(visible)` | method | Toggle with camera mode |
+
+**Dependencies:**
+- `three`
+- [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) → `TILE_WIDTH`, `TILE_LENGTH`, `ROAD_WIDTH_LANES`, `TOTAL_ROAD_WIDTH`
+
+---
+
+## preview.js
+
+**Purpose:** Isolated Three.js scene for the "Hovercraft Garage" ship picker UI. Renders a rotating 3D preview of the selected ship model with chosen skin and accent color. Shares model/skin catalogs with `graphics.js` (duplicated constants — refactoring target).
+
+**Stats:** ~600 lines · 23 KB
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `ShipPreviewEngine` | class | Preview renderer |
+| `.constructor(container)` | method | Creates isolated scene, camera, lights |
+| `.loadModel(model, skin, accent)` | method | Loads and displays ship |
+| `.setAccentColor(color)` | method | Repaint accent overlay |
+| `.setSkin(skinName)` | method | Switch base skin texture |
+| `.startRotation()` / `.stopRotation()` | methods | Auto-rotate animation |
+| `.dispose()` | method | Cleanup GPU resources |
+| `SHIP_MODELS` | const object | Model catalog (duplicated from graphics.js) |
+| `SHIP_SKINS` | const object | Skin catalog (duplicated from graphics.js) |
+| `SHIP_METRICS` | const object | Positioning metrics (duplicated from graphics.js) |
+| `BASE_TEXTURES` | const object | Texture presets (duplicated from graphics.js) |
+| `LEGACY_MODEL_ALIASES` | const object | Legacy mappings (duplicated from graphics.js) |
+
+**Dependencies:**
+- `three` (+ OBJLoader, FBXLoader, GLTFLoader)
+- Ship model GLB files, skin texture JPGs
+
+> **Note:** 5 constant objects are duplicated between `preview.js` and `graphics.js`. These should be extracted to a shared `shipCatalog.js` module.
+
+---
+
+## oplSynth.js
+
+**Purpose:** Faithful JavaScript emulation of the Yamaha OPL2 (AdLib FM) sound chip used in the 1993 DOS SkyRoads. Includes LZS decompression for original compressed music data (`MUZAX.LZS`), binary SFX parsing (`SFX.SND`), and a complete FM synthesis engine with ADSR envelopes, 8 waveforms, feedback modulation, and a song sequencer.
+
+**Stats:** ~637 lines · 19 KB
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `muzaxUrl` | string | URL to MUZAX.LZS asset |
+| `sfxUrl` | string | URL to SFX.SND asset |
+| `introUrl` | string | URL to INTRO.SND asset |
+| `decompressStream(data, offset, size, widths)` | function | LZS bitstream decompressor |
+| `parseMuzax(data)` | function | Parses MUZAX.LZS into song objects |
+| `parseSfx(data)` | function | Parses SFX.SND into effect arrays |
+| `OplSynthJS` | class | OPL2 FM synthesis (15 channels, ADSR, 8 waveforms) |
+| `OplSynthJS.setChannelConfig(ch, inst)` | method | Configure operator A/B |
+| `OplSynthJS.startNote(ch, freq, block)` | method | Trigger note |
+| `OplSynthJS.stopNote(ch)` | method | Release note |
+| `OplSynthJS.nextSample()` | method | Generates one audio sample |
+| `MuzaxPlayerJS` | class | Song sequencer/player |
+| `MuzaxPlayerJS.loadSong(idx, synth)` | method | Load and start a song |
+| `MuzaxPlayerJS.render(synth, buf, rate)` | method | Fill audio buffer |
+
+**Dependencies:**
+- `MUZAX.LZS`, `SFX.SND`, `INTRO.SND` (original DOS game binary assets via Vite `?url`)
+
+---
+
+## levels.js
+
+**Purpose:** Fetches and caches level pack JSON files. The "standard" pack merges standard + xmas levels with re-indexed indices. Provides sync access to already-loaded packs.
+
+**Stats:** ~78 lines · 2 KB
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `loadLevelPack(packName)` | async function | Fetches and caches a level pack ('standard', 'xmas', 'generated') |
+| `getCachedPack(packName)` | function | Synchronous access to loaded pack |
+| `LEVEL_PACKS` | const object | Internal pack cache reference |
+
+**Dependencies:**
+- [data/standard_levels.json](file:///c:/dev/Sky%20roads/data/standard_levels.json) (via Vite `?url`)
+- [data/xmas_levels.json](file:///c:/dev/Sky%20roads/data/xmas_levels.json) (via Vite `?url`)
+- [data/generated_levels.json](file:///c:/dev/Sky%20roads/data/generated_levels.json) (via Vite `?url`)
+
+---
+
+## generate_textures.js
+
+**Purpose:** Standalone Node.js script that procedurally generates seamless 1024×1024 PNG textures from pure math (no image dependencies). Uses deterministic seeded PRNG (Mulberry32) and hand-rolled PNG encoding with CRC32 + zlib.
+
+**Stats:** ~511 lines · 18 KB
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `mulberry32(seed)` | function (internal) | Seeded PRNG |
+| `encodePNG(w, h, pixels)` | function (internal) | Raw PNG encoder |
+| `generateRoadPlate()` | function (internal) | Generates `road_metallic_plate.png` |
+| `generateSpaceshipHull()` | function (internal) | Generates `spaceship_hull_plating.png` |
+
+**Exports:** None (standalone script, writes files directly)
+
+**Output:**
+- `road_metallic_plate.png` — dark industrial road texture
+- `spaceship_hull_plating.png` — titanium hull plating texture
+
+**Dependencies:**
+- `fs`, `path`, `zlib` (Node.js builtins)
+
+---
+
+## debug_coords.js
+
+**Purpose:** Puppeteer-based headless browser automation script for debugging touch HUD button coordinates and visibility. Launches Vite dev server, opens the game in headless Chrome/Edge, navigates through menus, and inspects DOM element properties.
+
+**Stats:** ~220 lines · 7 KB
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `delay(ms)` | function (internal) | Promise-based sleep |
+| `isPortOpen(port)` | function (internal) | Port checking utility |
+| `terminateProcessOnPort(port)` | function (internal) | Windows-specific process killer |
+| `run()` | function (internal) | Main automation flow |
+
+**Exports:** None (standalone script)
+
+**Dependencies:**
+- `puppeteer` (headless browser)
+- `child_process`, `fs`, `path`, `net` (Node.js builtins)
+
+---
+
+## vitest.setup.js
+
+**Purpose:** Pre-test initialization that creates stub model files (OBJ placeholders) and texture files in `assets/models/` and `assets/custom/`, then optionally runs Python generators for real assets.
+
+**Stats:** ~103 lines · 4 KB
+
+**Creates stubs for:**
+- 6 ship models (fighter, hauler, scout, dreadnought, cruiser, tunnel_archway) as OBJ
+- 4 themes × 3 types × diffuse/normal textures
+- 6 decal types × (base + per-theme variants)
+
+**Dependencies:**
+- `child_process`, `fs`, `path` (Node.js builtins)
+- `scratch/generate_models.py` (optional)
+- `scratch/generate_comfy_assets.py` (optional)
+
+---
+
+## index.html
+
+**Purpose:** Main HTML document containing all UI screens, overlays, HUD, and the WebGL game canvas. Single-page application with overlay-based navigation.
+
+**Stats:** ~975 lines · 61 KB
+
+### Structure
+
+| Section | Element ID | Description |
+|---------|-----------|-------------|
+| Canvas Container | `#canvas-container` | Three.js WebGL viewport |
+| Settings Gear | `#btn-settings-gear` | Floating top-left settings button |
+| Physics Calibrator | `#btn-settings-physics` | Floating calibrator button |
+| Pause Button | `#btn-in-game-pause` | In-game pause trigger |
+| Fullscreen Button | `#btn-fullscreen-trigger` | Top-right fullscreen toggle |
+| HUD Dashboard | `#hud .cockpit-panel` | 5-column grid: progress tube, GRAV-G LCD, center speedometer (SVG gauge), JUMP-O LCD, navigation telemetry |
+| Main Menu | `#screen-main-menu` | PLAY, PLAY 10 NEW WORLDS, HOW TO PLAY |
+| Settings Screen | `#screen-settings` | Difficulty, audio, controls, display, gamepad config |
+| Gamepad Config | `#screen-gamepad-config` | Button mapping for 7 actions |
+| Physics Calibrator | `#panel-physics-cal` | 4 sections × ~20 sliders (throttle, handling, jumping, camera) |
+| Level Select | `#screen-level-select` | Grid + Infinite Road button |
+| Ship Garage | `#screen-ship-picker` | Preview viewport + sidebar (models, skins, accent colors) |
+| Death Screen | `#screen-death` | Crash overlay |
+| Success Screen | `#screen-success` | Run telemetry, scoring, leaderboard |
+| How To Play | `#screen-how-to-play` | Controls guide + tile color legend |
+| Loading Screen | `#screen-loading` | Spinner + progress bar |
+| Mobile Touch HUD | `#mobile-touch-hud` | Joystick, D-pad, buttons, customizer dashboard |
+
+---
+
+## index.css
+
+**Purpose:** Complete game styling with retro-futuristic glassmorphism design system, responsive layouts, and animations.
+
+**Stats:** ~2,744 lines · 68 KB
+
+### Major Sections
+
+1. **CSS Reset & Design Tokens** — `:root` variables for colors, fonts, neon shadows
+2. **Viewport & Overlay** — Fullscreen canvas, glassmorphism overlay
+3. **Glass Cards** — `backdrop-filter: blur(15px)` frosted panels
+4. **Typography** — Orbitron display font with gradient fills
+5. **Buttons** — Primary (pink gradient), secondary (cyan gradient), info (transparent)
+6. **Level Grid** — 5-column responsive grid with neon hover effects
+7. **Status Cards** — Win/lose screens with danger/success colors
+8. **How To Play** — Key badges, control rows, color swatches
+9. **Cockpit Dashboard HUD** — 5-column panel: progress tube, LCD screens, SVG speedometer, telemetry, status LEDs
+10. **Loading Screen** — Spinning border animation, progress bar
+11. **Credits** — GitHub link with Octocat
+12. **Settings Controls** — Custom range slider styling (WebKit + Mozilla)
+13. **Responsive** — `@media (max-width: 600px)` breakpoints
+14. **Keyboard Navigation** — `.keyboard-focused` accessibility states
+15. **Ship Garage** — Model/texture/color option cards, scrollable sidebar
+16. **Cockpit Overlay** — First-person cabin bezel image
+17. **Pause/Fullscreen** — Glassmorphic floating buttons
+18. **Mobile Touch HUD** — Joystick base/knob, D-pad, action buttons, customizer dashboard
+19. **Physics Calibrator** — Floating panel with slider groups, preset buttons
+
+---
+
+## vite.config.js
+
+**Stats:** ~20 lines
+
+```js
+export default defineConfig({
+  base: './',
+  build: { outDir: 'dist' },
+  assetsInclude: ['**/*.obj'],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./vitest.setup.js'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.agents/**']
+  }
+});
+```
+
+---
+
+## package.json
+
+**Name:** skyroads-webgl · **Type:** ES module · **Version:** 1.0.0
+
+| Script | Command |
+|--------|---------|
+| `dev` | `vite` |
+| `build` | `vite build` |
+| `preview` | `vite preview` |
+| `test` | `vitest run` |
+
+| Dependency | Version | Purpose |
+|------------|---------|---------|
+| `three` | ^0.175.0 | 3D rendering engine |
+| `vite` | ^6.3.5 | Build tool / dev server |
+| `vitest` | ^3.1.4 | Test runner |
+| `jsdom` | ^26.1.0 | DOM simulation for tests |
+
+---
+
+## Cross-Module Dependency Graph
 
 ```mermaid
 graph TD
-    subgraph "app.js (GameManager)"
-        GM_init["init()"]
-        GM_open["openShipPicker()"]
-        GM_selectM["selectModelInPicker()"]
-        GM_selectT["selectTextureInPicker()"]
-        GM_selectC["selectColorInPicker()"]
-        GM_close["closeShipPicker()"]
-        GM_animate["animate()"]
-        GM_hud["updateHUD()"]
-        GM_death["handleDeath()"]
-        GM_success["handleSuccess()"]
+    APP["app.js<br/>GameManager"] --> GFX["graphics.js<br/>GraphicsEngine"]
+    APP --> PHY["physics.js<br/>PhysicsEngine"]
+    APP --> LL["levelLoader.js<br/>Level Builder"]
+    APP --> AUD["audio.js<br/>AudioSynthesizer"]
+    APP --> PRV["preview.js<br/>ShipPreviewEngine"]
+    APP --> LVL["levels.js<br/>Pack Loader"]
+
+    GFX --> PHY
+    GFX --> CC["cockpitConsole.js<br/>CockpitConsole3D"]
+    GFX --> LL
+    GFX --> THREE["three (npm)"]
+
+    CC --> LL
+    CC --> THREE
+
+    PHY --> THREE
+
+    LL --> THREE
+
+    PRV --> THREE
+
+    AUD --> OPL["oplSynth.js<br/>OPL2 FM Synth"]
+
+    LVL -->|"fetch JSON"| DATA["data/*.json"]
+    LL -->|"import textures"| ASSETS["assets/custom/*.png"]
+    GFX -->|"load models"| MODELS["assets/models/*.obj"]
+
+    subgraph "Standalone CLI Scripts"
+        WB["worldBuilder.js"] -->|"reads"| DATA
+        GT["generate_textures.js"] -->|"writes"| TEXOUT["*.png textures"]
+        DC["debug_coords.js"] -->|"uses"| PUP["puppeteer"]
     end
 
-    subgraph "preview.js (ShipPreviewEngine)"
-        PE_init["init()"]
-        PE_changeM["changeModel()"]
-        PE_changeS["changeSkin()"]
-        PE_optimize["optimizeShipTexture()"]
-        PE_load["loadModelAndTexture()"]
-        PE_destroy["destroy()"]
+    subgraph "Test Harness"
+        VS["vitest.setup.js"] -->|"creates stubs"| ASSETS
+        VS -->|"creates stubs"| MODELS
     end
-
-    subgraph "graphics.js (GraphicsEngine)"
-        GE_init["init()"]
-        GE_changeM["changeShipModel()"]
-        GE_changeS["changeShipSkin()"]
-        GE_optimize["optimizeShipTexture()"]
-        GE_load["loadModelAndTexture()"]
-        GE_update["update()"]
-        GE_clear["clearLevel()"]
-        GE_render["render()"]
-    end
-
-    subgraph "physics.js (PhysicsEngine)"
-        PHY_reset["reset()"]
-        PHY_update["update()"]
-    end
-
-    subgraph "levelLoader.js"
-        BL["buildLevel()"]
-    end
-
-    subgraph "audio.js"
-        AUD_click["gameAudio.playClick()"]
-        AUD_start["gameAudio.startEngine()"]
-        AUD_stop["gameAudio.stopEngine()"]
-        AUD_speed["gameAudio.updateEngineSpeed()"]
-    end
-
-    %% Startup Initialization
-    GM_init --> GE_init
-    GM_init --> GM_animate
-    GM_init -->|"If equipped custom model at startup"| GE_changeM
-
-    %% Open Garage Flow
-    GM_open --> PE_init
-    PE_init --> PE_load
-    PE_load --> PE_optimize
-
-    %% Garage Editing Selections Flow
-    GM_selectM --> PE_changeM
-    PE_changeM --> PE_load
-    
-    GM_selectT --> PE_changeS
-    PE_changeS --> PE_optimize
-    
-    GM_selectC --> PE_changeS
-    
-    %% Save Garage Flow
-    GM_close --> GE_changeM
-    GE_changeM --> GE_load
-    GE_load --> GE_optimize
-    GM_close --> PE_destroy
-
-    %% Main Gameplay Loop
-    GM_animate --> PHY_update
-    GM_animate --> GE_update
-    GM_animate --> AUD_speed
-    GM_animate --> GE_render
-    GM_animate --> GM_hud
-
-    %% Level Start / Death / Success Flow
-    GM_init -->|"Level Select"| GM_start["startLevel()"]
-    GM_start --> BL
-    GM_start --> PHY_reset
-    GM_start --> GE_clear
-    GM_start --> AUD_start
-
-    GM_death --> GE_explode["triggerExplosion()"]
-    GM_death --> AUD_stop
 ```
+
+---
+
+## Theme System
+
+14 visual themes, each with a complete set of road, obstacle, tunnel, and decal textures:
+
+| Theme | Style |
+|-------|-------|
+| `core` | Default base theme |
+| `cyberpunk` | Neon-lit futuristic city |
+| `industrial` | Heavy metal, riveted panels |
+| `organic` | Bio-mechanical, living surfaces |
+| `alien` | Extraterrestrial, exotic materials |
+| `furnace` | Volcanic, molten metal |
+| `glitch` | Digital corruption, pixelated |
+| `pulse` | Energy waves, electric |
+| `ridge` | Rocky, mountainous terrain |
+| `shallows` | Underwater, aquatic |
+| `spire` | Crystal towers, glass |
+| `thrill` | High-speed, racing |
+| `tundra` | Frozen, icy landscape |
+| `void` | Dark space, emptiness |
+
+**Per-theme assets:**
+- `{theme}_road_diffuse.png` + `{theme}_road_normal.png`
+- `{theme}_obstacle_diffuse.png` + `{theme}_obstacle_normal.png`
+- `{theme}_tunnel_diffuse.png` + `{theme}_tunnel_normal.png`
+- `decal_{type}_{theme}.png` for each of 6 decal types
+
+---
+
+## Asset Structure
+
+```
+assets/
+├── models/          6 OBJ ship models + tunnel_archway.obj
+├── custom/
+│   ├── *.glb        6 GLB ship models + tunnel_archway.glb
+│   ├── *.png        ~269 themed textures + decals
+│   └── level_61-90/ 30 per-level asset directories
+└── *.blend          Blender source files
+```
+
+---
+
+## Data Files
+
+| File | Size | Description |
+|------|------|-------------|
+| [standard_levels.json](file:///c:/dev/Sky%20roads/data/standard_levels.json) | 3.5 MB | 31 standard levels from original DOS SkyRoads |
+| [xmas_levels.json](file:///c:/dev/Sky%20roads/data/xmas_levels.json) | 2.2 MB | 31 Christmas Special levels |
+| [generated_levels.json](file:///c:/dev/Sky%20roads/data/generated_levels.json) | 3.2 MB | 30 procedurally generated levels (index 61–90) |
+| [level_patterns.json](file:///c:/dev/Sky%20roads/data/level_patterns.json) | 52 KB | Extracted statistical patterns from original levels |

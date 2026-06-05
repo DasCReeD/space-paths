@@ -33,6 +33,7 @@ const mockGraphicsInstance = {
   init: vi.fn(),
   clearLevel: vi.fn(),
   spawnCityScenery: vi.fn(),
+  loadLevelSceneryModels: vi.fn((index, resolve) => { if (resolve) resolve(); }),
   scene: { add: vi.fn(), remove: vi.fn() },
   starField: { rotation: { y: 0 } },
   render: vi.fn(),
@@ -92,7 +93,9 @@ vi.mock('../levelLoader.js', () => ({
   buildLevelAsync: vi.fn(async (_data, _scene, onProgress) => {
     if (onProgress) onProgress(100);
     return { ...mockBuildLevelResult };
-  })
+  }),
+  disposeUnusedThemes: vi.fn(),
+  getActiveThemeIndex: vi.fn(() => 0)
 }));
 
 vi.mock('../audio.js', () => ({
@@ -155,6 +158,7 @@ function createMinimalDOM() {
 
     <div id="menu-screen" class="overlay-screen active">
       <button id="btn-play-standard"></button>
+      <button id="btn-play-generated"></button>
       <button id="btn-play-xmas"></button>
       <button id="btn-how-to"></button>
     </div>

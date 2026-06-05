@@ -1,39 +1,37 @@
-# Implementation Plan: Sky Roads Next-Gen Overhaul
+# Implementation Plan: 10 Generated Worlds Expansion & Rendering Fixes
 
-We will execute the implementation across sequential milestones to ensure high quality, performance (60 FPS), and clean isolation.
+This plan details the steps to implement 10 new playable worlds with custom biomes, segment-based level generation, asset pipeline enhancements, and rendering fixes (mesh rotation, obstacle shading, and basement blocks).
 
-## Milestone 1: Exploration & Planning
-- [x] Spawns explorer to research codebase structure and locate targets.
-- [x] Produce detailed mathematical specifications for particles, shaders, tunnel merging, and physics parameters.
+## Milestone 1: Exploration & Codebase Audit
+- [x] Spawn Explorer to inspect:
+  - Existing `worldBuilder.js` and its generation/solver logic.
+  - Existing level asset loaders in `levelLoader.js` and `graphics.js`.
+  - Texture generator script `scratch/generate_comfy_assets_10_worlds.py` and obstacle generator `scratch/generate_assets_50_per_level.py`.
+  - Mesh loading and rotation code in `graphics.js` and `preview.js`.
+  - Greedy meshing loop in `buildMergedBlocks()` and tile processing in `levelLoader.js`.
+- [x] Generate detailed reports on findings and proposed edits.
 
-## Milestone 2: Branching Isolation & Skybox Decoupling
-- [ ] Create and switch to a new git branch: `feature/nextgen-graphics`.
-- [ ] Completely decouple, remove import, loading configurations, and references to `skybox_space_nebula.png`.
-- [ ] Delete/remove `skybox_space_nebula.png` from tracking and the file system.
-- [ ] Setup a placeholder standard black/nebula ShaderMaterial in `graphics.js:createSkybox()` to verify decoupling without compile errors.
+## Milestone 2: Level Blueprinting & Segment-based Generator Overhaul
+- [x] Draft detailed level specification blueprints in `scratch/level_blueprints.json` outlining turns, vertical steps, and segment structures for all 30 levels.
+- [x] Overhaul `worldBuilder.js` to:
+  - Parse and execute `scratch/level_blueprints.json`.
+  - Construct tracks using a Segment-based Track Builder structure: `buildRunway`, `buildClassicJumps`, `buildVerticalSteps`, `buildFloatingIslands`, `buildSlalom`, `buildTimingGates`, and `buildTunnelRun`.
+  - Implement static playability solver checking jump trajectories (parabolic flight path) and fuel consumption.
+  - Re-generate `data/generated_levels.json` with 30 validated playable levels.
+- [x] Implement/update unit tests in `tests/worldBuilder.test.js` to verify segment structures and solver playability.
 
-## Milestone 3: Procedural Cosmic Galaxy Skybox Overhaul
-- [ ] Implement custom GPU Vertex & Fragment Shaders using a 3D Fractional Brownian Motion (fBm) noise algorithm to generate dynamic, swirling volumetric neon nebulae on a massive sphere background.
-- [ ] Implement an animated Double-Armed Logarithmic Spiral particle system ($r = a \cdot e^{b\theta}$) rotating dynamically over time with radial velocity decay ($\omega(r) = \omega_0 / (1.0 + \gamma r)$) behind the play space.
-- [ ] Ensure 60 FPS performance by keeping particle count optimized (~1500 particles) and leveraging GPU operations.
+## Milestone 3: Art Team: Asset Planning, Generation & Integration
+- [x] Update `scratch/generate_comfy_assets_10_worlds.py` to use `imagen-4.0-generate-001` as the primary model, producing diffuse maps, normal maps, and decals for the 10 biomes, with Pillow fallback.
+- [x] Map generated assets to level-specific directories `assets/custom/level_X/` (where X is 61 to 90).
+- [x] Configure `THEMES[]` definition array in `levelLoader.js` with colors, roughness, metalness, and maps for the 10 new themes.
+- [x] Ensure `levelLoader.js` and `graphics.js` load level-specific assets if present, with biome-level fallback.
 
-## Milestone 4: Visuals, Track, and HUD Next-Gen Overhaul
-- [ ] Overhaul spaceship exhaust with sleeker engine flames and glowing wings trail ribbons using a dynamic `BufferGeometry` quad-strip history queue with AdditiveBlending.
-- [ ] Apply animated glowing neon pathways on road materials using time-based moving sine-wave patterns.
-- [ ] Polish the HUD cockpit/containers with beautiful Orbitron text-shadows, glow filters, and scanning line overlays.
+## Milestone 4: Rendering & Mesh Fixes
+- [x] **Spaceship Rotation**: Rotate GLB spaceship meshes by `Math.PI` (180 degrees) in `graphics.js` and `preview.js` to face forward.
+- [x] **Hollow Obstacles Shading**: Update `loadAndApplyObstacleModel` in `levelLoader.js` to compute vertex normals. Modify `generate_assets_50_per_level.py` to write clean faces `v/vt` without normal overrides.
+- [x] **Basement Blocks**: Render a standard flat road tile underneath all obstacles in `processTile()`. Update `buildMergedBlocks()` greedy meshing to run in two separate passes: Road Layer Pass and Obstacle Layer Pass.
 
-## Milestone 5: Tunnel Translation, Scale, and Navigability
-- [ ] Correct track translation logic in `levelLoader.js` where tunnel blocks were misparsed/offset.
-- [ ] Implement a Multi-Lane Tunnel Span Merging algorithm inside `levelLoader.js` to combine adjacent columns into a single wide arched geometry, preventing internal partition walls.
-- [ ] Scale and round/curve tunnel blocks correctly using semi-cylindrical geometries (`CylinderGeometry`) with double-sided materials.
-- [ ] Verify that a clear navigable path is fully open and unblocked in all levels.
-
-## Milestone 6: Gravity & Bounce Physics Settings
-- [ ] Introduce adjustable `bounceFactor` and `gravityFactor` multipliers to `PhysicsEngine`.
-- [ ] Integrate factors into landing rebound equations and gravity calculations in `physics.js`.
-- [ ] Expose settings controls (hotkeys 'O'/'P' or slider controls in HUD) so player can adjust values in real-time to eliminate "floatiness".
-
-## Milestone 7: Testing, Verification & Forensic Audit
-- [ ] Run test suite `npm run test` using Vitest to confirm zero regressions in existing tests.
-- [ ] Run Forensic Auditor to confirm authentic, non-hardcoded, clean WebGL shader and physics implementation.
-- [ ] Verify clean Git status on the branch `feature/nextgen-graphics`.
+## Milestone 5: Verification & Automated Tests
+- [/] Run `npm run test` to verify all 490 tests pass.
+- [ ] Implement new tests verifying the segment-based track building and playability checks.
+- [ ] Perform manual/visual checks on levels, meshes, and the play menu.

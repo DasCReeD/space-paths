@@ -1,5 +1,6 @@
 import standardLevelsUrl from './data/standard_levels.json?url';
 import xmasLevelsUrl from './data/xmas_levels.json?url';
+import generatedLevelsUrl from './data/generated_levels.json?url';
 
 // Cache for loaded packs (prevents duplicate fetches)
 const packCache = {};
@@ -8,7 +9,7 @@ const packCache = {};
  * Load a level pack by name. Returns an array of level data objects.
  * Fetches the JSON file on first call, then returns from cache.
  *
- * @param {'standard' | 'xmas'} packName - The pack to load.
+ * @param {'standard' | 'xmas' | 'generated'} packName - The pack to load.
  * @returns {Promise<Array>} Array of parsed level data objects.
  */
 export async function loadLevelPack(packName) {
@@ -19,7 +20,9 @@ export async function loadLevelPack(packName) {
   const fileMap = {
     standard: standardLevelsUrl,
     xmas: xmasLevelsUrl,
+    generated: generatedLevelsUrl,
   };
+
 
   if (packName === 'standard') {
     const resStandard = await fetch(`${fileMap.standard}?v=${Date.now()}`);

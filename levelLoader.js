@@ -71,7 +71,8 @@ import orgDecalSlippery from './assets/custom/decal_slippery_organic.png';
 
 // OBJ Loader and Custom Tunnel Archway Model
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import tunnelArchwayObjUrl from './assets/models/tunnel_archway.obj?url';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import tunnelArchwayUrl from './assets/custom/tunnel_archway.glb?url';
 
 // Eagerly glob all color-divided seamless abstract textures recursively from subfolders
 const colorTextures = import.meta.glob('./SBS - Seamless Abstract Pack - 512x512/PNG/**/*.png', { eager: true });
@@ -128,7 +129,9 @@ function classifyTileBehavior(topColor) {
     9:  { behavior: 'slippery',  glowColor: new THREE.Color(0.2, 0.2, 0.2) },
     10: { behavior: 'refill',    glowColor: new THREE.Color(0.0, 0.5, 1.0) },
     11: { behavior: 'boost',     glowColor: new THREE.Color(0.0, 1.0, 0.0) },
+    12: { behavior: 'super_boost', glowColor: new THREE.Color(0.0, 1.0, 1.0) },
     13: { behavior: 'burning',   glowColor: new THREE.Color(1.0, 0.0, 0.0) },
+    14: { behavior: 'high_jump', glowColor: new THREE.Color(1.0, 0.0, 1.0) },
   };
 
   const entry = BEHAVIORS[topColor];
@@ -225,6 +228,15 @@ function createRampGeometry(w, l, yBottom, y1, y2) {
   return geometry;
 }
 
+function getTileHeight(tile) {
+  if (!tile) return 0.0;
+  if (tile.ramp) return tile.endY !== undefined ? tile.endY : 1.0;
+  if (tile.full && tile.half) return 3.0;
+  if (tile.full) return 2.0;
+  if (tile.half) return 1.0;
+  return 0.0;
+}
+
 /**
  * Scans levelData rows and dynamically inserts ramp properties for tiles
  * immediately preceding an elevated tunnel entrance.
@@ -248,20 +260,23 @@ function preprocessLevelRamps(levelData) {
         // Place ramp on the previous tile if it is not already an elevated tunnel
         if (!isPrevTunnelElevated) {
           const targetHeight = (tile.full && tile.half) ? 3.0 : (tile.full ? 2.0 : 1.0);
-          if (!prevTile) {
-            // Create a new ramp tile
-            prevRow[c] = {
-              ramp: true,
-              startY: 0.0,
-              endY: targetHeight,
-              top_color: tile.top_color,
-              bottom_color: tile.bottom_color,
-            };
-          } else {
-            // Turn existing tile into a ramp
-            prevTile.ramp = true;
-            prevTile.startY = 0.0;
-            prevTile.endY = targetHeight;
+          const startHeight = getTileHeight(prevTile);
+          if (startHeight < targetHeight) {
+            if (!prevTile) {
+              // Create a new ramp tile
+              prevRow[c] = {
+                ramp: true,
+                startY: startHeight,
+                endY: targetHeight,
+                top_color: tile.top_color,
+                bottom_color: tile.bottom_color,
+              };
+            } else {
+              // Turn existing tile into a ramp
+              prevTile.ramp = true;
+              prevTile.startY = startHeight;
+              prevTile.endY = targetHeight;
+            }
           }
         }
       }
@@ -337,7 +352,7 @@ function adjustBoxUVs(geometry, width, height, length, xPos = 0, zPos = 0, yPos 
   uvAttribute.needsUpdate = true;
 }
 
-const textureCache = new Map();
+export const textureCache = new Map();
 
 /**
  * Load a premium color-divided seamless abstract pattern texture from the user's
@@ -762,8 +777,73 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
   return texture;
 }
 
+// Glob loads all custom biome assets and level-specific assets dynamically
+const customAssets = import.meta.glob('./assets/custom/*.png', { eager: true });
+const levelAssets = import.meta.glob('./assets/custom/level_*/*.png', { eager: true });
+const levelObjAssets = import.meta.glob('./assets/custom/level_*/*.obj', { query: '?url', eager: true });
+
+export function getCustomAssetUrl(filename) {
+  const key = `./assets/custom/${filename}`;
+  const module = customAssets[key];
+  return module ? module.default : null;
+}
+
+export function getLevelAssetUrl(levelIndex, filename) {
+  const key = `./assets/custom/level_${levelIndex}/${filename}`;
+  const module = levelAssets[key];
+  return module ? module.default : null;
+}
+
+export function getLevelObjUrl(levelIndex, filename) {
+  const key = `./assets/custom/level_${levelIndex}/${filename}`;
+  const module = levelObjAssets[key];
+  return module ? module.default : null;
+}
+
+const biomeConfigs = [
+  ['Visualizer Void', 'void', [0.05, 0.0, 0.1], [0.15, 0.0, 0.25]],
+  ['Blue Ridge Ascents', 'ridge', [0.0, 0.1, 0.3], [0.0, 0.2, 0.6]],
+  ['Thrill Sector', 'thrill', [0.1, 0.1, 0.12], [0.15, 0.15, 0.18]],
+  ['Hardware Core', 'core', [0.02, 0.18, 0.06], [0.05, 0.3, 0.1]],
+  ['Glitch Grid', 'glitch', [0.08, 0.01, 0.1], [0.12, 0.02, 0.15]],
+  ['Cryo-Stasis Tundra', 'tundra', [0.7, 0.9, 1.0], [0.8, 0.95, 1.0]],
+  ['Supernova Furnace', 'furnace', [0.15, 0.08, 0.05], [0.2, 0.1, 0.05]],
+  ['Nebula Shallows', 'shallows', [0.08, 0.02, 0.18], [0.1, 0.05, 0.22]],
+  ['Quantum Spire', 'spire', [0.9, 0.9, 0.95], [0.95, 0.95, 0.98]],
+  ['Kinetic Pulse', 'pulse', [0.18, 0.18, 0.2], [0.2, 0.2, 0.22]]
+];
+
+const generatedThemes = biomeConfigs.map(([name, key, defaultColorVal, defaultMatColor]) => {
+  const getAsset = (type, suffix) => getCustomAssetUrl(`${key}_${type}_${suffix}.png`) || getCustomAssetUrl(`${type}_${suffix}_${key}.png`);
+  const getDecal = (type) => getCustomAssetUrl(`decal_${type}_${key}.png`);
+
+  const roadDiff = getAsset('road', 'diffuse');
+  const roadNorm = getAsset('road', 'normal');
+  const obsDiff = getAsset('obstacle', 'diffuse');
+  const obsNorm = getAsset('obstacle', 'normal');
+  const tunDiff = getAsset('tunnel', 'diffuse');
+  const tunNorm = getAsset('tunnel', 'normal');
+
+  return {
+    name: name,
+    defaultColor: new THREE.Color(...defaultColorVal),
+    behaviors: {
+      default:  { map: roadDiff, normalMap: roadNorm, color: new THREE.Color(...defaultMatColor) },
+      obstacle: { map: obsDiff, normalMap: obsNorm, color: new THREE.Color(0.4, 0.4, 0.4) },
+      tunnel:   { map: tunDiff, normalMap: tunNorm },
+      boost:    { map: roadDiff, normalMap: roadNorm, decal: getDecal('boost') || getCustomAssetUrl('decal_boost.png'), color: new THREE.Color(...defaultMatColor), emissive: new THREE.Color(0.0, 1.0, 0.0) },
+      super_boost: { map: roadDiff, normalMap: roadNorm, decal: getDecal('boost') || getCustomAssetUrl('decal_boost.png'), color: new THREE.Color(...defaultMatColor), emissive: new THREE.Color(0.0, 1.0, 1.0) },
+      refill:   { map: roadDiff, normalMap: roadNorm, decal: getDecal('refill') || getCustomAssetUrl('decal_refill.png'), color: new THREE.Color(...defaultMatColor), emissive: new THREE.Color(0.0, 0.5, 1.0) },
+      burning:  { map: roadDiff, normalMap: roadNorm, decal: getDecal('explosive') || getCustomAssetUrl('decal_explosive.png'), color: new THREE.Color(...defaultMatColor), emissive: new THREE.Color(1.0, 0.0, 0.0) },
+      sticky:   { map: roadDiff, normalMap: roadNorm, decal: getDecal('sticky') || getCustomAssetUrl('decal_sticky.png'), color: new THREE.Color(...defaultMatColor), emissive: new THREE.Color(0.5, 0.0, 0.6) },
+      slippery: { map: roadDiff, normalMap: roadNorm, decal: getDecal('slippery') || getCustomAssetUrl('decal_slippery.png'), color: new THREE.Color(...defaultMatColor), emissive: new THREE.Color(0.0, 0.8, 1.0) },
+    }
+  };
+});
+
 // Theme definition sets
 export const THEMES = [
+
   {
     name: 'Cyberpunk/Neon Grid',
     defaultColor: new THREE.Color(0.15, 0.15, 0.25),
@@ -772,6 +852,7 @@ export const THEMES = [
       obstacle: { map: cpObstacleDiff, normalMap: cpObstacleNorm, color: new THREE.Color(0.8, 0.6, 0.0) },
       tunnel:   { map: cpTunnelDiff, normalMap: cpTunnelNorm },
       boost:    { map: cpRoadDiff, normalMap: cpRoadNorm, decal: cpDecalBoost, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.0, 1.0, 0.0) },
+      super_boost: { map: cpRoadDiff, normalMap: cpRoadNorm, decal: cpDecalBoost, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.0, 1.0, 1.0) },
       refill:   { map: cpRoadDiff, normalMap: cpRoadNorm, decal: cpDecalRefill, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.0, 0.5, 1.0) },
       burning:  { map: cpRoadDiff, normalMap: cpRoadNorm, decal: cpDecalExplosive, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(1.0, 0.0, 0.0) },
       sticky:   { map: cpRoadDiff, normalMap: cpRoadNorm, decal: cpDecalSticky, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.5, 0.0, 0.6) },
@@ -786,6 +867,7 @@ export const THEMES = [
       obstacle: { map: indObstacleDiff, normalMap: indObstacleNorm, color: new THREE.Color(0.3, 0.3, 0.3) },
       tunnel:   { map: indTunnelDiff, normalMap: indTunnelNorm },
       boost:    { map: indRoadDiff, normalMap: indRoadNorm, decal: indDecalBoost, color: new THREE.Color(0.2, 0.8, 0.2), emissive: new THREE.Color(0.1, 0.4, 0.1) },
+      super_boost: { map: indRoadDiff, normalMap: indRoadNorm, decal: indDecalBoost, color: new THREE.Color(0.2, 0.8, 1.0), emissive: new THREE.Color(0.1, 0.4, 0.5) },
       refill:   { map: indRoadDiff, normalMap: indRoadNorm, decal: indDecalRefill, color: new THREE.Color(0.2, 0.6, 1.0), emissive: new THREE.Color(0.1, 0.3, 0.5) },
       burning:  { map: indRoadDiff, normalMap: indRoadNorm, decal: indDecalExplosive, color: new THREE.Color(1.0, 0.2, 0.2), emissive: new THREE.Color(0.5, 0.1, 0.1) },
       sticky:   { map: indRoadDiff, normalMap: indRoadNorm, decal: indDecalSticky, color: new THREE.Color(0.15, 0.4, 0.15), emissive: new THREE.Color(0.05, 0.15, 0.05) },
@@ -800,6 +882,7 @@ export const THEMES = [
       obstacle: { map: alienObstacleDiff, normalMap: alienObstacleNorm, color: new THREE.Color(0.4, 0.1, 0.5), roughness: 0.2, metalness: 0.8 },
       tunnel:   { map: alienTunnelDiff, normalMap: alienTunnelNorm },
       boost:    { map: alienRoadDiff, normalMap: alienRoadNorm, decal: alienDecalBoost, color: new THREE.Color(0.0, 1.0, 0.0), emissive: new THREE.Color(0.0, 1.0, 0.0), roughness: 0.1, metalness: 0.9 },
+      super_boost: { map: alienRoadDiff, normalMap: alienRoadNorm, decal: alienDecalBoost, color: new THREE.Color(0.0, 1.0, 1.0), emissive: new THREE.Color(0.0, 1.0, 1.0), roughness: 0.1, metalness: 0.9 },
       refill:   { map: alienRoadDiff, normalMap: alienRoadNorm, decal: alienDecalRefill, color: new THREE.Color(0.0, 0.5, 1.0), emissive: new THREE.Color(0.0, 0.5, 1.0), roughness: 0.1, metalness: 0.9 },
       burning:  { map: alienRoadDiff, normalMap: alienRoadNorm, decal: alienDecalExplosive, color: new THREE.Color(1.0, 0.0, 0.0), emissive: new THREE.Color(1.0, 0.0, 0.0), roughness: 0.1, metalness: 0.9 },
       sticky:   { map: alienRoadDiff, normalMap: alienRoadNorm, decal: alienDecalSticky, color: new THREE.Color(0.1, 0.5, 0.1), emissive: new THREE.Color(0.05, 0.25, 0.05), roughness: 0.4, metalness: 0.6 },
@@ -814,15 +897,31 @@ export const THEMES = [
       obstacle: { map: orgObstacleDiff, normalMap: orgObstacleNorm, color: new THREE.Color(0.2, 0.15, 0.1) },
       tunnel:   { map: orgTunnelDiff, normalMap: orgTunnelNorm },
       boost:    { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalBoost, color: new THREE.Color(0.3, 0.8, 0.3), emissive: new THREE.Color(0.1, 0.4, 0.1) },
+      super_boost: { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalBoost, color: new THREE.Color(0.2, 0.8, 1.0), emissive: new THREE.Color(0.1, 0.4, 0.5) },
       refill:   { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalRefill, color: new THREE.Color(0.2, 0.5, 0.9), emissive: new THREE.Color(0.1, 0.25, 0.45) },
       burning:  { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalExplosive, color: new THREE.Color(0.9, 0.25, 0.1), emissive: new THREE.Color(0.45, 0.1, 0.05) },
       sticky:   { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalSticky, color: new THREE.Color(0.2, 0.4, 0.2), emissive: new THREE.Color(0.05, 0.15, 0.05) },
       slippery: { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalSlippery, color: new THREE.Color(0.85, 0.85, 0.9), emissive: new THREE.Color(0.25, 0.25, 0.3) },
     }
   }
-];
+].concat(generatedThemes);
 
 export function getActiveThemeIndex(levelData) {
+  const isGeneratedPack = (typeof window !== 'undefined' && window.currentGamePack === 'generated') || (levelData && levelData.isGenerated) || (levelData && typeof levelData.level_index === 'number' && levelData.level_index >= 61);
+  
+  if (isGeneratedPack) {
+    let idx = 0;
+    if (levelData && typeof levelData.level_index === 'number') {
+      idx = levelData.level_index;
+    } else if (typeof window !== 'undefined' && typeof window.currentLevelIndex === 'number') {
+      idx = window.currentLevelIndex;
+    }
+    if (idx >= 61) {
+      idx -= 61;
+    }
+    return 4 + (Math.floor(idx / 3) % 10);
+  }
+
   if (levelData && typeof levelData.level_index === 'number') {
     return levelData.level_index % 4;
   }
@@ -832,7 +931,8 @@ export function getActiveThemeIndex(levelData) {
   return 0;
 }
 
-const loadedTextureCache = new Map();
+
+export const loadedTextureCache = new Map();
 
 function getLoadedTexture(url) {
   if (typeof document === 'undefined') return null;
@@ -867,18 +967,44 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   const behaviorKey = behavior || 'default';
   const themeBehavior = theme.behaviors[behaviorKey] || theme.behaviors.default;
 
+  const levelIndex = levelData && typeof levelData.level_index === 'number' ? levelData.level_index : (typeof window !== 'undefined' ? window.currentLevelIndex : null);
+  const isGenerated = (levelData && levelData.isGenerated) || (levelIndex >= 61) || (typeof window !== 'undefined' && window.currentGamePack === 'generated');
+
+  let activeMap = themeBehavior.map;
+  let activeNorm = themeBehavior.normalMap;
+
+  if (isGenerated && levelIndex !== null) {
+    if (behaviorKey === 'default' || behaviorKey === 'boost' || behaviorKey === 'refill' || behaviorKey === 'burning' || behaviorKey === 'sticky' || behaviorKey === 'slippery' || behaviorKey === 'slow') {
+      const roadDiff = getLevelAssetUrl(levelIndex, 'road_diffuse.png');
+      const roadNorm = getLevelAssetUrl(levelIndex, 'road_normal.png');
+      if (roadDiff) activeMap = roadDiff;
+      if (roadNorm) activeNorm = roadNorm;
+    } else if (behaviorKey === 'obstacle') {
+      const obsDiff = getLevelAssetUrl(levelIndex, 'obstacle_diffuse.png');
+      const obsNorm = getLevelAssetUrl(levelIndex, 'obstacle_normal.png');
+      if (obsDiff) activeMap = obsDiff;
+      if (obsNorm) activeNorm = obsNorm;
+    } else if (behaviorKey === 'tunnel') {
+      const tunDiff = getLevelAssetUrl(levelIndex, 'tunnel_diffuse.png');
+      const tunNorm = getLevelAssetUrl(levelIndex, 'tunnel_normal.png');
+      if (tunDiff) activeMap = tunDiff;
+      if (tunNorm) activeNorm = tunNorm;
+    }
+  }
+
   // Level 1: Try loading themed texture map and normal map from local assets
   let texture = null;
   let normalTexture = null;
   
   const isTestEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') || (typeof window !== 'undefined' && window.__vitest_worker__);
   
-  if (!isTestEnv && themeBehavior.map) {
-    texture = getLoadedTexture(themeBehavior.map);
-    if (themeBehavior.normalMap) {
-      normalTexture = getLoadedTexture(themeBehavior.normalMap);
+  if (!isTestEnv && activeMap) {
+    texture = getLoadedTexture(activeMap);
+    if (activeNorm) {
+      normalTexture = getLoadedTexture(activeNorm);
     }
   }
+
 
   // Level 2: Fall back to canvas procedural rendering if standard textures are absent/failed
   if (!texture) {
@@ -891,7 +1017,14 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
 
   // Level 3: Fall back to raw solid color material if canvas drawing is unavailable
   const isSpecial = behavior && behavior !== 'default';
-  const matColor = isSpecial && themeBehavior.color ? themeBehavior.color : baseColor;
+  let matColor = isSpecial && themeBehavior.color ? themeBehavior.color : baseColor;
+  
+  // Fix: If baseColor is near-black (palette index 0) and we have a theme color, use the theme color
+  // to prevent invisible obstacles on levels where top_color=0
+  if (behaviorKey === 'obstacle' && matColor.r + matColor.g + matColor.b < 0.05 && themeBehavior.color) {
+    matColor = themeBehavior.color;
+  }
+  
   const isGlowing = emissiveGlow || !!themeBehavior.emissive;
   const matEmissive = isSpecial && themeBehavior.emissive ? themeBehavior.emissive : (isGlowing ? glowColor || baseColor : new THREE.Color(0, 0, 0));
   
@@ -900,6 +1033,11 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
     roughness: themeBehavior.roughness !== undefined ? themeBehavior.roughness : (behavior === 'slippery' ? 0.05 : 0.65),
     metalness: themeBehavior.metalness !== undefined ? themeBehavior.metalness : (behavior === 'slippery' ? 0.95 : 0.2),
   };
+  
+  // Obstacles render both sides to prevent hollow/invisible appearance from back-facing angles
+  if (behaviorKey === 'obstacle') {
+    matParams.side = THREE.DoubleSide;
+  }
 
   if (texture) {
     matParams.map = texture;
@@ -927,6 +1065,76 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   return new THREE.MeshStandardMaterial(matParams);
 }
 
+const loadedObjCache = new Map();
+function loadAndApplyObstacleModel(mesh, levelIndex, r, c, width, height, length) {
+  const modelIndex = ((r * 13 + c * 7) % 10) + 1; // deterministically select 1 to 10
+  const filename = `obstacle_model_${modelIndex}.obj`;
+  const objUrl = getLevelObjUrl(levelIndex, filename);
+  if (!objUrl) return;
+
+  const cacheKey = `${levelIndex}_${filename}`;
+  const applyModel = (originalObj) => {
+    const obj = originalObj.clone();
+    
+    // Scale and position the OBJ model to fit the block dimensions (width, height, length)
+    // Compute the bounding box of the loaded OBJ model
+    const bbox = new THREE.Box3().setFromObject(obj);
+    const size = new THREE.Vector3();
+    bbox.getSize(size);
+    
+    const scaleX = size.x > 0 ? (width / size.x) : 1;
+    const scaleY = size.y > 0 ? (height / size.y) : 1;
+    // Limit Z scaling to prevent horizontal stretching of obstacles along the track
+    const scaleZ = size.z > 0 ? (Math.min(length, width) / size.z) : 1;
+    
+    obj.scale.set(scaleX, scaleY, scaleZ);
+    
+    // Center the model relative to its bounding box center
+    const center = new THREE.Vector3();
+    bbox.getCenter(center);
+    obj.position.set(-center.x * scaleX, -center.y * scaleY, -center.z * scaleZ);
+
+    // Apply the parent mesh material to all children
+    obj.traverse((child) => {
+      if (child.isMesh) {
+        child.material = mesh.material;
+        child.castShadow = true;
+        child.receiveShadow = true;
+        if (child.geometry) {
+          child.geometry.computeVertexNormals();
+        }
+      }
+    });
+
+    // Verify the loaded model has visible geometry before replacing the original box
+    const objBbox = new THREE.Box3().setFromObject(obj);
+    const objSize = new THREE.Vector3();
+    objBbox.getSize(objSize);
+    if (objSize.x < 0.01 || objSize.y < 0.01 || objSize.z < 0.01) {
+      // Model is degenerate/invisible — keep the original BoxGeometry
+      return;
+    }
+
+    // Keep the original BoxGeometry visible — OBJ models are decorative children added on top.
+    // Previously, disposing the box geometry caused invisible collision blocks when OBJ models
+    // rendered incorrectly (too small, wrong normals, or partial coverage of the tile area).
+    // The OBJ is added as a visible child alongside the existing box.
+    mesh.add(obj);
+  };
+
+  if (loadedObjCache.has(cacheKey)) {
+    applyModel(loadedObjCache.get(cacheKey));
+  } else {
+    const loader = new OBJLoader();
+    loader.load(objUrl, (obj) => {
+      loadedObjCache.set(cacheKey, obj);
+      applyModel(obj);
+    }, undefined, (err) => {
+      // Keep original BoxGeometry on error
+    });
+  }
+}
+
 /**
  * Process a single tile in a row and add its geometry to the scene.
  * Mutates collidables, specialTiles, and roadMeshes arrays.
@@ -937,6 +1145,9 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
   const xPos = (c - 3) * TILE_WIDTH;
   const zPos = -r * TILE_LENGTH + zOffset;
 
+  const levelIndex = levelData && typeof levelData.level_index === 'number' ? levelData.level_index : (typeof window !== 'undefined' ? window.currentLevelIndex : null);
+  const isGenerated = (levelData && levelData.isGenerated) || (levelIndex >= 61) || (typeof window !== 'undefined' && window.currentGamePack === 'generated');
+
   if (tile.ramp) {
     const startY = tile.startY !== undefined ? tile.startY : 0.0;
     const endY = tile.endY !== undefined ? tile.endY : 1.0;
@@ -946,7 +1157,8 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
     const baseColor = getPaletteColor(palette, behaviorColor);
     const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData);
 
-    const geom = createRampGeometry(TILE_WIDTH, TILE_LENGTH, 0.0, startY, endY);
+    const yBottom = Math.min(startY, endY, 0.0) - 2.0;
+    const geom = createRampGeometry(TILE_WIDTH, TILE_LENGTH, yBottom, startY, endY);
     const mesh = new THREE.Mesh(geom, material);
     mesh.position.set(xPos, 0, zPos - TILE_LENGTH / 2);
     mesh.receiveShadow = true;
@@ -966,10 +1178,93 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
       isRamp: true,
       isFlatRoad: false,
     });
+
+    // Special behavior zone for ramps
+    if (behavior) {
+      specialTiles.push({
+        boundingBox: {
+          minX: xPos - TILE_WIDTH / 2,
+          maxX: xPos + TILE_WIDTH / 2,
+          minY: Math.min(startY, endY) - 0.05,
+          maxY: Math.max(startY, endY) + 0.3,
+          minZ: zPos - TILE_LENGTH,
+          maxZ: zPos,
+        },
+        behavior,
+      });
+
+      // Decal overlay for ramps
+      const themeIndex = getActiveThemeIndex(levelData);
+      const theme = THEMES[themeIndex];
+      const themeBehavior = theme.behaviors[behavior] || theme.behaviors.default;
+      
+      let activeDecal = themeBehavior.decal;
+      if (isGenerated && levelIndex !== null) {
+        const localDecal = getLevelAssetUrl(levelIndex, `decal_${behavior}.png`);
+        if (localDecal) activeDecal = localDecal;
+      }
+
+      if (activeDecal) {
+        const decalTex = getLoadedTexture(activeDecal);
+        if (decalTex) {
+          decalTex.wrapS = THREE.RepeatWrapping;
+          decalTex.wrapT = THREE.RepeatWrapping;
+          decalTex.repeat.set(1, 1);
+
+          const decalGeom = new THREE.PlaneGeometry(TILE_WIDTH, TILE_LENGTH);
+          
+          // Rotate decal to align with the slope of the ramp
+          const slopeAngle = Math.atan2(endY - startY, TILE_LENGTH);
+          decalGeom.rotateX(-Math.PI / 2 + slopeAngle);
+
+          const decalMat = new THREE.MeshStandardMaterial({
+            map: decalTex,
+            transparent: true,
+            emissive: themeBehavior.emissive || new THREE.Color(1, 1, 1),
+            emissiveIntensity: 3.0,
+            depthWrite: false,
+          });
+
+          if (behavior === 'boost' || behavior === 'super_boost' || behavior === 'sticky' || behavior === 'burning' || behavior === 'refill') {
+            decalMat.userData = {
+              isAnimated: true,
+              speed: (behavior === 'boost' || behavior === 'super_boost') ? -2.5 : (behavior === 'sticky' ? 1.0 : 0.0),
+              pulse: behavior === 'burning' || behavior === 'refill',
+              baseIntensity: 3.0
+            };
+            if (!scene.userData.animatedDecals) {
+              scene.userData.animatedDecals = [];
+            }
+            scene.userData.animatedDecals.push(decalMat);
+          }
+
+          const decalMesh = new THREE.Mesh(decalGeom, decalMat);
+          const centerY = (startY + endY) / 2;
+          
+          // Offset slightly along normal vector to prevent z-fighting
+          const cosA = Math.cos(slopeAngle);
+          const sinA = Math.sin(slopeAngle);
+          const offset = 0.015;
+          const yOffset = offset * cosA;
+          const zOffsetLocal = -offset * sinA;
+
+          decalMesh.position.set(xPos, centerY + yOffset, zPos - TILE_LENGTH / 2 + zOffsetLocal);
+          scene.add(decalMesh);
+          roadMeshes.push(decalMesh);
+        }
+      }
+    }
     return;
   }
 
   const { height, yPos, isObstacle } = computeTileGeometry(tile);
+
+
+
+  if (isObstacle) {
+    const flatTile = { ...tile, full: false, half: false };
+    processTile(flatTile, r, c, palette, scene, collidables, specialTiles, roadMeshes, zOffset, levelData);
+  }
 
   // Under the corrected Shikadi format:
   // For flat blocks, the main color/behavior is in bottom_color (or top_color fallback in tests).
@@ -986,17 +1281,23 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
 
   const { behavior, emissiveGlow, glowColor } = classifyTileBehavior(behaviorColor);
   const baseColor = getPaletteColor(palette, behaviorColor);
-  const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData);
+  const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior || (isObstacle ? 'obstacle' : null), behaviorColor, levelData);
 
   // Main block mesh
   const geom = new THREE.BoxGeometry(TILE_WIDTH, height, TILE_LENGTH);
   adjustBoxUVs(geom, TILE_WIDTH, height, TILE_LENGTH);
   const mesh = new THREE.Mesh(geom, material);
-  mesh.position.set(xPos, yPos, zPos - TILE_LENGTH / 2);
+  // Raise obstacles slightly above road surface to eliminate z-fighting with the flat road tile beneath
+  const yOffset = isObstacle ? 0.02 : 0;
+  mesh.position.set(xPos, yPos + yOffset, zPos - TILE_LENGTH / 2);
   mesh.receiveShadow = true;
   mesh.castShadow = isObstacle;
   scene.add(mesh);
   roadMeshes.push(mesh);
+
+  if (isGenerated && isObstacle && levelIndex !== null) {
+    loadAndApplyObstacleModel(mesh, levelIndex, r, c, TILE_WIDTH, height, TILE_LENGTH);
+  }
 
   // Collision bounding box
   const halfW = TILE_WIDTH / 2;
@@ -1052,24 +1353,15 @@ function buildMergedTunnel(group, r, palette, scene, collidables, roadMeshes, ro
   const totalSpan = rightX - leftX;
   const centerX = (leftX + rightX) / 2;
 
-  // We need the height/yPos of the base tiles to position the tunnel correctly.
-  // We scan the tiles in group to find the maximum top Y surface.
-  let maxHeight = 0.0;
-  if (row) {
-    for (const col of group) {
-      const tile = row[col];
-      if (tile) {
-        let tileTopY = 0.0;
-        if (tile.full && tile.half) tileTopY = 3.0;
-        else if (tile.full) tileTopY = 2.0;
-        else if (tile.half) tileTopY = 1.0;
-        if (tileTopY > maxHeight) {
-          maxHeight = tileTopY;
-        }
-      }
-    }
+  // Determine baseY (tunnel floor elevation) from the first tile in the group
+  const firstTile = row && group.length > 0 ? row[group[0]] : null;
+  let baseY = 0;
+  if (firstTile) {
+    if (firstTile.startY !== undefined) baseY = firstTile.startY;
+    else if (firstTile.full && firstTile.half) baseY = 3.0;
+    else if (firstTile.full) baseY = 2.0;
+    else if (firstTile.half) baseY = 1.0;
   }
-  const baseY = maxHeight; 
 
   const radius = totalSpan / 2; // Perfect dynamic semi-circular radius!
   const radialSegments = 16;
@@ -1164,12 +1456,13 @@ function buildMergedTunnel(group, r, palette, scene, collidables, roadMeshes, ro
     return;
   }
 
-  // Rounded semi-cylindrical dome - replaced with dynamic OBJLoader group for the custom tunnel archway model
+  // Rounded semi-cylindrical dome - replaced with dynamic GLTFLoader group for the custom tunnel archway model
   const domeMesh = new THREE.Group();
   domeMesh.position.set(centerX, baseY, meshZ);
   
-  const objLoader = new OBJLoader();
-  objLoader.load(tunnelArchwayObjUrl, (obj) => {
+  const gltfLoader = new GLTFLoader();
+  gltfLoader.load(tunnelArchwayUrl, (gltf) => {
+    const obj = gltf.scene;
     obj.traverse((child) => {
       if (child.isMesh) {
         child.material = tunnelMaterial;
@@ -1187,22 +1480,22 @@ function buildMergedTunnel(group, r, palette, scene, collidables, roadMeshes, ro
     const targetHeight = radius;
     const targetLength = TILE_LENGTH;
 
-    obj.scale.set(
-      targetWidth / (size.x || 1),
-      targetHeight / (size.y || 1),
-      targetLength / (size.z || 1)
-    );
+    const scaleX = size.x > 0 ? (targetWidth / size.x) : 1;
+    const scaleY = size.y > 0 ? (targetHeight / size.y) : 1;
+    const scaleZ = size.z > 0 ? (targetLength / size.z) : 1;
+
+    obj.scale.set(scaleX, scaleY, scaleZ);
 
     // Align center of archway with group origin
     const center = new THREE.Vector3();
     box.getCenter(center);
-    obj.position.x = -center.x * obj.scale.x;
-    obj.position.y = -box.min.y * obj.scale.y;
-    obj.position.z = -center.z * obj.scale.z;
+    obj.position.x = -center.x * scaleX;
+    obj.position.y = -box.min.y * scaleY;
+    obj.position.z = -center.z * scaleZ;
 
     domeMesh.add(obj);
   }, undefined, (err) => {
-    console.warn("Failed to load tunnel archway OBJ, falling back to cylinder:", err);
+    console.warn("Failed to load tunnel archway GLB, falling back to cylinder:", err);
     const cylinderGeom = new THREE.CylinderGeometry(radius, radius, TILE_LENGTH, radialSegments, heightSegments, openEnded, thetaStart, thetaLength);
     const fallbackMesh = new THREE.Mesh(cylinderGeom, tunnelMaterial);
     fallbackMesh.rotation.x = Math.PI / 2;
@@ -1474,17 +1767,43 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
   }
 
   // Greedy 2D meshing loop
+  // ==========================================
+  // PASS 1: Road Layer Pass
+  // ==========================================
+  const rendered1 = Array.from({ length: numRows }, () => new Uint8Array(ROAD_WIDTH_LANES));
+  const pass1Rows = [];
   for (let r = 0; r < numRows; r++) {
     const row = rows[r];
+    const newRow = [];
     for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
       const tile = row[c];
-      if (!tile || rendered[r][c]) continue;
+      if (!tile || tile.ramp || tile.tunnel) {
+        rendered1[r][c] = 1;
+        newRow.push(null);
+      } else {
+        const { isObstacle } = computeTileGeometry(tile);
+        if (isObstacle) {
+          // Convert obstacle tiles temporarily to flat road tiles
+          newRow.push({ ...tile, full: false, half: false });
+        } else {
+          newRow.push(tile);
+        }
+      }
+    }
+    pass1Rows.push(newRow);
+  }
 
-      const { height, yPos, isObstacle } = computeTileGeometry(tile);
+  // Greedy 2D meshing loop for Pass 1
+  for (let r = 0; r < numRows; r++) {
+    for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
+      const tile = pass1Rows[r][c];
+      if (!tile || rendered1[r][c]) continue;
+
+      const { height, yPos, isObstacle } = computeTileGeometry(tile); // height: 0.45, yPos: -0.225, isObstacle: false
 
       // Find vertical (Z) contiguous run
       let r_end = r;
-      while (r_end + 1 < numRows && !rendered[r_end + 1][c] && areTilesIdentical(tile, rows[r_end + 1][c])) {
+      while (r_end + 1 < numRows && !rendered1[r_end + 1][c] && areTilesIdentical(tile, pass1Rows[r_end + 1][c])) {
         r_end++;
       }
 
@@ -1493,7 +1812,7 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
       while (c_end + 1 < ROAD_WIDTH_LANES) {
         let match = true;
         for (let check_r = r; check_r <= r_end; check_r++) {
-          if (rendered[check_r][c_end + 1] || !areTilesIdentical(tile, rows[check_r][c_end + 1])) {
+          if (rendered1[check_r][c_end + 1] || !areTilesIdentical(tile, pass1Rows[check_r][c_end + 1])) {
             match = false;
             break;
           }
@@ -1508,7 +1827,7 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
       // Mark rectangle cells as rendered
       for (let mark_r = r; mark_r <= r_end; mark_r++) {
         for (let mark_c = c; mark_c <= c_end; mark_c++) {
-          rendered[mark_r][mark_c] = 1;
+          rendered1[mark_r][mark_c] = 1;
         }
       }
 
@@ -1530,7 +1849,7 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
       const zPos_center = (zPos_start + zPos_end) / 2 - TILE_LENGTH / 2;
 
       // Behavior & Material
-      const activeColor = isObstacle ? tile.top_color : (tile.bottom_color !== 0 ? tile.bottom_color : tile.top_color);
+      const activeColor = tile.bottom_color !== 0 ? tile.bottom_color : tile.top_color;
       const behaviorColor = activeColor > 0 ? (activeColor + 1) : 0;
       const { behavior, emissiveGlow, glowColor } = classifyTileBehavior(behaviorColor);
       const baseColor = getPaletteColor(palette, behaviorColor);
@@ -1548,9 +1867,191 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
       const mesh = new THREE.Mesh(geom, material);
       mesh.position.set(xPos, yPos, zPos_center);
       mesh.receiveShadow = true;
-      mesh.castShadow = isObstacle;
+      mesh.castShadow = isObstacle; // false
       scene.add(mesh);
       roadMeshes.push(mesh);
+
+      // Special behavior zone (single combined zone)
+      if (behavior) {
+        specialTiles.push({
+          boundingBox: {
+            minX: xPos - width / 2,
+            maxX: xPos + width / 2,
+            minY: yPos + height / 2 - 0.05,
+            maxY: yPos + height / 2 + 0.3,
+            minZ: zPos_center - length / 2,
+            maxZ: zPos_center + length / 2,
+          },
+          behavior,
+        });
+
+        // ── DECAL OVERLAY SYSTEM ──
+        const themeIndex = getActiveThemeIndex(levelData);
+        const theme = THEMES[themeIndex];
+        const themeBehavior = theme.behaviors[behavior] || theme.behaviors.default;
+        
+        let activeDecal = themeBehavior.decal;
+        const levelIndex = levelData && typeof levelData.level_index === 'number' ? levelData.level_index : (typeof window !== 'undefined' ? window.currentLevelIndex : null);
+        const isGenerated = (levelData && levelData.isGenerated) || (levelIndex >= 61) || (typeof window !== 'undefined' && window.currentGamePack === 'generated');
+
+        if (isGenerated && levelIndex !== null) {
+          const localDecal = getLevelAssetUrl(levelIndex, `decal_${behavior}.png`);
+          if (localDecal) activeDecal = localDecal;
+        }
+
+        if (activeDecal) {
+          const decalTex = getLoadedTexture(activeDecal);
+          if (decalTex) {
+            decalTex.wrapS = THREE.RepeatWrapping;
+            decalTex.wrapT = THREE.RepeatWrapping;
+            decalTex.repeat.set(spanX, spanZ);
+
+            const decalGeom = new THREE.PlaneGeometry(width, length);
+            decalGeom.rotateX(-Math.PI / 2);
+
+            const decalMat = new THREE.MeshStandardMaterial({
+              map: decalTex,
+              transparent: true,
+              emissive: themeBehavior.emissive || new THREE.Color(1, 1, 1),
+              emissiveIntensity: 3.0,
+              depthWrite: false,
+            });
+
+            // Tag as animated decal for the update loop in graphics.js
+            if (behavior === 'boost' || behavior === 'super_boost' || behavior === 'sticky' || behavior === 'burning' || behavior === 'refill') {
+              decalMat.userData = {
+                isAnimated: true,
+                speed: (behavior === 'boost' || behavior === 'super_boost') ? -2.5 : (behavior === 'sticky' ? 1.0 : 0.0),
+                pulse: behavior === 'burning' || behavior === 'refill',
+                baseIntensity: 3.0
+              };
+              if (!scene.userData.animatedDecals) {
+                scene.userData.animatedDecals = [];
+              }
+              scene.userData.animatedDecals.push(decalMat);
+            }
+
+            const decalMesh = new THREE.Mesh(decalGeom, decalMat);
+            decalMesh.position.set(xPos, yPos + height / 2 + 0.005, zPos_center);
+            scene.add(decalMesh);
+            roadMeshes.push(decalMesh);
+          }
+        }
+      }
+    }
+  }
+
+  // ==========================================
+  // PASS 2: Obstacle Layer Pass
+  // ==========================================
+  const rendered2 = Array.from({ length: numRows }, () => new Uint8Array(ROAD_WIDTH_LANES));
+  const pass2Rows = [];
+  for (let r = 0; r < numRows; r++) {
+    const row = rows[r];
+    const newRow = [];
+    for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
+      const tile = row[c];
+      if (!tile || tile.ramp || tile.tunnel) {
+        rendered2[r][c] = 1;
+        newRow.push(null);
+      } else {
+        const { isObstacle } = computeTileGeometry(tile);
+        if (!isObstacle) {
+          rendered2[r][c] = 1; // skip flat road tiles initially
+          newRow.push(null);
+        } else {
+          newRow.push(tile);
+        }
+      }
+    }
+    pass2Rows.push(newRow);
+  }
+
+  // Greedy 2D meshing loop for Pass 2
+  for (let r = 0; r < numRows; r++) {
+    for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
+      const tile = pass2Rows[r][c];
+      if (!tile || rendered2[r][c]) continue;
+
+      const { height, yPos, isObstacle } = computeTileGeometry(tile); // isObstacle is true
+
+      // Find vertical (Z) contiguous run
+      let r_end = r;
+      while (r_end + 1 < numRows && !rendered2[r_end + 1][c] && areTilesIdentical(tile, pass2Rows[r_end + 1][c])) {
+        r_end++;
+      }
+
+      // Find horizontal (X) expansion of matching columns for the Z-interval [r, r_end]
+      let c_end = c;
+      while (c_end + 1 < ROAD_WIDTH_LANES) {
+        let match = true;
+        for (let check_r = r; check_r <= r_end; check_r++) {
+          if (rendered2[check_r][c_end + 1] || !areTilesIdentical(tile, pass2Rows[check_r][c_end + 1])) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          c_end++;
+        } else {
+          break;
+        }
+      }
+
+      // Mark rectangle cells as rendered
+      for (let mark_r = r; mark_r <= r_end; mark_r++) {
+        for (let mark_c = c; mark_c <= c_end; mark_c++) {
+          rendered2[mark_r][mark_c] = 1;
+        }
+      }
+
+      // We now build the single combined block!
+      const spanX = c_end - c + 1;
+      const spanZ = r_end - r + 1;
+      
+      const width = spanX * TILE_WIDTH;
+      const length = spanZ * TILE_LENGTH;
+
+      // Position center X
+      const leftX = (c - 3) * TILE_WIDTH;
+      const rightX = (c_end - 3) * TILE_WIDTH;
+      const xPos = (leftX + rightX) / 2;
+
+      // Position center Z
+      const zPos_start = -r * TILE_LENGTH + zOffset;
+      const zPos_end = -r_end * TILE_LENGTH + zOffset;
+      const zPos_center = (zPos_start + zPos_end) / 2 - TILE_LENGTH / 2;
+
+      // Behavior & Material
+      const activeColor = tile.top_color;
+      const behaviorColor = activeColor > 0 ? (activeColor + 1) : 0;
+      const { behavior, emissiveGlow, glowColor } = classifyTileBehavior(behaviorColor);
+      const baseColor = getPaletteColor(palette, behaviorColor);
+      
+      const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior || (isObstacle ? 'obstacle' : null), behaviorColor, levelData);
+
+      // Rounded Box Geometry only on the merged block boundaries!
+      // Bevel radius is scaled dynamically.
+      const bevelRadius = Math.min(0.08, height * 0.25);
+      const geom = new RoundedBoxGeometry(width, height, length, 3, bevelRadius);
+      
+      // Apply seamless world-space UV coordinate mapping
+      adjustBoxUVs(geom, width, height, length, xPos, zPos_center, yPos);
+
+      const mesh = new THREE.Mesh(geom, material);
+      // Raise obstacles slightly above road surface to eliminate z-fighting with Pass 1 road beneath
+      const yOffset = isObstacle ? 0.02 : 0;
+      mesh.position.set(xPos, yPos + yOffset, zPos_center);
+      mesh.receiveShadow = true;
+      mesh.castShadow = isObstacle; // true
+      scene.add(mesh);
+      roadMeshes.push(mesh);
+
+      const levelIndex = levelData && typeof levelData.level_index === 'number' ? levelData.level_index : (typeof window !== 'undefined' ? window.currentLevelIndex : null);
+      const isGenerated = (levelData && levelData.isGenerated) || (levelIndex >= 61) || (typeof window !== 'undefined' && window.currentGamePack === 'generated');
+      if (isGenerated && isObstacle && levelIndex !== null) {
+        loadAndApplyObstacleModel(mesh, levelIndex, r, c, width, height, length);
+      }
 
       // Bounding box collisions (single combined box)
       const halfW = width / 2;
@@ -1590,8 +2091,17 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
         const theme = THEMES[themeIndex];
         const themeBehavior = theme.behaviors[behavior] || theme.behaviors.default;
         
-        if (themeBehavior.decal) {
-          const decalTex = getLoadedTexture(themeBehavior.decal);
+        let activeDecal = themeBehavior.decal;
+        const levelIndex = levelData && typeof levelData.level_index === 'number' ? levelData.level_index : (typeof window !== 'undefined' ? window.currentLevelIndex : null);
+        const isGenerated = (levelData && levelData.isGenerated) || (levelIndex >= 61) || (typeof window !== 'undefined' && window.currentGamePack === 'generated');
+
+        if (isGenerated && levelIndex !== null) {
+          const localDecal = getLevelAssetUrl(levelIndex, `decal_${behavior}.png`);
+          if (localDecal) activeDecal = localDecal;
+        }
+
+        if (activeDecal) {
+          const decalTex = getLoadedTexture(activeDecal);
           if (decalTex) {
             decalTex.wrapS = THREE.RepeatWrapping;
             decalTex.wrapT = THREE.RepeatWrapping;
@@ -1609,10 +2119,10 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
             });
 
             // Tag as animated decal for the update loop in graphics.js
-            if (behavior === 'boost' || behavior === 'sticky' || behavior === 'burning' || behavior === 'refill') {
+            if (behavior === 'boost' || behavior === 'super_boost' || behavior === 'sticky' || behavior === 'burning' || behavior === 'refill') {
               decalMat.userData = {
                 isAnimated: true,
-                speed: behavior === 'boost' ? -2.5 : (behavior === 'sticky' ? 1.0 : 0.0),
+                speed: (behavior === 'boost' || behavior === 'super_boost') ? -2.5 : (behavior === 'sticky' ? 1.0 : 0.0),
                 pulse: behavior === 'burning' || behavior === 'refill',
                 baseIntensity: 3.0
               };
@@ -1759,4 +2269,68 @@ export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInf
 
     processChunk();
   });
+}
+
+export function disposeUnusedThemes(activeThemeIndex) {
+  const activeUrls = new Set();
+  const theme = THEMES[activeThemeIndex];
+  if (theme && theme.behaviors) {
+    for (const behaviorKey in theme.behaviors) {
+      const behavior = theme.behaviors[behaviorKey];
+      if (behavior) {
+        if (typeof behavior.map === 'string') activeUrls.add(behavior.map);
+        if (typeof behavior.normalMap === 'string') activeUrls.add(behavior.normalMap);
+        if (typeof behavior.decal === 'string') activeUrls.add(behavior.decal);
+      }
+    }
+  }
+
+  if (customRoadNormalUrl) {
+    activeUrls.add(customRoadNormalUrl);
+  }
+
+  const currentLevelIndex = typeof window !== 'undefined' ? window.currentLevelIndex : undefined;
+  if (typeof currentLevelIndex === 'number' && currentLevelIndex >= 61) {
+    const assetNames = [
+      'road_diffuse.png',
+      'road_normal.png',
+      'obstacle_diffuse.png',
+      'obstacle_normal.png',
+      'tunnel_diffuse.png',
+      'tunnel_normal.png'
+    ];
+    for (const assetName of assetNames) {
+      const url = getLevelAssetUrl(currentLevelIndex, assetName);
+      if (url) {
+        activeUrls.add(url);
+      }
+    }
+  }
+
+  // Iterate over loadedTextureCache
+  for (const [url, texture] of loadedTextureCache.entries()) {
+    if (!activeUrls.has(url)) {
+      if (texture && typeof texture.dispose === 'function') {
+        texture.dispose();
+      }
+      loadedTextureCache.delete(url);
+    }
+  }
+
+  // Iterate over textureCache
+  for (const [key, texture] of textureCache.entries()) {
+    let containsActiveUrl = false;
+    for (const url of activeUrls) {
+      if (key.includes(url)) {
+        containsActiveUrl = true;
+        break;
+      }
+    }
+    if (!containsActiveUrl) {
+      if (texture && typeof texture.dispose === 'function') {
+        texture.dispose();
+      }
+      textureCache.delete(key);
+    }
+  }
 }

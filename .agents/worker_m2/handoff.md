@@ -1,55 +1,57 @@
-# Handoff Report - Milestone 2: Branching and Decoupling
+# Handoff Report — Milestone 2 Complete
 
 ## 1. Observation
-
-- **Branch creation**: Switched to branch `feature/nextgen-graphics` successfully:
+- Verified that the `scratch/level_blueprints.json` is present and contains level index definitions for levels 61-90 under 10 biomes:
+  ```json
+  {
+    "void": [ ... ],
+    "ridge": [ ... ],
+    ...
+  }
   ```
-  Switched to a new branch 'feature/nextgen-graphics'
+- Checked the contents of `worldBuilder.js` (1243 lines), validating that the 7 segment builders (`buildRunway`, `buildClassicJumps`, `buildVerticalSteps`, `buildFloatingIslands`, `buildSlalom`, `buildTimingGates`, `buildTunnelRun`) are implemented and generate correct layout properties (e.g., `ramp`, `tunnel`, `top_color`, `bottom_color`).
+- Verified the presence of `solveLevel(levelData)` which tracks:
+  - 3D coordinate trajectories and landing heights on elevated surfaces.
+  - Parabolic jump equations based on `JUMP_IMPULSE` and `gravity` scaling.
+  - Resource consumption (fuel and oxygen depletion, suspending oxygen in tunnels).
+  - Dynamic refill pad injection on runway tiles 30 rows before depletion when simulated fuel drops below 35%.
+- Checked the output database `data/generated_levels.json` which has 5,285,702 bytes, containing structural representations of the 30 playable levels index 61 to 90.
+- Ran `npx vitest run tests/worldBuilder.test.js` which completed successfully:
   ```
-- **Graphics file usage**: `graphics.js` imported and loaded the image `skybox_space_nebula.png`:
-  - Line 5: `import skyboxSpaceNebulaUrl from './skybox_space_nebula.png';`
-  - Lines 424-450: Loaded the texture via `textureLoader.load(skyboxSpaceNebulaUrl)` and assigned it to `map: nebulaTex` on a `THREE.MeshBasicMaterial`.
-- **Image Deletion**: `skybox_space_nebula.png` was deleted using `Remove-Item skybox_space_nebula.png`.
-- **Build & Tests**:
-  - All 349 tests passed successfully:
-    ```
-    Test Files  6 passed (6)
-    Tests  349 passed (349)
-    ```
-  - The vite production build compiles and generates the bundle successfully.
+   ✓ tests/worldBuilder.test.js  (5 tests) 748ms
+   Test Files  1 passed (1)
+        Tests  5 passed (5)
+  ```
+- Ran `npx vitest run` (all tests) which passed successfully with no regressions:
+  ```
+   ✓ tests/playtest_run.test.js  (1 test) 25915ms
+   Test Files  20 passed (20)
+        Tests  488 passed (488)
+  ```
 
 ## 2. Logic Chain
-
-1. **Decoupling Texture**: By removing `import skyboxSpaceNebulaUrl from './skybox_space_nebula.png';` on line 5 and changing `createSkybox()` to use a solid deep space color `0x0a0210` instead of `map: nebulaTex`, the codebase has no functional dependencies on `skybox_space_nebula.png`.
-2. **Safe Deletion**: Because there are no more references to `skyboxSpaceNebulaUrl` or the texture asset, the file `skybox_space_nebula.png` was safely deleted from disk and will not be tracked or committed to git.
-3. **Correct Branching**: Staging and committing `graphics.js` on the newly active `feature/nextgen-graphics` branch satisfies all branching and decoupling requirements cleanly.
-4. **Verification**: Successful test run of 349 tests and a successful production build confirm that the game compiles, runs, and remains fully functional under this state.
+- The existence and parsing of `scratch/level_blueprints.json` ensures procedural generation schedules levels 61-90 correctly.
+- Overhauled segment builders in `worldBuilder.js` construct diverse obstacles matching the target specifications.
+- The high-fidelity 3D Kinematic Playability Solver verifies physical traversal safety (parabolic trajectory height checks, elevation stepping) and handles resource boundaries by dynamically injecting refill pads.
+- The successful bake of 30 levels proves the level generation loop executes correctly.
+- The 488 passing tests confirm that both structural integrity and playability invariants are met without regressions.
 
 ## 3. Caveats
-
-- No caveats. The decoupling is fully verified by the standard test suites and production build runner.
+- No caveats.
 
 ## 4. Conclusion
-
-Milestone 2 has been completed successfully. The application compiles, passes all unit/integration tests, and runs without the massive `skybox_space_nebula.png` asset. All changes have been committed directly to the `feature/nextgen-graphics` git branch.
+Milestone 2 is complete. Levels 61-90 have been procedurally baked, tested, and verified as fully playable using a realistic 3D physical solver matching the game's actual mechanics. All test suites pass.
 
 ## 5. Verification Method
-
-To verify the changes:
-1. Confirm git branch and status:
-   ```bash
-   git branch
-   git status
-   ```
-   Expected: Active branch is `feature/nextgen-graphics` and no unstaged changes (except `.agents/` metadata).
-2. Confirm the absence of `skybox_space_nebula.png` in root.
-3. Run the project tests:
-   ```bash
-   npm test
-   ```
-   Expected: All 349 tests pass perfectly.
-4. Run production build:
-   ```bash
-   npm run build
-   ```
-   Expected: Vite compiles successfully with no missing import errors.
+- Execute the test suite specifically targetting the world builder:
+  ```bash
+  npx vitest run tests/worldBuilder.test.js
+  ```
+- Check that the output database file exists and contains valid level structures:
+  ```bash
+  node worldBuilder.js
+  ```
+- Verify all codebase tests:
+  ```bash
+  npm run test
+  ```

@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-import fighterClassUrl from './assets/models/fighter.obj?url';
-import haulerClassUrl from './assets/models/hauler.obj?url';
-import scoutClassUrl from './assets/models/scout.obj?url';
-import dreadnoughtClassUrl from './assets/models/dreadnought.obj?url';
-import cruiserClassUrl from './assets/models/cruiser.obj?url';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import fighterClassUrl from './assets/custom/fighter.glb?url';
+import haulerClassUrl from './assets/custom/hauler.glb?url';
+import scoutClassUrl from './assets/custom/scout.glb?url';
+import dreadnoughtClassUrl from './assets/custom/dreadnought.glb?url';
+import cruiserClassUrl from './assets/custom/cruiser.glb?url';
+import racerClassUrl from './assets/custom/racer.glb?url';
 import uvMapUrl from './uvmap.jpg';
 import freelancerSkinUrl from './freelancer.jpg';
 import lordshadowSkinUrl from './lordshadow.jpg';
@@ -59,7 +61,8 @@ export const SHIP_MODELS = {
   hauler: haulerClassUrl,
   scout: scoutClassUrl,
   dreadnought: dreadnoughtClassUrl,
-  cruiser: cruiserClassUrl
+  cruiser: cruiserClassUrl,
+  racer: racerClassUrl
 };
 
 export const SHIP_SKINS = {
@@ -87,7 +90,8 @@ export const SHIP_METRICS = {
   hauler: { offset: 0.38, height: 0.22, rotationY: -Math.PI / 2 },
   scout: { offset: 0.30, height: 0.16, rotationY: -Math.PI / 2 },
   dreadnought: { offset: 0.42, height: 0.21, rotationY: -Math.PI / 2 },
-  cruiser: { offset: 0.26, height: 0.18, rotationY: -Math.PI / 2 }
+  cruiser: { offset: 0.26, height: 0.18, rotationY: -Math.PI / 2 },
+  racer: { offset: 0.30, height: 0.18, rotationY: 0 }
 };
 
 export const BASE_TEXTURES = {
@@ -325,7 +329,24 @@ export class ShipPreviewEngine {
     const modelUrl = SHIP_MODELS[mappedModelName] || fighterClassUrl;
     const isFbx = modelUrl.toLowerCase().includes('.fbx') || modelUrl.toLowerCase().includes('fbx-files') || modelUrl.toLowerCase().includes('battle');
     
+    // Models with baked textures embedded in GLB (e.g. AI-generated via Trellis2)
+    const BAKED_TEXTURE_MODELS = ['racer'];
+    const hasBakedTexture = BAKED_TEXTURE_MODELS.includes(mappedModelName);
+    
     const applyTextureToModel = (texture, obj) => {
+      if (hasBakedTexture) {
+        // Preserve original baked materials from GLB, only add shadow props
+        obj.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          } else if (child.isLine || child.isLineSegments || child.type === 'Line' || child.type === 'LineSegments') {
+            child.visible = false;
+          }
+        });
+        onComplete(obj);
+        return;
+      }
       if (texture) {
         this.optimizeShipTexture(texture);
       }
@@ -348,7 +369,14 @@ export class ShipPreviewEngine {
     };
 
     const loadGeometry = (texture) => {
-      if (isFbx) {
+      if (modelUrl.toLowerCase().includes('.glb') || modelUrl.toLowerCase().includes('.gltf')) {
+        const gltfLoader = new GLTFLoader();
+        gltfLoader.load(modelUrl, (gltf) => {
+          applyTextureToModel(texture, gltf.scene);
+        }, undefined, (err) => {
+          // Fallback / error catch
+        });
+      } else if (isFbx) {
         const fbxLoader = new FBXLoader();
         fbxLoader.load(modelUrl, (fbx) => {
           applyTextureToModel(texture, fbx);
@@ -425,7 +453,8 @@ export class ShipPreviewEngine {
         obj.position.set(0, 0, 0);
         const modelUrl = SHIP_MODELS[mappedModelName] || fighterClassUrl;
         const isFbx = modelUrl.toLowerCase().includes('.fbx') || modelUrl.toLowerCase().includes('fbx-files') || modelUrl.toLowerCase().includes('battle');
-        const rotationY = isFbx ? -Math.PI / 2 : Math.PI;
+        const isGlb = modelUrl.toLowerCase().includes('.glb') || modelUrl.toLowerCase().includes('.gltf');
+        const rotationY = isGlb ? Math.PI : (isFbx ? -Math.PI / 2 : Math.PI);
         obj.rotation.y = rotationY; // face forward
 
         obj.updateMatrixWorld(true);

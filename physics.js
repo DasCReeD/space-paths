@@ -110,9 +110,11 @@ export class PhysicsEngine {
     // Active special behaviors
     this.activeEffects = {
       boost: false,
+      superBoost: false,
       sticky: false,
       slippery: false,
-      burning: false
+      burning: false,
+      highJump: false
     };
     
     this.oxygen = 100;
@@ -179,9 +181,11 @@ export class PhysicsEngine {
     
     this.activeEffects = {
       boost: false,
+      superBoost: false,
       sticky: false,
       slippery: false,
-      burning: false
+      burning: false,
+      highJump: false
     };
 
     this.triggerRefillAudio = false;
@@ -220,14 +224,14 @@ export class PhysicsEngine {
       this.groundHeight = 1.0;
       
       // Update engine states
-      this.activeEffects = { boost: false, sticky: false, slippery: false, burning: false };
+      this.activeEffects = { boost: false, superBoost: false, sticky: false, slippery: false, burning: false, highJump: false };
       return;
     }
 
     // 1. Consume Fuel & Oxygen
     if (Math.abs(this.velocity.z) > 0.5) {
       const rate = this.fuelConsumptionRate !== undefined ? this.fuelConsumptionRate : 25.0;
-      this.fuel = Math.max(0, this.fuel - dt * rate * (this.activeEffects.boost ? 2.5 : 1.0));
+      this.fuel = Math.max(0, this.fuel - dt * rate * ((this.activeEffects.boost || this.activeEffects.superBoost) ? 2.5 : 1.0));
     }
     this.oxygen = Math.max(0, this.oxygen - dt * 1.0); // 1 unit per second
 
@@ -253,7 +257,11 @@ export class PhysicsEngine {
 
     // 3. Forward Movement Acceleration / Drag
     let targetMaxSpeed = this.maxSpeedNormal;
-    if (this.activeEffects.boost) {
+    if (this.activeEffects.superBoost) {
+      targetMaxSpeed = 96.0; // Triple speed!
+      // Super boost forces forward acceleration extremely aggressively
+      this.velocity.z -= this.accelForward * 5.0 * dt;
+    } else if (this.activeEffects.boost) {
       targetMaxSpeed = this.maxSpeedBoost;
       // Boost forces forward acceleration
       this.velocity.z -= this.accelForward * 2.5 * dt;
@@ -267,7 +275,7 @@ export class PhysicsEngine {
 
     // Process player forward controls (positive/negative Z)
     // Note: Z-axis is negative for forward movement
-    if (keyboard.forward && !this.activeEffects.boost) {
+    if (keyboard.forward && !this.activeEffects.boost && !this.activeEffects.superBoost) {
       if (this.velocity.z > -targetMaxSpeed) {
         this.velocity.z -= this.accelForward * dt;
       }
@@ -361,7 +369,7 @@ export class PhysicsEngine {
     const isNearGround = this.velocity.y < 0 && this.groundHeight > -5.0 && (this.position.y - this.groundHeight) <= (this.settings.coyoteTimeBuffer !== undefined ? this.settings.coyoteTimeBuffer : 0.25);
     const wantsToJump = keyboard.jump || (keyboard.spacePressed !== undefined ? keyboard.spacePressed : false);
     if (wantsToJump && (this.onGround || this.isRebounding || isNearGround)) {
-      this.velocity.y = this.jumpImpulse * (this.settings.jumpFactor !== undefined ? this.settings.jumpFactor : 1.0);
+      this.velocity.y = this.jumpImpulse * (this.settings.jumpFactor !== undefined ? this.settings.jumpFactor : 1.0) * (this.activeEffects.highJump ? 1.7 : 1.0);
       this.onGround = false;
       this.isRebounding = false;
       this.justRebounded = false;
@@ -411,30 +419,101 @@ export class PhysicsEngine {
         const zOverlap = shipBox.maxZ > block.minZ && shipBox.minZ < block.maxZ;
 
         if (xOverlap && zOverlap) {
-          // Side collision check: slide along it if steering in from other lanes while too low
-          const blockCenterX = (block.minX + block.maxX) / 2;
-          const isSideCollision = Math.abs(this.position.x - blockCenterX) > 0.35;
+          // 1. Frontal Collision (Crash) check
+          // Only possible if the ship's center has not entered the ramp yet
+          if (this.position.z > block.maxZ) {
+            // Check if there is a connecting block preceding this ramp in collidables
+            let isPrecededByConnecting = levelInfo.collidables.some(other => {
+              const matchesZ = Math.abs(other.minZ - block.maxZ) < 0.05;
+              const matchesX = shipBox.maxX > other.minX && shipBox.minX < other.maxX;
+              if (matchesZ && matchesX) {
+                const otherHeight = other.isRamp ? other.endY : (other.maxY || 0.0);
+                return Math.abs(otherHeight - block.startY) < 0.05;
+              }
+              return false;
+            });
 
-          let isSideHit = false;
-          if (isSideCollision && this.position.y < rampHeight - 0.1) {
-            const halfW = SHIP_WIDTH / 2;
-            const shipCenterX = this.position.x;
-            const blockCenterX = (block.minX + block.maxX) / 2;
-            if (shipCenterX > blockCenterX) {
-              this.position.x = block.maxX + halfW + 0.01;
-            } else {
-              this.position.x = block.minX - halfW - 0.01;
+            // Also check if the preceding tile is a standard flat road tile at 0.0
+            if (!isPrecededByConnecting && Math.abs(block.startY) < 0.05) {
+              const maxLeft = -TOTAL_ROAD_WIDTH / 2;
+              const precedingZ = block.maxZ + 0.1; // point inside preceding row
+              const rIdx = Math.floor(-precedingZ / TILE_LENGTH);
+              const cIdx = Math.floor((this.position.x - maxLeft) / TILE_WIDTH);
+              const originalLevelData = window.currentLevelData;
+              if (originalLevelData && originalLevelData.rows[rIdx]) {
+                const tile = originalLevelData.rows[rIdx][cIdx];
+                if (tile !== null && !tile.full && !tile.half) {
+                  const tileHeight = tile.ramp ? tile.endY : 0.0;
+                  if (Math.abs(tileHeight - block.startY) < 0.05) {
+                    isPrecededByConnecting = true;
+                  }
+                }
+              }
             }
-            this.velocity.x = 0;
-            this.triggerWallCollisionAudio = true;
-            shipBox = this.getShipBox();
-            isSideHit = true;
+
+            const isBelowEntrance = this.position.y < block.startY - 0.15;
+            if (isBelowEntrance && !isPrecededByConnecting) {
+              if (this.difficulty === 'easy') {
+                // Bounce back instead of dying!
+                this.velocity.z = this.settings.easyCollisionBounceVel !== undefined ? this.settings.easyCollisionBounceVel : 10.0; // Positive Z is backward
+                this.position.z += this.settings.easyCollisionBounceDist !== undefined ? this.settings.easyCollisionBounceDist : 1.2; // Push back to clear block bounding box
+                this.triggerWallCollisionAudio = true; // Scrape/scrape wall audio as bounce indicator
+                this.velocity.x = 0;
+                
+                // Update the ship's bounding box
+                shipBox = this.getShipBox();
+              } else {
+                this.isDead = true;
+                this.deathReason = 'COLLIDED WITH BLOCK';
+                this.velocity.set(0, 0, 0);
+                return;
+              }
+            }
           }
 
-          // Only snap and ride on the ramp if we did not hit its side
-          if (!isSideHit) {
-            const aboveRamp = this.position.y <= rampHeight + 0.35;
-            if (this.velocity.y <= 0 && aboveRamp) {
+          // 2. Side Collision Check
+          // Only possible if ship's center is within the ramp's Z range
+          let isSideHit = false;
+          if (this.position.z <= block.maxZ && this.position.z >= block.minZ) {
+            const blockCenterX = (block.minX + block.maxX) / 2;
+            const isSideCollision = Math.abs(this.position.x - blockCenterX) > 0.35;
+
+            if (isSideCollision && this.position.y < rampHeight - 0.1) {
+              // Check if ship is currently riding an adjacent ramp of the same slope
+              const isSteeringRight = this.position.x > blockCenterX;
+              const isOnAdjacentRamp = levelInfo.collidables.some(other => 
+                other.isRamp && 
+                other !== block &&
+                other.startY === block.startY && 
+                other.endY === block.endY && 
+                other.minZ === block.minZ && 
+                other.maxZ === block.maxZ && 
+                (isSteeringRight ? (Math.abs(other.minX - block.maxX) < 0.01) : (Math.abs(other.maxX - block.minX) < 0.01))
+              );
+
+              if (!isOnAdjacentRamp) {
+                const halfW = SHIP_WIDTH / 2;
+                if (this.position.x > blockCenterX) {
+                  this.position.x = block.maxX + halfW + 0.01;
+                } else {
+                  this.position.x = block.minX - halfW - 0.01;
+                }
+                this.velocity.x = 0;
+                this.triggerWallCollisionAudio = true;
+                shipBox = this.getShipBox();
+                isSideHit = true;
+              }
+            }
+          }
+
+          // 3. Riding / Snapping onto the ramp
+          // Snap if we haven't hit the side and we are either on the ramp or transitioning off the top
+          if (!isSideHit && this.position.z <= block.maxZ) {
+            const isAboveRampSurface = this.position.y > rampHeight + 0.01;
+            const isJumping = this.velocity.y > 0;
+            
+            // Snap to ramp if not climbing/flying above it
+            if (!(isJumping && isAboveRampSurface)) {
               this.position.y = rampHeight;
               this.groundHeight = rampHeight;
               this.onGround = true;
@@ -469,13 +548,11 @@ export class PhysicsEngine {
             if (!isSideCollision) {
               const isPrecededByRamp = levelInfo.collidables.some(other => 
                 other.isRamp && 
-                Math.abs(other.minX - block.minX) < 0.1 && 
-                Math.abs(other.maxX - block.maxX) < 0.1 && 
-                Math.abs(other.minZ - block.maxZ) < 0.1
+                Math.abs(other.minZ - block.maxZ) < 0.1 &&
+                this.position.x >= other.minX - 0.2 && this.position.x <= other.maxX + 0.2
               );
               const isOnRamp = isPrecededByRamp && 
-                this.position.x > block.minX && this.position.x < block.maxX &&
-                this.position.z >= block.maxZ && this.position.z <= block.maxZ + TILE_LENGTH + 0.1;
+                this.position.z >= block.maxZ - 0.5 && this.position.z <= block.maxZ + TILE_LENGTH + 0.1;
 
               if (!isOnRamp) {
                 if (this.difficulty === 'easy') {
@@ -629,9 +706,11 @@ export class PhysicsEngine {
 
     // Reset temporary tile effects (they only last while touching!)
     this.activeEffects.boost = false;
+    this.activeEffects.superBoost = false;
     this.activeEffects.sticky = false;
     this.activeEffects.slippery = false;
     this.activeEffects.burning = false;
+    this.activeEffects.highJump = false;
 
     for (const tile of specialTiles) {
       const box = tile.boundingBox;
@@ -643,12 +722,16 @@ export class PhysicsEngine {
         const behavior = tile.behavior;
         if (behavior === 'boost') {
           this.activeEffects.boost = true;
+        } else if (behavior === 'super_boost') {
+          this.activeEffects.superBoost = true;
         } else if (behavior === 'sticky') {
           this.activeEffects.sticky = true;
         } else if (behavior === 'slippery') {
           this.activeEffects.slippery = true;
         } else if (behavior === 'burning') {
           this.activeEffects.burning = true;
+        } else if (behavior === 'high_jump') {
+          this.activeEffects.highJump = true;
         } else if (behavior === 'refill') {
           // Refills occur instantaneously, adding fuel and resetting oxygen to max
           if (this.fuel < 100 * 50) {

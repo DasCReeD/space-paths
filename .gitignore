@@ -20,3 +20,8 @@ Thumbs.db
 
 # Large download zips
 top100-large.zip
+
+# Environment Secrets
+.env
+.env.local
+.env.*

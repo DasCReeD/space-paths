@@ -1,102 +1,214 @@
-# SkyRoads WebGL Code Review Report
+# SkyRoads WebGL — Code Review Report
 
-## Scorecard Rating
-
-This section rates the core files against the **Global User Rules**:
-1. **Immutability**: Creating new objects rather than mutating in-place (Spread operators, immutable state updates).
-2. **Focus**: Keeping files small (<800 lines, focused modules, extracting utility functions).
-3. **Error Handling**: Comprehensive and explicit try-catch blocks at system/module boundaries and async code.
-4. **Input Validation**: Schema-based validation (e.g. Zod) or proactive validation at system boundaries.
-5. **No `console` Statements**: No `console.log` or similar debug output in production files.
-
-| File | Immutability | Focus / File Size | Error Handling | Input Validation | No console.log | Overall Grade |
-|---|---|---|---|---|---|---|
-| **app.js** | ❌ **FAIL** (High Mutation) | ❌ **FAIL** (877 lines, needs splitting) | ⚠️ **PARTIAL** (some try-catch, but missing at async boundaries) | ❌ **FAIL** (No system boundary schema check) | 🍏 **PASS** | **D** |
-| **graphics.js** | ❌ **FAIL** (High Mutation) | ❌ **FAIL** (1,455 lines, extremely oversized) | ⚠️ **PARTIAL** (silent catches, no user alerts) | ❌ **FAIL** (No boundary validation) | 🍏 **PASS** | **D-** |
-| **physics.js** | ❌ **FAIL** (High Mutation) | 🍏 **PASS** (541 lines) | ❌ **FAIL** (No try-catch blocks) | ❌ **FAIL** (No keyboard/level input validation) | 🍏 **PASS** | **D** |
-| **levelLoader.js**| ❌ **FAIL** (High Mutation) | ❌ **FAIL** (846 lines, oversized) | ⚠️ **PARTIAL** (try-catches on texture loading, none on builders) | ❌ **FAIL** (No level schema validation) | 🍏 **PASS** | **D+** |
-| **audio.js** | ❌ **FAIL** (State Mutation) | 🍏 **PASS** (418 lines) | ⚠️ **PARTIAL** (several try-catches but has console.warn/error) | ❌ **FAIL** (No envelope input validation) | ❌ **FAIL** (Uses `console.warn` and `console.error`) | **D** |
+> **Last updated:** 2026-06-04
+> Assessment against project coding standards.
 
 ---
 
-## Specific, Line-by-Line Observations
+## Executive Summary
 
-### 1. Immutability Violations (CRITICAL RULE VIOLATION)
-The codebase extensively relies on mutating state in-place, modifying property values, or updating vector instances directly.
-
-- **app.js**:
-  - `this.tempSelectedModel = ...`, `this.tempSelectedSkin = ...` (mutations on the class instance rather than returning updated state descriptors).
-  - Lines 441-450: In-place removal and mutation of Three.js materials and geometries.
-  - Lines 496, 548, 556, 564: Modifying the `this.physics` vector state directly via methods like `this.physics.position.set(...)` or setting boolean flags in-place.
-- **graphics.js**:
-  - Lines 166-184: `data[i] = newR`, `data[i+1] = newG`, etc. direct pixel array mutation in `swapTextureColor`.
-  - Lines 1000-1017: Deep structural tree modification using `this.shipMesh.remove(child)` and disposing geometries/materials sequentially.
-  - Lines 1071-1076: Modifying rotations directly: `this.shipMesh.rotation.z += ...`.
-  - Lines 1105-1112: In-place linear interpolation mutating vector objects: `this.camera.position.lerp(...)`.
-- **physics.js**:
-  - Entire `update(dt, keyboard, levelInfo)` method modifies `this.position`, `this.velocity`, `this.activeEffects`, `this.fuel`, and `this.oxygen` in-place (e.g. Lines 86, 88, 115, 120, 221-223).
-  - Lines 268-271: Directly mutating `this.position.x` in-place when colliding with wall blocks.
-  - Lines 386-390: In-place reset of `this.activeEffects` variables.
-- **levelLoader.js**:
-  - Processes and populates arrays passed by reference in `processTile(...)` (Lines 549, 581, 589, 604).
-  - Mutates THREE meshes, geometries, and materials in-place (Lines 646, 652, 658).
-
-### 2. Focus & File Size Violations
-- **graphics.js** exceeds the absolute max constraint of 800 lines significantly (1,455 lines). It couples procedural ship meshes, asset texture caching, OBJ/FBX dynamic loaders, color replacement HSL logic, hyperdrive line particle systems, and scenery generators in a single file.
-- **app.js** is 877 lines long, exceeding the 800-line limit. It combines UI event handlers, keyboard navigation matrices, HUD SVG render controllers, and level orchestrations.
-- **levelLoader.js** is 846 lines long, which exceeds the 800-line constraint. It contains procedural canvas pattern creators alongside chunk-based asynchronous level meshes builders.
-
-### 3. Error Handling Gaps
-- **app.js**:
-  - Lines 385, 462: `await loadLevelPack(packName)` and `await buildLevelAsync(...)` are called inside async methods without surrounding `try-catch` blocks. If any level file fails to load or parse, the entire orchestrator crashes silently.
-- **physics.js**:
-  - Completely lacks `try-catch` error handling blocks. Any undefined lookup in `levelInfo` causes the physics updates to panic.
-- **graphics.js**:
-  - Lines 357, 360, 609, 616, 945, 989, 1019, 1053, 1359: Multiple empty `catch` blocks or simple ignored callbacks where loader failures could lock up the rendering queue without user-friendly feedback.
-
-### 4. System Boundary Input Validation Gaps
-- **levelLoader.js** and **levels.js** do not validate JSON level structures before compiling geometries. Gaps or format deviations in row tile arrays will throw uncaught property lookup errors.
-- **physics.js**:
-  - `KeyboardController` does not validate keyboard event objects or mouse coordinates, making it vulnerable to null references if client parameters differ.
-
-### 5. Console Statements in Production
-- **audio.js**:
-  - Line 16: `console.warn("Web Audio API is not supported in this browser:", e)`
-  - Line 71: `console.error("Failed to start engine audio in test:", e)`
-  - Line 111: `console.error("Failed to start engine audio:", e)`
+The SkyRoads WebGL codebase has grown significantly from its initial commit to a feature-rich game with 14 source modules, 20 test files, and ~269 asset textures. While the module boundaries are clean and the test coverage is comprehensive, the codebase has **significant file size violations** — every main source file exceeds the 800-line standard. There are also mutation patterns in the physics and state management code, and code duplication between `graphics.js` and `preview.js`. These are the priority areas for refactoring.
 
 ---
 
-## Concrete Refactoring Suggestions
+## Scorecard
 
-### 1. Splitting `graphics.js` (Oversized: 1,455 lines)
-We suggest breaking down `graphics.js` into smaller modules under a `graphics/` subdirectory:
-- **`graphics/textureColorSwap.js`**: Extract the canvas-based color replacement logic (`swapTextureColor`, `rgbToHsl`, `hslToRgb`, `getCachedImage`).
-- **`graphics/particleSystem.js`**: Extract thruster and explosion particle emitters and updates.
-- **`graphics/starfield.js`**: Extract the cylinder warp segments starfield and rotating skybox pan updates.
-- **`graphics/shipMeshGenerator.js`**: Extract procedural/fallback standard wedge ship meshes build steps.
-- **`graphics/sceneryGenerator.js`**: Extract scenery loader and city templates cloning logic (`spawnCityScenery`).
-- **`graphics/cameraController.js`**: Extract multi-camera setups, modes (`fixed` vs `follow`), zooming calculations, and HUD syncs.
+| File | Lines | Size Limit | Immutability | Error Handling | Input Validation | No console.log | Overall |
+|------|-------|------------|-------------|----------------|------------------|----------------|---------|
+| [app.js](file:///c:/dev/Sky%20roads/app.js) | ~3,044 | ❌ 3.8× over | ⚠️ State mutation | ⚠️ Mixed | ⚠️ Partial | ⚠️ Some | ⚠️ |
+| [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) | ~1,800 | ❌ 2.3× over | ✅ Mostly clean | ✅ Try/catch | ⚠️ Limited | ⚠️ Some | ⚠️ |
+| [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) | ~2,200 | ❌ 2.8× over | ⚠️ Cache mutation | ✅ Good | ⚠️ Partial | ⚠️ Some | ⚠️ |
+| [worldBuilder.js](file:///c:/dev/Sky%20roads/worldBuilder.js) | ~1,695 | ❌ 2.1× over | ✅ Standalone | ✅ Validates output | ✅ Schema checks | ✅ Clean | ✅ |
+| [physics.js](file:///c:/dev/Sky%20roads/physics.js) | ~850 | ❌ 1.1× over | ❌ Heavy mutation | ✅ DT capping | ⚠️ Partial | ✅ Clean | ⚠️ |
+| [audio.js](file:///c:/dev/Sky%20roads/audio.js) | ~1,281 | ❌ 1.6× over | ⚠️ State mutation | ✅ Context guards | ⚠️ Limited | ⚠️ Some | ⚠️ |
+| [cockpitConsole.js](file:///c:/dev/Sky%20roads/cockpitConsole.js) | ~400 | ✅ Under limit | ✅ Clean | ✅ Good | ✅ N/A | ✅ Clean | ✅ |
+| [preview.js](file:///c:/dev/Sky%20roads/preview.js) | ~600 | ✅ Under limit | ✅ Clean | ✅ Good | ⚠️ Limited | ✅ Clean | ✅ |
+| [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) | ~637 | ✅ Under limit | ⚠️ Buffer mutation | ✅ Good | ✅ Binary parsing | ✅ Clean | ✅ |
+| [levels.js](file:///c:/dev/Sky%20roads/levels.js) | ~78 | ✅ Under limit | ✅ Cache pattern | ✅ Good | ✅ N/A | ✅ Clean | ✅ |
+| [generate_textures.js](file:///c:/dev/Sky%20roads/generate_textures.js) | ~511 | ✅ Under limit | ✅ Standalone | ✅ Good | ✅ N/A | ✅ Clean | ✅ |
+| [debug_coords.js](file:///c:/dev/Sky%20roads/debug_coords.js) | ~220 | ✅ Under limit | ✅ Clean | ✅ Good | ✅ N/A | ⚠️ Debug logs | ✅ |
+| [vitest.setup.js](file:///c:/dev/Sky%20roads/vitest.setup.js) | ~103 | ✅ Under limit | ✅ Clean | ✅ Try/catch | ✅ N/A | ⚠️ Setup logs | ✅ |
+| [levels.js](file:///c:/dev/Sky%20roads/levels.js) | ~78 | ✅ Under limit | ✅ Clean | ✅ Good | ✅ N/A | ✅ Clean | ✅ |
 
-### 2. Splitting `app.js` (Oversized: 877 lines)
-Break down `app.js` into focused controller components:
-- **`ui/keyboardMenuHandler.js`**: Move arrow key screens navigation matrices and focus behaviors out.
-- **`ui/hudController.js`**: Move speedometer gauge SVGs dashboard ring redraw updates.
-- **`ui/shipPickerUI.js`**: Move preview engine bindings, custom colors, and model selector clicks out.
+---
 
-### 3. Splitting `levelLoader.js` (Oversized: 846 lines)
-Break down `levelLoader.js` into:
-- **`level/proceduralTextures.js`**: Extract the heavy `getProceduralTexture(...)` patterns.
-- **`level/tunnelBuilder.js`**: Extract the detailed Three.js archways constructors.
-- **`level/finishLineBuilder.js`**: Extract neon arches and Z-finishing markers constructors.
+## Critical Issues
+
+### 1. File Size Violations (P0)
+
+Every main game module exceeds the 800-line limit:
+
+| File | Lines | Over By |
+|------|-------|---------|
+| app.js | ~3,044 | **3.8×** |
+| levelLoader.js | ~2,200 | **2.8×** |
+| graphics.js | ~1,800 | **2.3×** |
+| worldBuilder.js | ~1,695 | **2.1×** |
+| audio.js | ~1,281 | **1.6×** |
+| physics.js | ~850 | **1.1×** |
+
+> [!CAUTION]
+> `app.js` at 3,044 lines is the most urgent target. It contains the entire GameManager, all UI event handlers, gamepad manager, touch control manager, physics calibrator, ship garage, scoring, and leaderboard logic in a single file.
+
+### 2. Code Duplication (P1)
+
+`graphics.js` and `preview.js` duplicate 5 constant objects:
+- `SHIP_MODELS`
+- `SHIP_SKINS`
+- `SHIP_METRICS`
+- `BASE_TEXTURES`
+- `LEGACY_MODEL_ALIASES`
+
+These should be extracted to a shared `shipCatalog.js` module.
+
+### 3. Mutation Patterns (P1)
+
+`physics.js` mutates the ship state object directly — position, velocity, fuel, oxygen are all mutated in-place. While common in game engines for performance, this violates the immutability coding standard.
+
+`app.js` mutates game state, settings objects, and DOM state extensively.
+
+### 4. Massive Import Section (P2)
+
+`levelLoader.js` has ~60+ static Vite imports for themed textures. This creates a large import block and tight coupling between the level builder and texture file paths.
+
+---
+
+## Strengths
+
+1. **Comprehensive test coverage** — 20 test files covering all major systems
+2. **Clean module boundaries** — each file has a clear, focused responsibility
+3. **Vitest setup** with intelligent asset stub generation for CI environments
+4. **GitHub Pages CI/CD** — automated deployment on push to main
+5. **Multiple input systems** — keyboard, gamepad, and touch all cleanly separated
+6. **Theme system** — 14 visual themes with complete texture sets per theme
+7. **OPL2 FM synthesis** — authentic audio recreation from original DOS data
+8. **Physics solver** — procedurally generated levels are validated before acceptance
+9. **GPU memory management** — `disposeUnusedThemes()` prevents VRAM leaks
+10. **Automated visual testing** — Puppeteer screenshot pipeline for regression detection
+
+---
+
+## Detailed Observations
+
+### Immutability
+
+- **physics.js:** Ship state (`position`, `velocity`, `fuel`, `oxygen`) is mutated in-place for performance. This is standard in game engine physics but violates the coding standard.
+- **app.js:** Game state transitions mutate the `gameState` variable and UI-related state objects directly.
+- **levelLoader.js:** `textureCache` and `loadedTextureCache` are mutated Maps.
+- **worldBuilder.js:** ✅ Standalone script creates new objects cleanly.
+- **cockpitConsole.js, preview.js, levels.js:** ✅ Mostly clean patterns.
+
+### File Size
+
+Only 8 of 14 source files meet the 800-line limit. The 6 oversized files collectively account for ~10,870 lines that should be distributed across smaller modules.
+
+### Error Handling
+
+- **audio.js:** Good AudioContext lifecycle management with `resume()` guards for autoplay policy
+- **graphics.js:** Try/catch around model loading and texture loading
+- **physics.js:** DT capping at 0.05s prevents physics explosion from frame spikes
+- **app.js:** Mixed — some operations have try/catch, others silently proceed
+- **levelLoader.js:** Good error handling in async level building
+
+### Input Validation
+
+- **worldBuilder.js:** ✅ Validates generated level data before accepting it
+- **physics.js:** ⚠️ Limited bounds checking on input values
+- **app.js:** ⚠️ Partial validation of localStorage data on load
+
+### Console.log Usage
+
+Several modules still have `console.log` / `console.warn` statements:
+- `app.js` — state transition logging
+- `audio.js` — AudioContext status messages
+- `debug_coords.js` — intentional debug output
+- `vitest.setup.js` — test setup logging (acceptable in test context)
+
+---
+
+## Recommended Refactoring Plan
+
+### Phase 1: Extract Shared Constants (P1, Low Risk)
+
+Extract `shipCatalog.js` from `graphics.js` and `preview.js`:
+```
+shipCatalog.js (NEW)
+├── SHIP_MODELS
+├── SHIP_SKINS
+├── SHIP_METRICS
+├── BASE_TEXTURES
+└── LEGACY_MODEL_ALIASES
+```
+
+### Phase 2: Split app.js (P1, Medium Risk)
+
+```
+app.js (~800 lines) — GameManager core + game loop
+├── ui/menuScreens.js — Main menu, level select, death/success screens
+├── ui/settingsPanel.js — Settings UI + physics calibrator
+├── ui/garagePanel.js — Ship garage UI
+├── input/gamepadManager.js — Gamepad polling + mapping
+├── input/touchControlManager.js — Touch input + customizer
+└── scoring.js — Score calculation + leaderboard
+```
+
+### Phase 3: Split levelLoader.js (P2, Medium Risk)
+
+```
+levelLoader.js (~800 lines) — Core level building
+├── themeManager.js — Theme definitions, texture loading, VRAM disposal
+├── tileFactory.js — Individual tile/block/tunnel geometry creation
+└── textureImports.js — Static texture URL imports
+```
+
+### Phase 4: Split graphics.js (P2, Medium Risk)
+
+```
+graphics.js (~800 lines) — Scene + renderer management
+├── shipRenderer.js — Ship model loading, skin painting
+├── particles.js — Particle systems (exhaust, explosion, sparks)
+├── skybox.js — Procedural skybox creation
+└── cameraController.js — Camera modes + zoom
+```
+
+---
+
+## Test Coverage Assessment
+
+| Module | Test File(s) | Coverage |
+|--------|-------------|----------|
+| GameManager | app.test.js (1,071 lines) | ✅ Comprehensive |
+| GraphicsEngine | graphics.test.js (1,125 lines) | ✅ Comprehensive |
+| PhysicsEngine | physics.test.js (1,418 lines) | ✅ Comprehensive |
+| Level Builder | levelLoader.test.js (674 lines) | ✅ Good |
+| Audio | audio.test.js, classicAudio.test.js | ✅ Good |
+| Cockpit | cockpitConsole.test.js | ✅ Good |
+| Touch | touchControls.test.js | ✅ Good |
+| Ship Classes | shipStats.test.js | ✅ Good |
+| Gamepad | gamepad.test.js | ✅ Good |
+| Ramps | ramps.test.js | ✅ Good |
+| WorldBuilder | worldBuilder.test.js | ✅ Basic (data integrity) |
+| Preview | preview.test.js | ✅ Good |
+| Settings | settingsToggles.test.js | ✅ Good |
+| Lane Snap | laneSnapToggles.test.js | ✅ Good |
+| Themes | dynamicSkinning.test.js | ✅ Good |
+| Assets | assets.test.js, generate.test.js | ✅ Good |
+| Playtest | playtest_run.test.js | ✅ Basic |
+| Analysis | analyze.test.js | ✅ Basic |
+| OPL Synth | — | ❌ No dedicated tests |
+| Debug | — | ❌ No tests (tool script) |
 
 ---
 
 ## Action Items
 
-1. **Adopt State Reducer Patterns in Physics**: Refactor `PhysicsEngine.js` state modifications to yield new immutable state descriptors rather than mutating `this.position` and `this.velocity` objects in-place.
-2. **Deconstruct `graphics.js`**: Move modules out into `graphics/` directory following the proposed structure to comply with the <800 lines constraint.
-3. **Deconstruct `app.js` and `levelLoader.js`**: Extract procedural textures and UI controller files to drop total lines per file below 800.
-4. **Implement Zod Schema Boundary Validation**: Write schemas for `levels.json` and level pack structure in `levels.js` / `levelLoader.js` to fail fast during loading.
-5. **Add Comprehensive Error Boundaries**: Wrap async pack loading and geometry builders in `app.js` inside structured try-catch clauses that alert the user gracefully.
-6. **Remove `console` Logs**: Re-route console logs in `audio.js` to a custom logging wrapper or abstract them.
+| # | Action | Priority | Effort |
+|---|--------|----------|--------|
+| 1 | Extract `shipCatalog.js` from graphics.js + preview.js | P1 | Small |
+| 2 | Split `app.js` into 6 focused modules | P1 | Large |
+| 3 | Remove console.log from production modules | P1 | Small |
+| 4 | Split `levelLoader.js` into theme/tile/import modules | P2 | Medium |
+| 5 | Split `graphics.js` into ship/particles/skybox/camera modules | P2 | Medium |
+| 6 | Add OPL synthesizer unit tests | P2 | Medium |
+| 7 | Add input validation to localStorage data loading | P2 | Small |
+| 8 | Evaluate immutable physics state pattern (perf impact) | P2 | Research |

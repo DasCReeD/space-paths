@@ -22,6 +22,14 @@ function writeStubs() {
     }
   }
 
+  const glbModels = ['fighter.glb', 'hauler.glb', 'scout.glb', 'dreadnought.glb', 'cruiser.glb', 'tunnel_archway.glb'];
+  for (const m of glbModels) {
+    const p = path.join(customDir, m);
+    if (!fs.existsSync(p)) {
+      fs.writeFileSync(p, `gltf placeholder`);
+    }
+  }
+
   const themes = ['cyberpunk', 'industrial', 'organic', 'alien'];
   const types = ['road', 'obstacle', 'tunnel'];
   const decals = ['boost', 'slow', 'explosive', 'refill', 'sticky', 'slippery'];

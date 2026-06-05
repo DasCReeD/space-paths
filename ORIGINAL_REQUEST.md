@@ -224,3 +224,359 @@ Integrity mode: development
 - [ ] No regressions in core game loop, audio, or collision physics.
 - [ ] Existing `npm run test` suite passes 100%.
 - [ ] New unit tests are written to verify the new 3D Cockpit HUD initialization and dynamic level texture assignment.
+
+## Follow-up — 2026-06-03T04:42:20Z
+
+We aim to expand the WebGL/Three.js game with custom generated assets, a 3D modeling pipeline, 5 distinct ship classes with unique handling profiles, a complete responsive UI overhaul (including custom touch controls), and an automated visual playtesting pipeline.
+
+Working directory: c:\dev\Sky roads
+Integrity mode: development
+
+## Requirements
+
+### R1. Texture & Asset Variety
+- Expand the ComfyUI generation script to support multiple distinct level themes (Industrial, Organic, Alien).
+- Generate custom road surface tiling textures, ramp decals, and unique tunnel materials for each theme.
+
+### R2. TRELLIS 3D Generation Pipeline
+- Set up a pipeline to install and configure **TRELLIS** (or a compatible 3D asset generation model) via ComfyUI or standalone script.
+- Generate high-quality 3D models for:
+  - 5 custom space vehicles representing classes: **Fighter, Hauler, Scout, Dreadnought, Cruiser**.
+  - A fully 3D model for the tunnel archway (replacing the current simple procedural geometries).
+- Save generated OBJ/GLTF models in `assets/models/`.
+
+### R3. Ship Stats & Handling System
+- Implement a stats system for the 5 vehicle classes. 
+- Reuse the existing handling profile logic in the physics engine to set individual speed, steering, acceleration, and fuel consumption attributes per class.
+- Prune the available selectable ships to *only* these 5 new custom vehicles.
+
+### R4. Responsive UI & Touch Controls Overhaul
+- Overhaul all menu pages (Main Menu, Level Select, Garage/Ship Select, Settings, HUD overlay) using clean, responsive HTML/JS components under Vite.
+- Ensure all menus scale dynamically, center properly, and render correctly on both desktop and mobile viewports (minimum width: 375px) without text clipping.
+- **Touchscreen Control Customization:**
+  - Build a settings interface to configure individual placement of touch controls.
+  - Implement placement logic so bounding boxes are tight and match the visual buttons exactly (preventing "twitchy", overlapping behavior during configuration).
+  - Allow each control button to be positioned, resized, and configured independently.
+
+### R5. Playtesting Pipeline
+- Build a lightweight automated test script that launches the Vite server, opens the browser (using Puppeteer/Playwright), navigates menus, starts a level, and saves screenshots to a `playtests/` directory so agents can visually verify the UI layout and game render.
+
+## Acceptance Criteria
+
+### Visuals & Models
+- [ ] 5 custom 3D ship models are generated, loaded into the garage, and playable.
+- [ ] Ramps have dedicated decals, and tunnels render using a fully 3D model instead of procedural code.
+
+### Gameplay & Stats
+- [ ] Physics handling adjusts dynamically depending on the selected ship class (Scout is agile, Hauler is heavy, etc.).
+- [ ] Legacy ship selections are removed.
+
+### UI & Touch Controls
+- [ ] Menus scale dynamically across mobile (375px) and desktop (1080p+) resolutions.
+- [ ] Touch control buttons can be adjusted, repositioned individually, and have tight non-overlapping drag bounding boxes.
+
+### Verification
+- [ ] An automated script generates visual playtest screenshots under `playtests/` verifying menu navigation and in-game rendering.
+
+## Follow-up — 2026-06-03T04:46:13Z
+
+IMPORTANT DESIGN CHANGE: The user requested that all 5 vehicle classes should be designed and generated as hovercraft instead of spaceships. Please keep the same classes (Fighter, Hauler, Scout, Dreadnought, Cruiser) and handling profile logic, but update the prompts, models, and UI references to focus on ground-hovering vehicles.
+
+## Follow-up — 2026-06-03T05:39:58Z
+
+IMPORTANT INSTRUCTION: Please make sure that all 5 custom hovercraft classes and their corresponding 3D cockpit models are fully skinned and textured, with distinct materials matching their respective classes. Ensure these textures are correctly loaded and mapped in the game.
+
+## Follow-up — 2026-06-03T05:40:55Z
+
+IMPORTANT INSTRUCTION: Please ensure that the generated 3D hovercraft models are analyzed to find their engine nozzles/exhausts and wingtips. Set the proper coordinates in `SHIP_METRICS` (or use dynamic mesh detection) so that the engine exhaust particles and wing trails render in the exact physical locations with colors that match each vehicle class's aesthetic.
+
+## Follow-up — 2026-06-03T05:43:41Z
+
+IMPORTANT INSTRUCTION: The user reported that the ship models in the loading/preview screen (rendered by `preview.js` and `graphics.js`) look jumbled with fragmented parallel color bands. Please inspect the model loaders and UV mappings. Make sure that the texture coordinates (UVs) on the hovercraft models map correctly and do not stretch or repeat incorrectly on each face. If using the procedural generator fallback, ensure proper unwrapping is configured, or load a seamless texture mapped with box-projection instead of standard UV-space grids.
+
+## Follow-up — 2026-06-03T05:50:55Z
+
+Conduct a comprehensive review, visual audit, and bug-fix pass over the newly implemented custom textures, 3D hovercraft models, 3D tunnel meshes, responsive menus, and touch controls customization interface.
+
+Working directory: c:\dev\Sky roads
+Integrity mode: development
+
+## Requirements
+
+### R1. Visual Asset Quality Inspection (Gemini Vision Audit)
+- Leverage Gemini (or visual agent-as-judge checks) to inspect generated textures, decals, and model render screenshots.
+- Ensure that assets are generated correctly, are free of corruption, banding, or unintended shapes, and that diffuse/normal maps tile seamlessly without high-contrast visual cuts.
+
+### R2. 3D Model UV & Texture Mapping Audit
+- Inspect the generated 3D hovercraft models (`fighter`, `hauler`, `scout`, `dreadnought`, `cruiser`) and the `tunnel_archway` model.
+- **Fix Jumbled Model Rendering & Texture Mapping:** Diagnose and resolve texture mapping distortion (like parallel color lines or disjointed UV maps) on the preview and in-game meshes. Fix the model UV unwrapping coordinates in `generate_models.py` or apply seamless projection wrapping.
+- **Correct Ship Preview Scaling & Positioning:** Diagnose and fix why the hovercraft models render extremely tiny, dark, or off-center in the Garage preview box (`preview.js`). Adjust the bounding box calculation, scale factors, lighting intensity, and pivot points so the hovercraft displays clearly and dominates the preview frame.
+
+### R3. Particle & Engine Trail Coordination
+- Audit the wingtip and exhaust nozzle positions for each of the 5 hovercraft classes.
+- Verify that engine flame particles and wing trails render in the exact physical nozzle/wingtip locations relative to the loaded geometries, using colors matching each class's styling.
+
+### R4. Responsive UI & Touch Controls Overhaul
+- Overhaul all menu pages (Main Menu, Level Select, Garage/Ship Select, Settings, HUD overlay) using clean, responsive HTML/JS components under Vite.
+- Ensure all menus scale dynamically, center properly, and render correctly on both desktop and mobile viewports (minimum width: 375px) without text clipping.
+- **Touchscreen Control Customization:**
+  - Build a settings interface to configure individual placement of touch controls.
+  - Implement placement logic so bounding boxes are tight and match the visual buttons exactly (preventing "twitchy", overlapping behavior during configuration).
+  - Allow each control button to be positioned, resized, and configured independently.
+
+### R5. Playtesting Pipeline
+- Build a lightweight automated test script that launches the Vite server, opens the browser (using Puppeteer/Playwright), navigates menus, starts a level, and saves screenshots to a `playtests/` directory so agents can visually verify the UI layout and game render.
+
+## Acceptance Criteria
+
+### Visuals & Models Correctness
+- [ ] No ship models show jumbled, misaligned, or fragmented texture coordinates on loading, preview, or gameplay screens.
+- [ ] Hovercraft preview meshes are properly scaled (centered and clearly visible) inside the Garage preview container.
+- [ ] Visual inspection (via Gemini/vision checks) confirms all generated assets look clean, correct, and matching their theme designs.
+- [ ] The custom 3D tunnel archway loads and displays correctly in-game for all themes.
+
+### Trails & Effects Alignment
+- [ ] Particle exhaust effects spawn directly from physical nozzle locations on all 5 hovercraft models.
+- [ ] Wing trail meshes start exactly from the wingtips.
+
+### UI & Touch Bounds Stability
+- [ ] Drag-and-drop bounds for touchscreen custom buttons fit tightly to each button visual without overlapping other button containers.
+- [ ] All menu layouts scale dynamically without text clipping on target viewports.
+
+### Verification
+- [ ] An automated script generates visual playtest screenshots under `playtests/` verifying menu navigation and in-game rendering.
+
+## Follow-up — 2026-06-03T06:00:25Z
+
+A comprehensive investigation and blueprint for setting up local Trellis/Pixal3D workflows in ComfyUI and applying them to overhaul the 3D models (ships and tunnels) and PBR materials of the "Sky roads" game to achieve AAA quality.
+
+Working directory: c:/dev/Sky roads
+Integrity mode: development
+
+Reference Materials:
+- Video 1: "The Best FREE 3D AI Workflow in 2026" (https://www.youtube.com/watch?v=l-BH8mrQrrw)
+- Video 2: "Pixal3D on 6GB VRAM — Better Than Trellis 2!" (https://www.youtube.com/watch?v=LMmuhIwaeB4)
+
+## Requirements
+
+### R1. Local Trellis / Pixal3D ComfyUI Setup Guide
+- Detail custom node installations (e.g., `Saganaki22/Pixal3D-ComfyUI` or PozzettiAndrea's `ComfyUI-TRELLIS2`), dependencies (e.g., `nvdiffrast`, `flash_attn`), checkpoint downloads, and GGUF quantization configurations for lower VRAM (6GB+).
+
+### R2. AAA 3D Geometry Workflow for Ships and Tunnels
+- Define a practical pipeline for converting concept/generated shapes into high-fidelity game-ready models, including mesh details, clean topologies, and custom geometries for both the 5 ship classes and the tunnel archways.
+
+### R3. AAA Texturing, Coloring, & PBR Skin Pipeline
+- Outline a workflow using ComfyUI texture generators and tools (e.g., Stable Projectorz or Modddif) to bake diffuse, normal, roughness, and metallic maps matching the game's Cyberpunk, Industrial, Alien, and Organic themes.
+
+### R4. Highly Optimized Generation Prompts
+- Provide ready-to-use, rich generation prompts for 3D models and textures, incorporating the aesthetic principles and style tips from the reference videos.
+
+## Acceptance Criteria
+
+### ComfyUI Setup Blueprint
+- [ ] Step-by-step setup walkthrough for both Trellis and Pixal3D, highlighting common errors and GGUF configuration.
+- [ ] Example JSON workflow files or node-by-node pipeline maps for generating 3D models and texturing them.
+
+### Asset Improvement Strategies
+- [ ] Written guide detailing mesh optimization, subdivision, face-weighted normals, and texture mapping for the game's spaceships and tunnels.
+- [ ] Analysis of the current procedural models in `generate_models.py` versus the proposed AI-generated or enhanced assets.
+
+### Optimized Prompt Bank
+- [ ] A curated bank of highly descriptive, high-fidelity prompts for generating:
+  - Each ship class (fighter, cruiser, hauler, dreadnought, scout) with premium sci-fi, greebles, paneling, and thruster detailing.
+  - Tunnel archways and tiling textures for Cyberpunk, Industrial, Alien, and Organic themes.
+
+## Follow-up — 2026-06-03T06:09:41Z
+
+The user has successfully installed Blender. Please make sure the AAA 3D Geometry workflow guide (R2) includes exact Blender-specific shortcuts, modifier configurations (Decimate, Weighted Normal, Triangulate), and instructions on how to leverage python script automation in Blender for processing the generated ship OBJ meshes if possible.
+
+## Follow-up — 2026-06-04T03:42:27Z
+
+Add 10 new playable worlds with custom biomes and level layouts to the SkyRoads WebGL remake, utilizing build-time level baking, a pattern analyst agent, and an AI-driven asset pipeline.
+
+Working directory: c:/dev/Sky roads
+Integrity mode: development
+
+---
+
+## 1. Project Overview
+We want to introduce 10 new playable worlds (Worlds 0 to 9), each containing 3 levels (total 30 levels) in a new pack called "generated".
+The project utilizes:
+1. An **AI Asset Generation Pipeline** using Google AI Studio (Imagen 3 / "nanobanana 2") to generate raw textures, and local ComfyUI (`BiRefNet`) to remove backgrounds for clean transparency.
+2. A **Level Design Analyst Agent** (`level-analyst`) that analyzes the original 61 levels to extract design statistics, frequencies, and transition probabilities.
+3. A **Procedural World Builder** (`worldBuilder.js`) that consumes these extracted design patterns and deterministic seeds to generate levels at build-time.
+4. A **Level Loading & Menu UI** integration to render the new biomes and allow pack selection.
+
+---
+
+## 2. Requirements
+
+### R1. Asset Generation Agent (`asset-generator`)
+A dedicated agent will build the 2D assets using the Google AI Studio key:
+- **API Key**: Read from the gitignored `.env` file (`GEMINI_API_KEY=AIzaSyD-BRekIwqxhIdOgcvGSUqkhsttPXYRMGk`).
+- **REST Request**: Call the AI Studio Imagen 3 endpoint:
+  `POST https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${GEMINI_API_KEY}`
+- **Transparency Processing**: Route raw base64 outputs to local ComfyUI (`http://127.0.0.1:8000`) with the `BiRefNet` background removal node to achieve clean transparency.
+- **Biomes**: Create textures (diffuse, normal, decals) for:
+  1. `void` (Visualizer Void)
+  2. `ridge` (Blue Ridge Ascents)
+  3. `thrill` (Thrill Sector)
+  4. `core` (Hardware Core)
+  5. `glitch` (Glitch Grid)
+  6. `tundra` (Cryo-Stasis Tundra)
+  7. `furnace` (Supernova Furnace)
+  8. `shallows` (Nebula Shallows)
+  9. `spire` (Quantum Spire)
+  10. `pulse` (Kinetic Pulse)
+- **Fallback**: Fallback seamlessly to Pillow-based procedural textures if offline.
+
+### R2. Level Design Analyst Agent (`level-analyst`)
+A dedicated agent will scan and extract patterns from the original 61 human-designed levels:
+- **Analysis script**: Write and run `scratch/analyze_original_levels.js` to process standard and Xmas Special levels.
+- **Pattern Extractor**: Extract statistics for:
+  - Jump/gap lengths (distribution of gap sizes and runway lengths between jumps).
+  - Obstacle groupings (ratio of flat roads vs half, full, or full+half obstacles).
+  - Tile behavior transition matrices (e.g., probability of normal tiles leading to boost, slippery, sticky, or hazard tiles).
+  - Lane movement profiles (how frequently paths shift left vs right).
+- **Data Export**: Save the extracted profile to `data/level_patterns.json`.
+
+### R3. Deterministic World Builder & Level Generation Agents
+We will task the level generation of each world/level to individual agents following a **Standardized Workflow**:
+
+#### Level Generation Standardized Workflow:
+1. **Design Profile**: Select the biome's visual parameters and physics config (gravity factor, starting fuel, starting oxygen).
+2. **Organic Random Pacing**: Consume the probability weights in `data/level_patterns.json` to guide the seeded RNG (`mulberry32(seed)`) in generating tile sequences. This ensures generated tracks feel human and rhythmic while maintaining seed-driven variation.
+3. **Obstacle Layout**: Place themed obstacles on side lanes based on biome profiles.
+4. **Special Tile Placement**: Simulate the player's run:
+   - Place fuel refills dynamically when simulated fuel drops below 35%.
+   - Place speed boosts exactly 2-3 rows before gaps longer than 2 rows.
+   - Place hazard tiles or traps around the target path.
+5. **Playability Solver (Build-Time Check)**: Enforce programmatic validation verifying that at the level's gravity and entrance speed, all jumps are solvable, the track is navigable, and fuel is sufficient. If validation fails, regenerate the seed. Bake the validated levels into `data/generated_levels.json`.
+
+#### Biome Rules:
+- **World 0 (Visualizer Void)**: No sharp 90-degree corners. Obstacles are rhythmically shifting equalizer bars.
+- **World 1 (Blue Ridge Ascents)**: High verticality. Sloped ramps up to height 2.0/3.0, steep drops. High gravity (scale index 14). Archways mark drops.
+- **World 2 (Thrill Sector)**: Wide tracks (all 7 lanes), straight stretches, dense boost pad chains, low obstacle density.
+- **World 3 (Hardware Core)**: Rigid 90-degree obstacle switches. Path $L$ moves left-right rapidly every 4 rows, demanding tight slaloms. Safe routes are only 1-lane wide.
+- **World 4 (Glitch Grid)**: Phasing track zones (holes/gaps generated in alternating beats of 4 rows). Fake hazard decorations.
+- **World 5 (Cryo-Stasis Tundra)**: 80% flat road tiles are slippery ice (color 9). Paths are wide to allow pre-planned drifting. Angled border blocks bounce the ship inward.
+- **World 6 (Supernova Furnace)**: Fuel rate starts at lower default, oxygen at 50. Track has burn tiles (color 13) flanking the target path. Refill pads (color 10) placed inside gaps or surrounded by burn tiles.
+- **World 7 (Nebula Shallows)**: Generates dense fog and guide rails. Tracks have bright neon emissive guide lines in lanes 2 and 4.
+- **World 8 (Quantum Spire)**: Low gravity (gravity index 4). Consists entirely of small $2\times2$ and $3\times3$ floating islands (large gaps of 3-4 rows).
+- **World 9 (Kinetic Pulse)**: Sticky pads (color 3) placed on the road to act as brakes before speed-restricted timing gates (obstacles blocking most lanes).
+
+### R4. Level Loading & Rendering
+- Import all 10 new biome texture assets in `levelLoader.js`.
+- Add all 10 themes to the `THEMES[]` definition array.
+- Modify `getActiveThemeIndex(levelData)`:
+  - If the pack is `generated`, map to `4 + (Math.floor((level_index - 61) / 3) % 10)`.
+  - Classic levels continue to use their first 4 themes.
+- Update `levels.js` to expose the new `generated` level pack loading the baked `data/generated_levels.json`.
+
+### R5. UI Integration
+- Add the `btn-play-generated` button to the main menu overlay in `index.html`: "PLAY 10 NEW WORLDS".
+- Wire the button in `app.js` to call `showLevelSelection('generated')`.
+- Add the `generatedRoadNames` array defining names for all 30 levels and update HUD display lookups.
+
+---
+
+## 3. Acceptance Criteria
+
+### Verification Target
+All criteria must be checked objectively:
+- [ ] Running `npm test` passes all 455+ existing unit tests.
+- [ ] Running the analysis script generates a valid `data/level_patterns.json` file.
+- [ ] Running `worldBuilder.js` successfully compiles and outputs `data/generated_levels.json`.
+- [ ] A new test `tests/worldBuilder.test.js` passes, verifying generated level structures and navigability.
+- [ ] Dev server runs (`npm run dev`) and "PLAY 10 NEW WORLDS" launches the level select grid with 30 items.
+- [ ] Level themes load the correct textures (verified via console/browser check).
+
+
+## Follow-up — 2026-06-04T03:43:07Z
+
+Please ensure the orchestrator and all active subagents read and strictly adhere to the files we just created:
+1. `plans/generated_worlds_project_summary.md` (Project and expansion summary)
+2. `plans/council_assessment_and_details.md` (AI Council assessment, 27 design constraints, VRAM management, and Level Analyst rules)
+3. The active `implementation_plan.md` artifact (describing the asset pipeline and build-time solver math).
+
+These documents represent the agreed-upon technical design and constraints.
+
+
+## Follow-up — 2026-06-04T10:59:23Z
+
+Add 10 new playable worlds with custom biomes and level layouts to the SkyRoads WebGL remake, utilizing build-time level baking, a pattern analyst agent, and an AI-driven asset pipeline.
+
+Working directory: c:/dev/Sky roads
+Integrity mode: development
+
+---
+
+## 1. Project Overview
+We want to introduce 10 new playable worlds (Worlds 0 to 9), each containing 3 levels (total 30 levels) in a new pack called "generated".
+The project divides the work between a dedicated **Art Team** and a **Level Design Team**:
+1. **Art Team** (4 Specialized Roles):
+   - **Asset Planner**: Decides what visual assets (textures, decals, 3D models, FX) are required for each biome/level and writes detailed, high-contrast prompt descriptors.
+   - **Asset Generator**: Orchestrates the API scripts using the Google AI Studio Imagen 4 model (`imagen-4.0-generate-001`) to generate raw diffuse textures, uses ComfyUI background removal, or falls back to procedural image filters if offline.
+   - **Asset Integrator**: Manages directories (e.g. `assets/custom/level_X/`) and maps individual asset filenames to the level loading logic.
+   - **Visual Designer**: Themes the blocks, decals, and decorations for each biome/level (defines color palettes, roughness, metalness, and emissive glow values).
+2. **Level Design Team** (3 Specialized Roles):
+   - **Level Blueprinter**: Creates a detailed, segment-by-segment blueprint for each level prior to generation. Each blueprint details the sequence of runs, jumps, slalom weaving, floating islands, curves/turns, and height transitions, drawing structural inspiration and pacing ideas from the original 61 levels (using them as a guide only, rather than strictly duplicating them).
+   - **Level Generator**: Overhauls the level builder (`worldBuilder.js`) using these blueprints and the seed-based generator to compile the track geometry.
+   - **Level Validator**: Integrates a static playability solver to programmatically verify that every generated track is fully solvable at its gravity and pacing.
+
+---
+
+## 2. Requirements
+
+### R1. Art Team: Asset Planning, Generation & Integration
+- **Asset Planner**: Define prompt profiles for road, obstacle, and tunnel textures across the 10 biomes.
+- **Asset Generator**: Update `scratch/generate_comfy_assets_10_worlds.py` to use `imagen-4.0-generate-001` as the primary image model. Generate 2D textures (diffuse, normal maps) and decals (boost, refill, burning, sticky, slippery, slow) for the 10 biomes. Fall back to Pillow-based procedural assets if API keys are missing.
+- **Asset Integrator**: Map generated files to their respective level asset directories under `assets/custom/level_X/` (where X is 61 to 90). Ensure the `levelLoader.js` and `graphics.js` load level-specific assets if present, falling back to biome defaults.
+- **Visual Designer**: Configure the `THEMES[]` definition array in `levelLoader.js` to assign colors, roughness, metalness, and maps for the 10 new themes:
+  1. `void` (Visualizer Void): neon pink/green glowing wireframe.
+  2. `ridge` (Blue Ridge Ascents): blue topographic contours.
+  3. `thrill` (Thrill Sector): orange rollercoaster tarmac.
+  4. `core` (Hardware Core): green supercomputer microchip grids.
+  5. `glitch` (Glitch Grid): pixelated chromatic noise.
+  6. `tundra` (Cryo-Stasis Tundra): icy white and cyan sheets.
+  7. `furnace` (Supernova Furnace): magma flows and obsidian.
+  8. `shallows` (Nebula Shallows): violet cosmic dust and neon guide lines.
+  9. `spire` (Quantum Spire): stark minimalist white spires.
+  10. `pulse` (Kinetic Pulse): dark steel and warning indicators.
+
+### R2. Level Design Team: Blueprinting, Generation & Validation
+- **Level Blueprinter**: Draft a detailed track specification document (`scratch/level_blueprints.json` or inline data structures) outlining the exact sequence of segments for each level. The blueprints must dictate vertical transitions (slopes up/down, steep drops), turns/curves (lane shifts), jumps, timing gates, and island sizes, using classic human-designed layouts as a general guide only.
+- **Level Generator**: Overhaul `worldBuilder.js` to read and execute these blueprints. Construct tracks using a **Segment-based Track Builder** structure, chaining sequential segments (length 15-25 rows):
+  - `buildRunway(length)`: Flat solid roads.
+  - `buildClassicJumps(length, gapSize, boostCount)`: Jumps over 1-3 row gaps.
+  - `buildVerticalSteps(length, startHeight, targetHeight)`: Steps up/down using ramps (e.g. height 1.0/2.0), or vertical drops (jumping off raised platforms to ground).
+  - `buildFloatingIslands(length, islandSize, gapSize)`: Isolated platforms with large voids.
+  - `buildSlalom(length, spacing)`: Alternating left/right obstacle walls.
+  - `buildTimingGates(length, spacing)`: High obstacle walls with narrow openings, preceded by sticky speed-bleeding pads or speed boosts.
+  - `buildTunnelRun(length)`: Covered arches containing hazard tiles.
+- Apply these segments to build distinct difficulty curves: World 0 has simple jumps, World 1 has high-gravity steps, World 8 has low-gravity floating spires, World 9 has sticky timing gates.
+- **Level Validator**: Enforce the static playability solver in `worldBuilder.js` to simulate a perfect run on each track (verifying jumps are mathematically clearable and fuel is sufficient).
+- Re-generate `data/generated_levels.json` with 30 fully validated playable levels.
+
+### R3. Rendering Bug Fixes
+- **Spaceship Rotation**: In `graphics.js` and `preview.js`, rotate the GLB spaceship meshes by `Math.PI` (180 degrees) so they face forward during gameplay and in the garage preview.
+- **Hollow Obstacles Shading**: Update `loadAndApplyObstacleModel` in `levelLoader.js` to compute correct normals for loaded OBJ models: call `child.geometry.computeVertexNormals()` for all loaded meshes. Modify `generate_assets_50_per_level.py` to write clean faces `v/vt` without hardcoded upward normal overrides.
+- **Basement Blocks**: Render a standard flat road tile underneath all obstacles. In `processTile()`, if it's an obstacle, recursively render a flat tile first. In `buildMergedBlocks()`, execute the greedy 2D meshing loop in two separate passes:
+  - **Road Layer Pass**: Greedily merge all tiles as flat blocks.
+  - **Obstacle Layer Pass**: Greedily merge obstacle blocks sitting on top of the road.
+
+---
+
+## 3. Acceptance Criteria
+
+### Verification Target
+- [ ] Running `npm test` passes all 480+ unit tests.
+- [ ] Running `python scratch/generate_comfy_assets_10_worlds.py` runs successfully using the `imagen-4.0-generate-001` model (or fallback if offline) and populates `assets/custom/`.
+- [ ] Detailed level blueprints exist in `scratch/level_blueprints.json` or within `worldBuilder.js` itself, containing turns, vertical steps, and segment structures for all 30 levels.
+- [ ] Running `node worldBuilder.js` compiles successfully, outputs `data/generated_levels.json`, and all 30 generated levels are verified playable by the solver.
+- [ ] Spaceship GLB is verified facing forward (jet nozzle glowing towards the camera view, cockpit pointing forward).
+- [ ] Obstacles render with a solid road tile beneath them (no void gaps in the track under obstacles).
+- [ ] Obstacle OBJ meshes (pyramids, prisms, buildings) render with proper shading on their side walls (no black faces or hollow rendering).
+- [ ] The "PLAY 10 NEW WORLDS" button in the menu displays the level select grid with 30 generated levels, each launching with its correct biome theme.
+
+

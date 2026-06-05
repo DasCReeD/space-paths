@@ -263,4 +263,49 @@ describe('Sloped Ramp Physics Engine Mechanics', () => {
     expect(physics.position.y).toBeCloseTo(2.0, 3);
     expect(physics.onGround).toBe(true);
   });
+
+  it('should not trigger side collision or prevent snapping when steering between two adjacent ramps of the same slope', () => {
+    // We have two identical ramps next to each other.
+    // Ramp 1 (lane 3): x in [-0.5, 0.5]
+    // Ramp 2 (lane 4): x in [0.5, 1.5]
+    levelInfo.collidables = [
+      {
+        minX: -TILE_WIDTH / 2,
+        maxX: TILE_WIDTH / 2,
+        minZ: -TILE_LENGTH, // -4.0
+        maxZ: 0.0,
+        startY: 0.0,
+        endY: 2.0,
+        isObstacle: true,
+        isRamp: true,
+        isFlatRoad: false
+      },
+      {
+        minX: TILE_WIDTH / 2,
+        maxX: TILE_WIDTH / 2 + TILE_WIDTH,
+        minZ: -TILE_LENGTH,
+        maxZ: 0.0,
+        startY: 0.0,
+        endY: 2.0,
+        isObstacle: true,
+        isRamp: true,
+        isFlatRoad: false
+      }
+    ];
+
+    // Ship's center is at x = 0.55 (just crossed the lane boundary at 0.5).
+    // Ship is over the ramp at z = -1.0. Snap height should be 0.5.
+    physics.position.set(0.55, 0.1, -1.0);
+    physics.velocity.set(5.0, -1.0, 0.0);
+    physics.onGround = false;
+
+    physics.update(0.016, keyboard, levelInfo);
+
+    // With the fix, the ship should not suffer a side collision, its velocity.x should not be set to 0,
+    // and it should snap to the ramp height (0.5).
+    expect(physics.isDead).toBe(false);
+    expect(physics.position.y).toBeCloseTo(0.5, 4);
+    expect(physics.onGround).toBe(true);
+    expect(physics.velocity.x).toBeGreaterThan(4.0);
+  });
 });

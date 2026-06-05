@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { SHIP_WIDTH, SHIP_HEIGHT, SHIP_LENGTH } from './physics.js';
 import { CockpitConsole3D } from './cockpitConsole.js';
+import { getLevelObjUrl, getLevelAssetUrl, getActiveThemeIndex, THEMES } from './levelLoader.js';
 import spaceshipHullPlatingUrl from './spaceship_hull_plating.png';
 import roadMetallicUrl from './road_metallic_plate.png';
 import hudOverlayUrl from './hud_overlay.jfif';
@@ -23,11 +24,12 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import fighterObjUrl from './fighter1.obj?url';
-import fighterClassUrl from './assets/models/fighter.obj?url';
-import haulerClassUrl from './assets/models/hauler.obj?url';
-import scoutClassUrl from './assets/models/scout.obj?url';
-import dreadnoughtClassUrl from './assets/models/dreadnought.obj?url';
-import cruiserClassUrl from './assets/models/cruiser.obj?url';
+import fighterClassUrl from './assets/custom/fighter.glb?url';
+import haulerClassUrl from './assets/custom/hauler.glb?url';
+import scoutClassUrl from './assets/custom/scout.glb?url';
+import dreadnoughtClassUrl from './assets/custom/dreadnought.glb?url';
+import cruiserClassUrl from './assets/custom/cruiser.glb?url';
+import racerClassUrl from './assets/custom/racer.glb?url';
 import uvMapUrl from './uvmap.jpg';
 import cityFbxUrl from './futuristic low poly city by niko.fbx?url';
 import skyboxGltfUrl from './assets/free_colorful_sci_fi_skybox_gltf/scene.gltf?url';
@@ -83,7 +85,8 @@ export const SHIP_MODELS = {
   hauler: haulerClassUrl,
   scout: scoutClassUrl,
   dreadnought: dreadnoughtClassUrl,
-  cruiser: cruiserClassUrl
+  cruiser: cruiserClassUrl,
+  racer: racerClassUrl
 };
 
 export const SHIP_SKINS = {
@@ -111,7 +114,8 @@ export const SHIP_METRICS = {
   hauler: { offset: 0.38, height: 0.22, rotationY: -Math.PI / 2 },
   scout: { offset: 0.30, height: 0.16, rotationY: -Math.PI / 2 },
   dreadnought: { offset: 0.42, height: 0.21, rotationY: -Math.PI / 2 },
-  cruiser: { offset: 0.26, height: 0.18, rotationY: -Math.PI / 2 }
+  cruiser: { offset: 0.26, height: 0.18, rotationY: -Math.PI / 2 },
+  racer: { offset: 0.30, height: 0.18, rotationY: 0 }
 };
 
 export const BASE_TEXTURES = {
@@ -258,6 +262,7 @@ export class GraphicsEngine {
     
     // Scenery templates & groups
     this.buildingTemplates = [];
+    this.customBuildingTemplates = [];
     this.sceneryGroup = null;
 
     // Custom skins map loaded dynamically
@@ -304,7 +309,7 @@ export class GraphicsEngine {
     // 1. Create Scene & Renderer
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0a0210); // Solid color background fallback
-    this.scene.fog = new THREE.FogExp2(0x0a0519, 0.003); // Subtle atmospheric fog
+    this.scene.fog = null; // Disable atmospheric fog entirely
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
@@ -906,7 +911,24 @@ export class GraphicsEngine {
     const modelUrl = SHIP_MODELS[mappedModelName] || fighterClassUrl;
     const isFbx = modelUrl.toLowerCase().includes('.fbx') || modelUrl.toLowerCase().includes('fbx-files') || modelUrl.toLowerCase().includes('battle');
     
+    // Models with baked textures embedded in GLB (e.g. AI-generated via Trellis2)
+    const BAKED_TEXTURE_MODELS = ['racer'];
+    const hasBakedTexture = BAKED_TEXTURE_MODELS.includes(mappedModelName);
+    
     const applyTextureToModel = (texture, obj) => {
+      if (hasBakedTexture) {
+        // Preserve original baked materials from GLB, only add shadow props
+        obj.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          } else if (child.isLine || child.isLineSegments || child.type === 'Line' || child.type === 'LineSegments') {
+            child.visible = false;
+          }
+        });
+        onComplete(obj);
+        return;
+      }
       if (texture) {
         this.optimizeShipTexture(texture);
       }
@@ -929,7 +951,14 @@ export class GraphicsEngine {
     };
 
     const loadGeometry = (texture) => {
-      if (isFbx) {
+      if (modelUrl.toLowerCase().includes('.glb') || modelUrl.toLowerCase().includes('.gltf')) {
+        const gltfLoader = new GLTFLoader();
+        gltfLoader.load(modelUrl, (gltf) => {
+          applyTextureToModel(texture, gltf.scene);
+        }, undefined, (err) => {
+          if (onError) onError(err);
+        });
+      } else if (isFbx) {
         const fbxLoader = new FBXLoader();
         fbxLoader.load(modelUrl, (fbx) => {
           applyTextureToModel(texture, fbx);
@@ -1244,7 +1273,8 @@ export class GraphicsEngine {
         obj.position.set(0, 0, 0);
         const modelUrl = SHIP_MODELS[mappedModelName] || fighterClassUrl;
         const isFbx = modelUrl.toLowerCase().includes('.fbx') || modelUrl.toLowerCase().includes('fbx-files') || modelUrl.toLowerCase().includes('battle');
-        const rotationY = isFbx ? -Math.PI / 2 : Math.PI;
+        const isGlb = modelUrl.toLowerCase().includes('.glb') || modelUrl.toLowerCase().includes('.gltf');
+        const rotationY = isGlb ? Math.PI : (isFbx ? -Math.PI / 2 : Math.PI);
         obj.rotation.y = rotationY; // Face forward
 
         obj.updateMatrixWorld(true);
@@ -2160,9 +2190,46 @@ export class GraphicsEngine {
    * Hubble space image matching the active level index, creating a stunning visual atmosphere.
    */
   updateSkyboxBackground() {
-    if (!this.nebulaSphere || skyboxKeys.length === 0) return;
+    if (!this.nebulaSphere) return;
+
+    // Dispose of any previously active scene background cube texture to prevent memory leaks
+    if (this.scene && this.scene.background) {
+      if (typeof this.scene.background.dispose === 'function') {
+        this.scene.background.dispose();
+      }
+      this.scene.background = null;
+    }
 
     const levelIndex = window.currentLevelIndex || 0;
+
+    // Check if it is a generated level with 6-sided custom skybox assets
+    if (levelIndex >= 61 && !this.isTestEnv) {
+      const px = getLevelAssetUrl(levelIndex, 'skybox_px.png');
+      const nx = getLevelAssetUrl(levelIndex, 'skybox_nx.png');
+      const py = getLevelAssetUrl(levelIndex, 'skybox_py.png');
+      const ny = getLevelAssetUrl(levelIndex, 'skybox_ny.png');
+      const pz = getLevelAssetUrl(levelIndex, 'skybox_pz.png');
+      const nz = getLevelAssetUrl(levelIndex, 'skybox_nz.png');
+
+      if (px && nx && py && ny && pz && nz) {
+        const cubeLoader = new THREE.CubeTextureLoader();
+        try {
+          cubeLoader.load([px, nx, py, ny, pz, nz], (cubeTex) => {
+            this.scene.background = cubeTex;
+            this.nebulaSphere.visible = false;
+          });
+          return;
+        } catch (e) {
+          // Fall back to standard sphere skybox on loader failure
+        }
+      }
+    }
+
+    // Classic/fallback handling: clear cube background and use the nebula sphere skybox
+    this.scene.background = null;
+    this.nebulaSphere.visible = true;
+
+    if (skyboxKeys.length === 0) return;
     const key = skyboxKeys[levelIndex % skyboxKeys.length];
     const module = skyboxImages[key];
     if (!module) return;
@@ -2238,13 +2305,89 @@ export class GraphicsEngine {
     }
   }
 
+  loadLevelSceneryModels(levelIndex, callback) {
+    if (this.customBuildingTemplates && this.customBuildingTemplates.length > 0) {
+      this.customBuildingTemplates.forEach((obj) => {
+        obj.traverse((node) => {
+          if (node.geometry) node.geometry.dispose();
+          if (node.material) {
+            if (Array.isArray(node.material)) {
+              node.material.forEach(m => m.dispose());
+            } else {
+              node.material.dispose();
+            }
+          }
+        });
+      });
+      this.customBuildingTemplates = [];
+    }
+
+    if (levelIndex < 61 || this.isTestEnv) {
+      callback();
+      return;
+    }
+
+    const templates = [];
+    let loadedCount = 0;
+    const objLoader = new OBJLoader();
+
+    const checkFinished = () => {
+      if (loadedCount === 10) {
+        this.customBuildingTemplates = templates;
+        callback();
+      }
+    };
+
+    for (let m = 1; m <= 10; m++) {
+      const filename = `scenery_model_${m}.obj`;
+      const url = getLevelObjUrl(levelIndex, filename);
+      if (!url) {
+        loadedCount++;
+        checkFinished();
+        continue;
+      }
+
+      objLoader.load(
+        url,
+        (obj) => {
+          const themeIndex = getActiveThemeIndex({ level_index: levelIndex });
+          const themeColor = THEMES[themeIndex] ? THEMES[themeIndex].defaultColor : new THREE.Color(0x221c38);
+          
+          obj.traverse((child) => {
+            if (child.isMesh) {
+              child.material = new THREE.MeshStandardMaterial({
+                color: themeColor,
+                roughness: 0.35,
+                metalness: 0.75,
+              });
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+          templates.push(obj);
+          loadedCount++;
+          checkFinished();
+        },
+        undefined,
+        (err) => {
+          loadedCount++;
+          checkFinished();
+        }
+      );
+    }
+  }
+
   /**
    * Spawns low-poly buildings from the FBX city template on both sides of the road.
    *
    * @param {number} trackLength - Z-length of the current level road track.
    */
   spawnCityScenery(trackLength, zOffset = 0) {
-    if (this.buildingTemplates.length === 0 || !this.sceneryGroup) return;
+    const templates = (this.customBuildingTemplates && this.customBuildingTemplates.length > 0)
+      ? this.customBuildingTemplates
+      : this.buildingTemplates;
+
+    if (templates.length === 0 || !this.sceneryGroup) return;
 
     const interval = 35.0; // spawn every 35 units along Z-axis
     const leftX = -18.0;   // safely to the left of the 14-width road

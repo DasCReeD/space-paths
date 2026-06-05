@@ -231,9 +231,14 @@ def batch_process_objs(input_dir, output_dir, target_tris=10000):
             dec_mod.ratio = dec_ratio
             print(f"Applying Decimate (ratio: {dec_ratio:.4f})")
 
-        # Enable Auto Smooth on the mesh
-        obj.data.use_auto_smooth = True
-        obj.data.auto_smooth_angle = math.radians(30.0)
+        # Enable Auto Smooth (Blender <4.1) or add Smooth by Angle modifier (Blender >=4.1)
+        try:
+            obj.data.use_auto_smooth = True
+            obj.data.auto_smooth_angle = math.radians(30.0)
+        except AttributeError:
+            # For Blender 4.1+, use the Smooth by Angle modifier
+            smooth_mod = obj.modifiers.new(name="SmoothByAngle", type='SMOOTH_BY_ANGLE')
+            smooth_mod.angle = math.radians(30.0)
 
         # Weighted Normal Modifier
         wn_mod = obj.modifiers.new(name="WeightedNormal", type='WEIGHTED_NORMAL')
@@ -258,7 +263,6 @@ def batch_process_objs(input_dir, output_dir, target_tris=10000):
             filepath=output_path,
             export_format='GLB',
             use_selection=True,
-            export_apply=True,
             export_yup=True
         )
         print(f"[Success] Optimized and saved: {output_path}")

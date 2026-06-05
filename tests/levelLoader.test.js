@@ -5,7 +5,9 @@ import {
   TILE_WIDTH,
   TILE_LENGTH,
   ROAD_WIDTH_LANES,
-  TOTAL_ROAD_WIDTH
+  TOTAL_ROAD_WIDTH,
+  getLevelObjUrl,
+  getLevelAssetUrl
 } from '../levelLoader.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -394,7 +396,7 @@ describe('buildLevel', () => {
       const row = [null, null, null, fullBlockWithTunnel, null, null, null];
       const levelData = createBaseLevelData({ rows: [row] });
       const result = buildLevel(levelData, scene);
-      // 1 obstacle block + 3 tunnel walls = 4
+      // Renders both the elevated obstacle block (1) and the tunnel walls (3)
       expect(result.collidables).toHaveLength(4);
     });
 
@@ -406,12 +408,34 @@ describe('buildLevel', () => {
       const levelData = createBaseLevelData({ rows: [row] });
       const result = buildLevel(levelData, scene);
       
-      // We expect 1 block collidable (minY=0.0, maxY=1.0) and 3 tunnel collidables (minY=1.0, maxY=3.8)
+      // Renders the half-block obstacle (1) and the tunnel walls (3)
       expect(result.collidables).toHaveLength(4);
       
-      // Find the tunnel left wall collidable
-      const tunnelLeftWall = result.collidables.find(c => c.minY === 1.0 && c.maxY === 3.8);
-      expect(tunnelLeftWall).toBeDefined();
+      // Find any tunnel wall collidable and verify it sits at baseY=1.0 (on top of the half block)
+      const tunnelWall = result.collidables.find(c => c.minY !== undefined && c.maxY !== undefined && c.minY > 0.1);
+      expect(tunnelWall).toBeDefined();
+      expect(tunnelWall.minY).toBe(1.0);
+    });
+
+    it('should dynamically shift tunnel height (baseY) to sit on top of custom-height ramp/road', () => {
+      const customTunnel = {
+        val: 0,
+        ramp: true,
+        startY: -4.0,
+        endY: -4.0,
+        tunnel: true,
+        top_color: 0,
+        bottom_color: 1,
+        low3: 1
+      };
+      const row = [null, null, null, customTunnel, null, null, null];
+      const levelData = createBaseLevelData({ rows: [row] });
+      const result = buildLevel(levelData, scene);
+
+      // Find any tunnel wall collidable and verify it sits at baseY=-4.0
+      const tunnelWall = result.collidables.find(c => c.minY !== undefined && c.maxY !== undefined && c.minY < -0.1);
+      expect(tunnelWall).toBeDefined();
+      expect(tunnelWall.minY).toBe(-4.0);
     });
   });
 
@@ -588,8 +612,9 @@ describe('buildLevel', () => {
       const row = [null, null, null, createFullBlockTile(), null, null, null];
       const levelData = createBaseLevelData({ rows: [row] });
       const result = buildLevel(levelData, scene);
-      // height = 2.0, yPos = 1.0
-      expect(result.roadMeshes[0].position.y).toBeCloseTo(1.0, 5);
+      // height = 2.0, yPos = 1.0 + 0.02 z-fighting offset
+      // Since a flat road tile is created underneath, index 0 is the flat road tile, index 1 is the obstacle block
+      expect(result.roadMeshes[1].position.y).toBeCloseTo(1.02, 5);
     });
   });
 
@@ -631,9 +656,9 @@ describe('buildLevel', () => {
       const row = [null, null, createFlatTile(), createFullBlockTile(), null, null, null];
       const levelData = createBaseLevelData({ rows: [row] });
       const result = buildLevel(levelData, scene);
-      // roadMeshes[0] = flat tile (col 2), roadMeshes[1] = full block (col 3)
+      // roadMeshes[0] = flat tile (col 2), roadMeshes[1] = flat tile under obstacle (col 3), roadMeshes[2] = full block (col 3)
       expect(result.roadMeshes[0].castShadow).toBe(false);
-      expect(result.roadMeshes[1].castShadow).toBe(true);
+      expect(result.roadMeshes[2].castShadow).toBe(true);
     });
   });
 
@@ -648,6 +673,20 @@ describe('buildLevel', () => {
     it('should export correct road configuration', () => {
       expect(ROAD_WIDTH_LANES).toBe(7);
       expect(TOTAL_ROAD_WIDTH).toBe(14.0);
+    });
+  });
+
+  // ── Custom Generated Level Assets ─────────────────────────────────────
+
+  describe('Custom Generated Level Assets', () => {
+    it('should export getLevelObjUrl and getLevelAssetUrl', () => {
+      expect(typeof getLevelObjUrl).toBe('function');
+      expect(typeof getLevelAssetUrl).toBe('function');
+    });
+
+    it('should return null or undefined for non-existent assets', () => {
+      expect(getLevelObjUrl(999, 'nonexistent.obj')).toBeNull();
+      expect(getLevelAssetUrl(999, 'nonexistent.png')).toBeNull();
     });
   });
 });

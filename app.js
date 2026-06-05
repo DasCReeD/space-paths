@@ -2,7 +2,7 @@
 import { loadLevelPack, getCachedPack } from './levels.js';
 import { GraphicsEngine } from './graphics.js';
 import { PhysicsEngine, KeyboardController, SHIP_LENGTH } from './physics.js';
-import { buildLevelAsync } from './levelLoader.js';
+import { buildLevelAsync, disposeUnusedThemes, getActiveThemeIndex } from './levelLoader.js';
 import { gameAudio } from './audio.js';
 import { ShipPreviewEngine } from './preview.js';
 
@@ -49,7 +49,20 @@ class GameManager {
       "ROAD 20", "ROAD 21", "ROAD 22", "ROAD 23", "ROAD 24", "ROAD 25", "ROAD 26", "ROAD 27", "ROAD 28", "ROAD 29",
       "ROAD 30"
     ];
+    this.generatedRoadNames = [
+      "DEMO LEVEL", "VECTOR PULSE", "RESONANCE STREAM",
+      "BLUE CREST", "SKY ALPINE", "VERTICAL REACH",
+      "COASTER CRUISE", "G-FORCE SHIFT", "THRILL RUNWAY",
+      "SILICON SLALOM", "CIRCUIT TRACE", "HARDWARE GATE",
+      "PHASE NOISE", "Z-FIGHT BEAT", "GRID FRACTURE",
+      "GLACIER SLIDE", "CRYO RUNNER", "STASIS DRIFT",
+      "BURN FLANK", "VOLCANIC CHASM", "SUPERNOVA RIFT",
+      "COSMIC RAILS", "FOG SHORE", "NEBULA PATH",
+      "VOID ISLANDS", "QUANTUM LEAP", "MONOLITH REACH",
+      "STICKY SLOW", "PULSE GATE", "CHRONO SPEED"
+    ];
     this.wasSteeringLastFrame = false;
+
     this.wallScrapeSoundTimer = 0.0;
 
     // Ship preview variables
@@ -724,10 +737,16 @@ class GameManager {
       this.showLevelSelection('standard');
     });
 
+    document.getElementById('btn-play-generated').addEventListener('click', () => {
+      gameAudio.playClick();
+      this.showLevelSelection('generated');
+    });
+
     document.getElementById('btn-play-xmas').addEventListener('click', () => {
       gameAudio.playClick();
       this.showLevelSelection('xmas');
     });
+
 
     const btnToggleMouse = document.getElementById('btn-toggle-mouse');
     if (btnToggleMouse) {
@@ -1423,13 +1442,21 @@ class GameManager {
     const levels = await loadLevelPack(packName);
 
     this.gameState = 'level_select';
-    const packTitle = packName === 'standard' ? 'STANDARD PACK' : 'XMAS SPECIAL';
+    const packTitle = packName === 'standard' ? 'STANDARD PACK' : (packName === 'xmas' ? 'XMAS SPECIAL' : 'GENERATED PACK');
     document.getElementById('level-pack-title').innerText = packTitle;
 
     const grid = document.getElementById('level-grid');
     grid.innerHTML = ''; // Clear previous
 
-    const names = packName === 'standard' ? [...this.standardRoadNames, ...this.xmasRoadNames] : this.xmasRoadNames;
+    let names;
+    if (packName === 'standard') {
+      names = [...this.standardRoadNames, ...this.xmasRoadNames];
+    } else if (packName === 'xmas') {
+      names = this.xmasRoadNames;
+    } else {
+      names = this.generatedRoadNames;
+    }
+
 
     levels.forEach((level, idx) => {
       const btn = document.createElement('div');
@@ -1494,19 +1521,25 @@ class GameManager {
 
     // 1. Reset Scene Meshes
     this.graphics.clearLevel();
+    await new Promise((resolve) => {
+      this.graphics.loadLevelSceneryModels(index, resolve);
+    });
     if (this.levelInfo && this.levelInfo.roadMeshes) {
       this.levelInfo.roadMeshes.forEach(mesh => {
         this.graphics.scene.remove(mesh);
-        if (mesh.geometry) mesh.geometry.dispose();
-        if (mesh.material) {
-          if (Array.isArray(mesh.material)) {
-            mesh.material.forEach(m => m.dispose());
-          } else {
-            mesh.material.dispose();
+        mesh.traverse((node) => {
+          if (node.geometry) node.geometry.dispose();
+          if (node.material) {
+            if (Array.isArray(node.material)) {
+              node.material.forEach(m => m.dispose());
+            } else {
+              node.material.dispose();
+            }
           }
-        }
+        });
       });
     }
+    disposeUnusedThemes(getActiveThemeIndex(this.currentLevelData));
 
     // 2. Build track geometry asynchronously with progress updates
     const onProgress = (percent) => {
@@ -1569,10 +1602,11 @@ class GameManager {
 
     // 5. Update HUD headers & telemetry, then show HUD and hide overlays
     const packNameEl = document.getElementById('hud-pack-name');
-    if (packNameEl) packNameEl.innerText = this.currentPack === 'standard' ? 'STANDARD PACK' : 'XMAS SPECIAL';
-    const roadNames = this.currentPack === 'standard' ? [...this.standardRoadNames, ...this.xmasRoadNames] : this.xmasRoadNames;
+    if (packNameEl) packNameEl.innerText = this.currentPack === 'standard' ? 'STANDARD PACK' : (this.currentPack === 'xmas' ? 'XMAS SPECIAL' : 'GENERATED PACK');
+    const roadNames = this.currentPack === 'standard' ? [...this.standardRoadNames, ...this.xmasRoadNames] : (this.currentPack === 'xmas' ? this.xmasRoadNames : this.generatedRoadNames);
     const roadNameEl = document.getElementById('hud-road-name');
     if (roadNameEl) roadNameEl.innerText = roadNames[index] || `ROAD ${index}`;
+
 
     const gravityVal = this.currentLevelData.gravity ? ((this.currentLevelData.gravity - 3) * 100) : 500;
     const gravityTextEl = document.getElementById('hud-gravity-text');
@@ -1795,6 +1829,7 @@ class GameManager {
         const nextIdx = (this.currentLevelIndex + 1) % packLevels.length;
         this.currentLevelIndex = nextIdx;
         this.currentLevelData = packLevels[nextIdx];
+        disposeUnusedThemes(getActiveThemeIndex(this.currentLevelData));
 
         // Bind to window for physics tile checks
         window.currentLevelIndex = nextIdx;
@@ -1822,23 +1857,26 @@ class GameManager {
         // Clean up old meshes from the scene
         oldMeshes.forEach(mesh => {
           this.graphics.scene.remove(mesh);
-          if (mesh.geometry) mesh.geometry.dispose();
-          if (mesh.material) {
-            if (Array.isArray(mesh.material)) {
-              mesh.material.forEach(m => m.dispose());
-            } else {
-              mesh.material.dispose();
+          mesh.traverse((node) => {
+            if (node.geometry) node.geometry.dispose();
+            if (node.material) {
+              if (Array.isArray(node.material)) {
+                node.material.forEach(m => m.dispose());
+              } else {
+                node.material.dispose();
+              }
             }
-          }
+          });
         });
 
         // 5. Replenish fuel/oxygen and update gravity/telemetry
         this.physics.fuel = nextLevelInfo.fuel * 50;
         this.physics.oxygen = nextLevelInfo.oxygen;
 
-        const roadNames = this.currentPack === 'standard' ? [...this.standardRoadNames, ...this.xmasRoadNames] : this.xmasRoadNames;
+        const roadNames = this.currentPack === 'standard' ? [...this.standardRoadNames, ...this.xmasRoadNames] : (this.currentPack === 'xmas' ? this.xmasRoadNames : this.generatedRoadNames);
         const roadNameEl = document.getElementById('hud-road-name');
         if (roadNameEl) roadNameEl.innerText = roadNames[nextIdx] || `ROAD ${nextIdx}`;
+
 
         const gravityVal = this.currentLevelData.gravity ? ((this.currentLevelData.gravity - 3) * 100) : 500;
         const gravityTextEl = document.getElementById('hud-gravity-text');

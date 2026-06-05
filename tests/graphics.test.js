@@ -133,9 +133,9 @@ describe('GraphicsEngine', () => {
       expect(engine.scene).toBeInstanceOf(THREE.Scene);
     });
 
-    it('should set fog on the scene', () => {
+    it('should set fog on the scene to null', () => {
       engine.init(container);
-      expect(engine.scene.fog).toBeInstanceOf(THREE.FogExp2);
+      expect(engine.scene.fog).toBeNull();
     });
 
     it('should create a WebGLRenderer', () => {

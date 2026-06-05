@@ -1,319 +1,380 @@
-# SkyRoads WebGL — Architecture Overview
+# SkyRoads WebGL — Architecture
 
-> A modern 3D WebGL remake of the classic 1993 DOS game SkyRoads, built with Three.js and vanilla JavaScript.
+> **Last updated:** 2026-06-04
+> Definitive architectural reference for the SkyRoads WebGL project.
 
 ---
 
 ## Project Overview
 
-| Attribute       | Value                                                          |
-|-----------------|----------------------------------------------------------------|
-| **Project**     | SkyRoads Modern WebGL Remake                                   |
-| **Runtime**     | Browser (ES Modules)                                           |
-| **3D Engine**   | [Three.js](https://threejs.org/) v0.160.0                      |
-| **Audio**       | Web Audio API (procedural synthesis, plus classic OPL2/DOS assets) |
-| **Build Tool**  | [Vite](https://vitejs.dev/) v5.x                               |
-| **Test Runner** | [Vitest](https://vitest.dev/) v1.x (jsdom environment)        |
-| **Package**     | `skyroads-modern` v1.0.0 (private, ESM)                       |
-| **Fonts**       | Google Fonts — Orbitron (display), Outfit (body)               |
-| **Level Data**  | Lazy-loaded JSON files fetched on demand (~6 MB standard and xmas packs) |
+| Component | Technology |
+|-----------|------------|
+| **Runtime** | Browser (ES Modules) |
+| **3D Engine** | Three.js ^0.175.0 |
+| **Build Tool** | Vite ^6.3.5 |
+| **Test Runner** | Vitest ^3.1.4 + jsdom |
+| **Audio** | Web Audio API + OPL2 FM Synthesis |
+| **Fonts** | Google Fonts (Orbitron, Outfit) |
+| **Deployment** | GitHub Pages (automated via Actions) |
+| **Package** | npm (ES module, `type: "module"`) |
 
-### Tech Stack Diagram
+---
 
-```mermaid
-graph TB
-    subgraph "Browser Runtime"
-        HTML["index.html"]
-        CSS["index.css"]
-        JS["ES Modules"]
-    end
+## Source File Inventory
 
-    subgraph "Dependencies"
-        THREE["Three.js v0.160"]
-        WAAPI["Web Audio API"]
-        GFONTS["Google Fonts"]
-    end
-
-    subgraph "Build Tooling"
-        VITE["Vite v5"]
-        VITEST["Vitest v1"]
-        JSDOM["jsdom v22"]
-    end
-
-    JS --> THREE
-    JS --> WAAPI
-    HTML --> GFONTS
-    VITE --> JS
-    VITEST --> JSDOM
-```
+| File | Size | Lines | Responsibility |
+|------|------|-------|----------------|
+| [app.js](file:///c:/dev/Sky%20roads/app.js) | 120 KB | ~3,044 | GameManager — state machine, UI, game loop, input, garage, settings |
+| [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) | 93 KB | ~1,800 | Three.js rendering, particles, skybox, theming, ship models |
+| [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) | 88 KB | ~2,200 | Level geometry builder, themed textures, async building, VRAM disposal |
+| [index.css](file:///c:/dev/Sky%20roads/index.css) | 68 KB | ~2,744 | Retro-futuristic glassmorphism design system |
+| [index.html](file:///c:/dev/Sky%20roads/index.html) | 61 KB | ~975 | Full game UI — menus, HUD, settings, garage, touch controls |
+| [worldBuilder.js](file:///c:/dev/Sky%20roads/worldBuilder.js) | 50 KB | ~1,695 | Procedural level generation (standalone CLI) |
+| [physics.js](file:///c:/dev/Sky%20roads/physics.js) | 42 KB | ~850 | Physics engine, collision, ship class presets, keyboard/gamepad input |
+| [audio.js](file:///c:/dev/Sky%20roads/audio.js) | 41 KB | ~1,281 | Web Audio synthesizer, music sequencer, SFX |
+| [cockpitConsole.js](file:///c:/dev/Sky%20roads/cockpitConsole.js) | 35 KB | ~400 | 3D cockpit dashboard HUD + path scanner minimap |
+| [preview.js](file:///c:/dev/Sky%20roads/preview.js) | 23 KB | ~600 | Ship garage preview engine (isolated Three.js scene) |
+| [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) | 19 KB | ~637 | OPL2 FM synthesis + LZS decompressor |
+| [generate_textures.js](file:///c:/dev/Sky%20roads/generate_textures.js) | 18 KB | ~511 | Procedural PNG texture generator (standalone CLI) |
+| [debug_coords.js](file:///c:/dev/Sky%20roads/debug_coords.js) | 7 KB | ~220 | Puppeteer-based UI debug automation |
+| [levels.js](file:///c:/dev/Sky%20roads/levels.js) | 2 KB | ~78 | Level pack fetch + cache loader |
 
 ---
 
 ## Module Dependency Graph
 
-The application follows a **hub-and-spoke** architecture where [app.js](file:///c:/dev/Sky%20roads/app.js) acts as the central orchestrator importing all subsystems.
-
 ```mermaid
-graph LR
-    APP["app.js<br/>GameManager"]
-    GFX["graphics.js<br/>GraphicsEngine"]
-    PHY["physics.js<br/>PhysicsEngine + KeyboardController"]
-    LVL["levelLoader.js<br/>buildLevel()"]
-    AUD["audio.js<br/>AudioSynthesizer"]
-    LEV["levels.js<br/>LEVEL_PACKS"]
-    THREE["three (npm)"]
-    HTML["index.html"]
-    CSS["index.css"]
+graph TD
+    APP["app.js<br/>GameManager"] --> GFX["graphics.js<br/>GraphicsEngine"]
+    APP --> PHY["physics.js<br/>PhysicsEngine + KeyboardController"]
+    APP --> LL["levelLoader.js<br/>Level Builder"]
+    APP --> AUD["audio.js<br/>AudioSynthesizer"]
+    APP --> PRV["preview.js<br/>ShipPreviewEngine"]
+    APP --> LVL["levels.js<br/>Pack Loader"]
 
-    APP -->|"imports"| GFX
-    APP -->|"imports"| PHY
-    APP -->|"imports"| LVL
-    APP -->|"imports"| AUD
-    APP -->|"imports"| LEV
+    GFX --> PHY
+    GFX --> CC["cockpitConsole.js<br/>CockpitConsole3D + Minimap"]
+    GFX --> LL
+    GFX --> THREE["three.js"]
 
-    GFX -->|"imports"| THREE
-    GFX -->|"imports SHIP_*"| PHY
-    PHY -->|"imports"| THREE
-    LVL -->|"imports"| THREE
+    CC --> LL
+    CC --> THREE
 
-    HTML -->|"link stylesheet"| CSS
-    HTML -->|"script module"| APP
-    HTML -->|"importmap CDN"| THREE
+    PHY --> THREE
+    LL --> THREE
+    PRV --> THREE
+
+    AUD --> OPL["oplSynth.js<br/>OPL2 FM Synth"]
+
+    LVL -->|"fetch"| SD["data/standard_levels.json"]
+    LVL -->|"fetch"| XD["data/xmas_levels.json"]
+    LVL -->|"fetch"| GD["data/generated_levels.json"]
+
+    LL -->|"import"| TEX["assets/custom/*.png<br/>~269 textures"]
+    GFX -->|"load"| MDL["assets/models/*.obj<br/>6 ship models"]
+    OPL -->|"decompress"| DOS["MUZAX.LZS / SFX.SND<br/>Original DOS audio"]
+
+    subgraph "Standalone CLI Tools"
+        WB["worldBuilder.js"] -->|"reads"| LP["data/level_patterns.json"]
+        WB -->|"writes"| GD
+        GT["generate_textures.js"] -->|"writes"| PTEX["*.png textures"]
+        DC["debug_coords.js"] -->|"puppeteer"| VITE["Vite dev server"]
+    end
 ```
-
-> [!NOTE]
-> `audio.js` imports OPL2 FM synthesizer and LZS decompression modules from `./oplSynth.js`.
-> `levels.js` imports static level JSON URLs using Vite asset URL queries.
 
 ---
 
-## GameManager State Machine
-
-The [GameManager](file:///c:/dev/Sky%20roads/app.js#L8-L327) class in `app.js` implements a finite state machine with five states:
+## Game State Machine
 
 ```mermaid
 stateDiagram-v2
-    [*] --> menu : DOMContentLoaded
-
-    menu --> level_select : "Play Standard" / "Play Xmas"
-    menu --> menu : "How to Play" (overlay swap)
-
-    level_select --> playing : Click level item
-    level_select --> menu : "Back" button
-
-    playing --> death : isDead flag set
-    playing --> success : Ship crosses finishZ
-
-    death --> playing : "Try Again" button
-    death --> menu : "Back to Menu" button
-
-    success --> playing : "Next Road" button
-    success --> menu : "Back to Menu" button
+    [*] --> menu
+    menu --> levelSelect : PLAY
+    menu --> settings : SETTINGS
+    menu --> howToPlay : HOW TO PLAY
+    levelSelect --> loading : select level
+    levelSelect --> garage : GARAGE
+    loading --> playing : level built
+    playing --> paused : pause
+    paused --> playing : resume
+    paused --> menu : quit
+    playing --> dead : collision / fuel / oxygen / fall
+    playing --> success : reach finish
+    dead --> playing : retry
+    dead --> levelSelect : level select
+    success --> levelSelect : continue
+    success --> playing : retry
+    settings --> menu : back
+    garage --> levelSelect : back
+    howToPlay --> menu : back
 ```
-
-### State Responsibilities
-
-| State          | Active Screen        | Game Loop Behavior                          | Audio State       |
-|----------------|----------------------|---------------------------------------------|--------------------|
-| `menu`         | `menu-screen`        | Stars rotate slowly, renderer active         | Engine stopped     |
-| `level_select` | `level-screen`       | Stars rotate slowly, renderer active         | Engine stopped     |
-| `playing`      | HUD visible          | Full physics + graphics update loop          | Engine hum running |
-| `death`        | `death-screen` (1.2s delay) | Explosion particles, physics frozen   | Explosion SFX      |
-| `success`      | `success-screen`     | Physics frozen, scene visible                | Win fanfare SFX    |
 
 ---
 
 ## Game Loop Data Flow
 
-The main [animate()](file:///c:/dev/Sky%20roads/app.js#L211-L253) loop runs via `requestAnimationFrame` at display refresh rate. During `playing` state, each frame executes this pipeline:
-
 ```mermaid
 flowchart TD
-    RAF["requestAnimationFrame"] --> DT["Calculate delta time<br/>(capped at 50ms)"]
-
-    DT --> PHYS["physics.update(dt, keyboard, levelInfo)"]
-
-    subgraph "Physics Pipeline"
-        PHYS --> FUEL["Consume Fuel & Oxygen"]
-        FUEL --> SPECIAL["Resolve Special Tiles<br/>(boost, sticky, slippery, burning, refill)"]
-        SPECIAL --> ACCEL["Forward Acceleration / Drag"]
-        ACCEL --> STEER["Steering (Left/Right)"]
-        STEER --> JUMP["Jump & Gravity"]
-        JUMP --> POS["Update Position"]
-        POS --> COLL["Ground & Block Collision"]
-        COLL --> FALL["Fall-off-road Detection"]
-    end
-
-    PHYS --> HUD["updateHUD()<br/>Speed, Oxygen, Fuel, Progress"]
-    HUD --> GFX["graphics.update(physics, dt)"]
-
-    subgraph "Graphics Pipeline"
-        GFX --> SHIP["Position Ship Mesh<br/>Banking & Pitch"]
-        SHIP --> CAM["Smooth Chase Camera<br/>(lerp interpolation)"]
-        CAM --> LIGHT["Reposition Sun Light"]
-        LIGHT --> STAR["Parallax Starfield"]
-        STAR --> PART["Update Particles<br/>(thrusters & explosions)"]
-    end
-
-    GFX --> AUDIO["gameAudio.updateEngineSpeed(ratio)"]
-    AUDIO --> REFILL{"Refill trigger?"}
-    REFILL -->|yes| RSND["gameAudio.playRefill()"]
-    REFILL -->|no| CHECK["Check success / death"]
-
-    CHECK -->|"position ≤ finishZ"| SUCCESS["handleSuccess()"]
-    CHECK -->|"isDead"| DEATH["handleDeath()"]
-    CHECK -->|"continue"| RAF
+    RAF["requestAnimationFrame"] --> DT["Calculate delta time<br/>(capped at 0.05s)"]
+    DT --> INPUT["Poll Input<br/>Keyboard + Gamepad + Touch"]
+    INPUT --> PHY["PhysicsEngine.update(dt, inputs)"]
+    
+    PHY --> THROTTLE["Throttle & Steering"]
+    PHY --> GRAVITY["Gravity & Jumping<br/>(coyote time, variable height)"]
+    PHY --> COLLISION["Collision Detection<br/>(AABB + ramp interpolation)"]
+    PHY --> EFFECTS["Tile Effects<br/>(boost, slow, sticky, etc.)"]
+    PHY --> RESOURCES["Fuel & Oxygen Depletion"]
+    
+    COLLISION --> DEATH{"Death?"}
+    RESOURCES --> DEATH
+    DEATH -->|yes| DEATHSCREEN["Show Death Screen"]
+    DEATH -->|no| PROGRESS{"At Finish?"}
+    PROGRESS -->|yes| SUCCESSSCREEN["Show Success Screen"]
+    PROGRESS -->|no| RENDER["GraphicsEngine.update(state, dt)"]
+    
+    RENDER --> CAMERA["Update Camera Position"]
+    RENDER --> SHIP["Update Ship Transform"]
+    RENDER --> PARTICLES["Update Particles"]
+    RENDER --> COCKPIT["Update Cockpit Gauges"]
+    RENDER --> MINIMAP["Update Minimap"]
+    RENDER --> DRAW["renderer.render(scene, camera)"]
+    DRAW --> HUD["Update DOM HUD<br/>(speed, fuel, oxygen bars)"]
+    HUD --> RAF
 ```
-
-### Menu Loop (non-playing states)
-
-When not in `playing` state, the animate loop only:
-1. Rotates the starfield slowly (`starField.rotation.y += 0.02 * dt`)
-2. Calls `graphics.render()` to paint the scene
 
 ---
 
-## Level Data Pipeline
-
-Level data originates from the original 1993 DOS SkyRoads `.LZS` compressed road files, extracted offline into JSON and embedded in [levels.js](file:///c:/dev/Sky%20roads/levels.js).
+## Rendering Pipeline
 
 ```mermaid
 flowchart LR
-    DOS["DOS SkyRoads<br/>.LZS files"] -->|"Offline extraction"| JSON["JSON structures"]
-    JSON -->|"Embedded in"| LEVELS["levels.js<br/>LEVEL_PACKS constant"]
-    LEVELS -->|"Imported by"| APP["app.js<br/>GameManager"]
-    APP -->|"Passes levelData to"| BUILD["buildLevel(levelData, scene)"]
-
-    subgraph "buildLevel() Pipeline"
-        BUILD --> ITER["Iterate rows × 7 columns"]
-        ITER --> TILE{"Tile null?"}
-        TILE -->|"yes"| SKIP["Skip (gap)"]
-        TILE -->|"no"| GEOM["Create BoxGeometry"]
-        GEOM --> MAT["Assign Material<br/>(palette color + glow)"]
-        MAT --> MESH["Create Mesh<br/>→ add to Scene"]
-        MESH --> BB["Compute Bounding Box"]
-        BB --> COLL["Push to collidables[]"]
-        BB --> SPEC{"Special tile?"}
-        SPEC -->|"yes"| STILE["Push to specialTiles[]"]
-        SPEC -->|"no"| NEXT["Next tile"]
-        MESH --> TUN{"Tunnel bit?"}
-        TUN -->|"yes"| ARCH["Build tunnel archway<br/>(walls + ceiling)"]
+    subgraph Scene["Three.js Scene"]
+        SKY["Procedural Skybox<br/>(stars, nebulae, planets)"]
+        ROAD["Road Segments<br/>(themed textures + decals)"]
+        OBS["Obstacles<br/>(themed materials)"]
+        TUN["Tunnels<br/>(archway models + interior)"]
+        SHIP["Ship Model<br/>(OBJ/GLB + skin + accent)"]
+        PART["Particle Systems<br/>(exhaust, explosions, sparks)"]
+        COCK["Cockpit Console<br/>(3D gauges, LCD, wings)"]
+        MINI["Minimap<br/>(canvas-based path scanner)"]
     end
-
-    BUILD -->|"Returns LevelInfo"| INFO["{ trackLength, collidables,<br/>specialTiles, finishZ,<br/>gravity, fuel, oxygen,<br/>roadMeshes }"]
-```
-
-### Level Data Schema
-
-```
-LEVEL_PACKS = {
-  "standard": [ LevelData, ... ],   // 31 levels (index 0–30)
-  "xmas":     [ LevelData, ... ]     // 31 levels (index 0–30)
-}
-
-LevelData = {
-  level_index: number,
-  gravity:     number,        // DOS gravity scale (e.g. 8 → mapped to 24 m/s²)
-  fuel:        number,        // Starting fuel (e.g. 130 → scaled ×50 = 6500)
-  oxygen:      number,        // Starting oxygen percentage (e.g. 60)
-  palette:     [r,g,b][],     // 16+ color entries, values 0–255
-  rows:        (Tile|null)[][]  // Array of rows, each row has 7 columns
-}
-
-Tile = {
-  val:          number,
-  full:         boolean,      // Full-height obstacle flag
-  half:         boolean,      // Half-height obstacle flag
-  tunnel:       boolean,      // Tunnel/archway overlay
-  top_color:    number,       // Palette index for top face (determines behavior)
-  bottom_color: number,       // Palette index for bottom/sides
-  low3:         number        // Low 3 bits of raw tile value
-}
+    
+    Scene --> RENDERER["WebGLRenderer"]
+    RENDERER --> CANVAS["HTMLCanvasElement"]
+    CANVAS --> DOM["DOM HUD Overlay<br/>(speed/fuel/oxygen bars)"]
 ```
 
 ---
 
-## File Responsibility Table
+## Audio Architecture
 
-| File | Lines | Size | Responsibility |
-|------|------:|-----:|----------------|
-| [app.js](file:///c:/dev/Sky%20roads/app.js) | 1,487 | 64 KB | Game orchestrator, state machine, UI event wiring, HUD updates, touch control mapping, physics calibrator dashboard, infinite road seamless transition manager, game loop |
-| [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) | 1,675 | 71 KB | Three.js renderer, scene setup, ship mesh, skybox, particles, chase camera, volumetric fragment shaders, city scenery spawners, custom procedural space/nebula particle systems |
-| [physics.js](file:///c:/dev/Sky%20roads/physics.js) | 729 | 27 KB | Three-axis motion integration, collision detection, fuel/oxygen, special tiles terrain effects, keyboard input, settings calibrator parameters, coyote-time buffers, collision/bounce behaviors, sloped ramp snapping/side collisions, tunnel entrance transition overrides |
-| [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) | 1,404 | 52 KB | Asynchronous geometry compilation, BoxGeometry/rounded archways, palette mappings, finish neon arches, gap/tunnel mesh optimizations, custom triangular wedge geometry generator (`createRampGeometry`), level parser ramp pre-processing scanner |
-| [audio.js](file:///c:/dev/Sky%20roads/audio.js) | 1,060 | 35 KB | Procedural sound synthesis via Web Audio API, speed-modulated engine hum, jump sweeps, and background synthesizer music playback. Manages sound effect triggers and sound mode selection (Synth vs. Classic). |
-| [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) | 631 | 19 KB | Real-time 15-channel OPL2 AdLib FM synthesis engine, DOS LZS decompressor stream parser, and Muzax / SFX sound structure decoders. |
-| [levels.js](file:///c:/dev/Sky%20roads/levels.js) | 76 | 2 KB | Lazy-loading level pack manifest & caching utility to dynamically load `./data/standard_levels.json` and `./data/xmas_levels.json` without bloating initial page loads |
-| [index.html](file:///c:/dev/Sky%20roads/index.html) | 641 | 37 KB | DOM structure: canvas container, HUD overlays, unified next-gen touch controls (left 2D analog stick, right arced action buttons), settings popups with calibration sliders, level select buttons |
-| [index.css](file:///c:/dev/Sky%20roads/index.css) | 1,869 | 49 KB | Synthwave design system: glassmorphic styles, neon glow micro-animations, full-scale layouts, landscape/portrait media query scaling, PS2-style circular virtual joystick, and right-side arced button layouts |
-| [vite.config.js](file:///c:/dev/Sky%20roads/vite.config.js) | 17 | 325 B | Dev server (port 3000, auto-open), build (esbuild minify), test (jsdom) |
-| [package.json](file:///c:/dev/Sky%20roads/package.json) | 21 | 361 B | Package manifest, scripts: `dev`, `build`, `preview`, `test` |
+```mermaid
+flowchart TD
+    subgraph AudioSynthesizer
+        CTX["AudioContext"] --> MUSIC_GAIN["Music GainNode"]
+        CTX --> SFX_GAIN["SFX GainNode"]
+    end
+    
+    subgraph "Music Sources"
+        OPL["OPL2 FM Synth<br/>(15 channels, ADSR, 8 waveforms)"]
+        RETRO["RetroMusicSequencer<br/>(8-bit chiptune patterns)"]
+    end
+    
+    subgraph "SFX Sources"
+        ENGINE["Engine Hum<br/>(speed-reactive)"]
+        BOOST["Boost Effect"]
+        CRASH["Collision Impact"]
+        JUMP["Jump Sound"]
+        LAND["Landing Thump"]
+    end
+    
+    OPL --> MUSIC_GAIN
+    RETRO --> MUSIC_GAIN
+    MUSIC_GAIN --> DEST["AudioContext.destination"]
+    
+    ENGINE --> SFX_GAIN
+    BOOST --> SFX_GAIN
+    CRASH --> SFX_GAIN
+    JUMP --> SFX_GAIN
+    LAND --> SFX_GAIN
+    SFX_GAIN --> DEST
+    
+    DOS["MUZAX.LZS<br/>(LZS compressed)"] -->|"decompressStream()"| OPL
+    SND["SFX.SND"] -->|"parseSfx()"| SFX_GAIN
+```
+
+---
+
+## Input Systems
+
+### 1. Keyboard
+- **WASD / Arrow keys** — steering and throttle
+- **Space** — jump
+- **Shift** — brake
+- Handled by `KeyboardController` class in [physics.js](file:///c:/dev/Sky%20roads/physics.js)
+
+### 2. Xbox Gamepad
+- `GamepadManager` class in [app.js](file:///c:/dev/Sky%20roads/app.js)
+- Configurable button mapping for 7 actions (stored in localStorage)
+- Analog stick deadzone configuration
+- Menu navigation support
+- Polling via Gamepad API
+
+### 3. Touch Controls
+- `TouchControlManager` class in [app.js](file:///c:/dev/Sky%20roads/app.js)
+- Virtual analog stick (PS2-style)
+- D-pad mode alternative
+- Throttle axis (vertical joystick maps to forward/backward)
+- Boat throttle mode (joystick Y disables drag for zero-stick = coast)
+- Drag-to-reposition all control groups
+- Touch customizer dashboard (type, scale, swap sides, button config)
+- Lane-snapping magnetism for mobile
+
+### 4. Mouse
+- Optional mouse steering mode
+- Toggle in settings
+
+---
+
+## Theme System
+
+14 visual themes assigned per-level via `getThemeForLevel()`:
+
+| # | Theme | Description |
+|---|-------|-------------|
+| 1 | `core` | Default base theme |
+| 2 | `cyberpunk` | Neon-lit futuristic city |
+| 3 | `industrial` | Heavy metal, riveted panels |
+| 4 | `organic` | Bio-mechanical, living surfaces |
+| 5 | `alien` | Extraterrestrial, exotic materials |
+| 6 | `furnace` | Volcanic, molten metal |
+| 7 | `glitch` | Digital corruption, pixelated |
+| 8 | `pulse` | Energy waves, electric |
+| 9 | `ridge` | Rocky, mountainous terrain |
+| 10 | `shallows` | Underwater, aquatic |
+| 11 | `spire` | Crystal towers, glass |
+| 12 | `thrill` | High-speed, racing |
+| 13 | `tundra` | Frozen, icy landscape |
+| 14 | `void` | Dark space, emptiness |
+
+Each theme provides: road diffuse+normal, obstacle diffuse+normal, tunnel diffuse+normal, 6 decal variants.
+
+VRAM managed by `disposeUnusedThemes()` which releases GPU textures for inactive themes.
+
+---
+
+## Ship Class System
+
+6 ship classes, each with unique physics tuning. Selected in the Garage, persisted to localStorage:
+
+| Class | Max Speed | Accel | Steer | Drag | Character |
+|-------|-----------|-------|-------|------|-----------|
+| `original` | Baseline | Baseline | Baseline | Baseline | Faithful DOS recreation |
+| `fighter` | High | High | High | High | Fast, agile, burns fuel |
+| `scout` | Medium | Very High | Very High | Medium | Quick acceleration, nimble |
+| `hauler` | Low | Low | Low | Low | Slow, fuel efficient |
+| `dreadnought` | Very High | Medium | Low | Low | Fast but hard to steer |
+| `cruiser` | Medium-High | Medium | Medium | Medium | Balanced all-rounder |
+
+---
+
+## Level System
+
+| Pack | Source | Count | Data File |
+|------|--------|-------|-----------|
+| Standard | Original 1993 DOS SkyRoads | 31 levels (10 worlds × 3 + extras) | `data/standard_levels.json` |
+| Xmas Special | SkyRoads Xmas Special | 31 levels | `data/xmas_levels.json` |
+| Generated | Procedural (worldBuilder.js) | 30 levels (index 61–90) | `data/generated_levels.json` |
+
+Level patterns extracted from the original game are stored in `data/level_patterns.json` (52 KB) and used by `worldBuilder.js` for procedural generation.
+
+Each generated level is validated by a static physics solver to ensure it is completable before being accepted.
+
+---
+
+## Asset Pipeline
+
+```mermaid
+flowchart LR
+    CONCEPT["Concept Art /<br/>Text Prompts"] --> COMFY["ComfyUI<br/>Trellis2 + Pixal3D"]
+    COMFY --> RAW["Raw GLB"]
+    RAW --> BLENDER["Blender CLI<br/>(decimate, UV, cleanup)"]
+    BLENDER --> GAME["Game-Ready GLB"]
+    GAME --> THREE["Three.js<br/>OBJLoader / GLTFLoader"]
+    
+    PROMPTS["Theme Prompts"] --> SDXL["SDXL / FLUX"]
+    SDXL --> TEX["Themed PBR Textures"]
+    TEX --> THREE
+    
+    MATH["Seeded PRNG"] --> GENTEX["generate_textures.js"]
+    GENTEX --> PTEX["Procedural Textures"]
+    PTEX --> THREE
+```
+
+**Asset Counts:**
+- 6 OBJ models + 6 GLB models + tunnel archway (OBJ + GLB)
+- ~269 PNG textures across 14 themes
+- 30 per-level asset directories (`level_61` through `level_90`)
+- 4+ Blender source files with cleanup scripts
+- 2 procedurally generated textures
+- 6 GLTF reference asset packs (skybox, textures)
+
+---
+
+## Test Architecture
+
+20 test files in `tests/`, powered by Vitest + jsdom:
+
+| Test File | Module Under Test | Focus |
+|-----------|-------------------|-------|
+| `app.test.js` | GameManager | Full DOM lifecycle, state machine, settings, scoring |
+| `graphics.test.js` | GraphicsEngine | Scene, camera, particles, ship mesh, skybox |
+| `physics.test.js` | PhysicsEngine | Acceleration, collision, jump, effects, death |
+| `levelLoader.test.js` | buildLevel() | Tile types, blocks, tunnels, finish line, gravity |
+| `audio.test.js` | AudioSynthesizer | Engine sounds, SFX, music sequencer, volume |
+| `cockpitConsole.test.js` | CockpitConsole3D | Gauges, minimap, frustum positioning |
+| `touchControls.test.js` | TouchControlManager | Analog stick, D-pad, layout validation |
+| `shipStats.test.js` | CLASS_PRESETS | Ship classes, applyShipClass, localStorage |
+| `gamepad.test.js` | GamepadManager | Input mapping, deadzone, multi-gamepad |
+| `ramps.test.js` | Ramp physics | Height interpolation, collision, transitions |
+| `worldBuilder.test.js` | Generated levels | Data integrity, 30 levels, palette validation |
+| `preview.test.js` | ShipPreviewEngine | Garage preview, skin/model swapping, cleanup |
+| `settingsToggles.test.js` | Settings UI | Throttle, cockpit, fullscreen toggles |
+| `laneSnapToggles.test.js` | Lane snapping | Enable/disable, strength config |
+| `dynamicSkinning.test.js` | Theme system | 14 themes, VRAM management, texture cache |
+| `classicAudio.test.js` | Classic audio | Retro vs classic toggle, track cycling |
+| `generate.test.js` | Asset pipeline | Model/texture generation validation |
+| `playtest_run.test.js` | Playtest system | Automated screenshot pipeline |
+| `assets.test.js` | Asset files | Model/texture existence verification |
+| `analyze.test.js` | Level analysis | Pattern extraction validation |
+
+**Test setup:** [vitest.setup.js](file:///c:/dev/Sky%20roads/vitest.setup.js) generates stub OBJ models and PNG textures before tests run.
+
+---
+
+## CI/CD
+
+### GitHub Pages Deployment
+
+File: [.github/workflows/deploy.yml](file:///c:/dev/Sky%20roads/.github/workflows/deploy.yml)
+
+**Trigger:** Push to `main` branch
+**Runner:** ubuntu-latest
+**Pipeline:** Checkout → Node 20 → `npm ci` → `npm run build` → Deploy `./dist` to GitHub Pages
 
 ---
 
 ## Key Design Decisions
 
-### 1. Hub-and-Spoke Architecture (No Framework)
-
-The project deliberately avoids SPA frameworks. `app.js` serves as a thin orchestrator wiring together three independent engines (graphics, physics, audio) plus a pure data module. This keeps the dependency graph flat and each module testable in isolation.
-
-### 2. Dynamic Lazy Loading of Level Data
-
-All level pack files (~6.3 MB JSON data) are dynamically lazy-loaded via `fetch` when starting standard or xmas level packs. The `levels.js` module exposes an asynchronous `loadLevelPack(packName)` function that caches data once fetched. This reduces the initial JS bundle size from 6MB+ to just ~2KB, ensuring fast loading and saving initial network bandwidth.
-
-### 3. Dual-Mode Audio System: Procedural & Classic FM Emulation
-
-The audio engine features a dual-mode sound system selectable in Settings:
-1. **Synth Mode**: Generates all sound effects (jump sweeps, engine rumble, refills, crashes) and chiptune loops on-the-fly using browser oscillators, filters, noise nodes, and ADSR gain envelopes.
-2. **Classic Mode**: Fetches original DOS assets (`MUZAX.LZS`, `SFX.SND`, `INTRO.SND`) dynamically. A client-side LZSS decompressor decodes these binary resources in the browser, extracting raw 8kHz 8-bit unsigned PCM sound effects and FM registers. A custom 15-channel OPL2 AdLib FM software synthesizer (`OplSynthJS`) emulates AdLib FM registers, scheduling notes and outputting samples directly to a Web Audio `ScriptProcessorNode` to reproduce the authentic 1993 game soundtrack.
-If DOS asset fetches fail (e.g. in offline environments or JSDOM test runners), the engine gracefully falls back to Synth Mode to prevent breakage.
-
-### 4. Global Window State for Cross-Module Communication
-
-`physics.js` reads `window.currentLevelData`, `window.currentGamePack`, and `window.currentLevelIndex` for gap detection in [checkTileExists()](file:///c:/dev/Sky%20roads/physics.js#L266-L290). These globals are set by `app.js` in [startLevel()](file:///c:/dev/Sky%20roads/app.js#L166-L169). This avoids circular imports but introduces implicit coupling.
-
-### 5. AABB Collision System
-
-Physics uses axis-aligned bounding boxes (AABBs) for all collision detection. Both the ship and every tile/obstacle are represented as simple min/max boxes, enabling fast overlap checks without complex mesh-based collision.
-
-### 6. Chase Camera with Lerp Interpolation
-
-The camera smoothly follows the ship using `Vector3.lerp()` with a fixed blending factor (0.1), creating a cinematic chase-cam effect. The starfield and synthwave sun track the ship position to maintain the illusion of infinite space.
-
-### 7. Tile Color → Behavior Mapping
-
-Special tile behaviors (boost, sticky, slippery, burning, refill) are determined by the `top_color` palette index from the original DOS data, preserving compatibility with the original game's level design:
-
-| `top_color` | Behavior   | Visual Effect        |
-|:-----------:|------------|----------------------|
-| 3           | Sticky     | Dark green glow      |
-| 9           | Slippery   | Dark gray glow       |
-| 10          | Refill     | Bright blue neon     |
-| 11          | Boost      | Lime green neon      |
-| 13          | Burning    | Bright red neon      |
-
-### 8. CSS Design System with Custom Properties
-
-The UI uses a synthwave/cyberpunk aesthetic defined through CSS custom properties (`:root` variables) for colors, fonts, and neon shadow effects. Glassmorphism cards (`backdrop-filter: blur`) overlay the 3D viewport.
-
-### 9. Unified Premium Analog Stick HUD & Smart Snapping
-
-To support mobile play, a high-fidelity glassmorphic overlay is injected dynamically with a unified controller configuration:
-- **PS2-Style Virtual Analog Stick**: Left on-screen 2D floating joystick tracking continuous pointer displacement with concentric rubber-style ridges, an inner grip dome, and active neon highlights.
-- **Right-Hand Arced Controls**: Curved action cluster for Thrust, Jump, and Brake buttons matching the thumb sweep of the player.
-- **Smart Lane-Snapping Magnetism**: A proportional spring-damping alignment system in the physics loop that centers the ship onto the nearest track lane center if the steering stick is in deadzone/released.
-Controls utilize multi-touch (`touchstart`, `touchend`, pointer capture) to guarantee zero latency and simultaneous button presses.
-
-### 10. Seamless Level Stitching (Infinite Road Mode)
-
-In infinite road mode, the game loops through levels seamlessly by stitching the track ahead. The orchestrator tracks a `this.infiniteZOffset` corresponding to the finish line of the current road. Mid-way through the autopilot transition, `buildLevelAsync` is triggered ahead, and obsolete Three.js meshes are cleanly deleted/disposed from memory to avoid resource leaks.
-
-### 11. Physics Parameter Calibrator settings
-
-An interactive settings popup exposes real-time slider controls for fine-tuning game constants such as forward speed, boost velocity, steering inertia, wall collision bounce/pushback, coyote-time buffers, and landing bounce height. This eliminates the default floating sensation and lets players customize responsiveness.
-
-### 12. Sloped Ramps and Interpolated Snapping
-
-To support vertical gameplay and ramps leading into elevated tunnels, the level parser pre-processes loaded levels to automatically scan for raised blocks carrying a tunnel, inserting a customized 3D triangular wedge (prism) immediately preceding the tunnel entrance.
-- **Height Interpolation**: The physics loop calculates the ship's longitudinal progression ratio `t` along the ramp's Z-span and snaps the ship's Y position to the exact sloped `rampHeight = startY + t * (endY - startY)`.
-- **Collision Priorities**: Side collisions (`Math.abs(position.x - blockCenterX) > 0.35`) are evaluated before height snapping to ensure that steering into the side of a ramp blocks the ship, while front collisions are ignored when climbing the ramp (`isOnRamp`) to prevent the ship's nose from crashing/rebounding into the elevated block immediately following it.
+1. **Single HTML page** with overlay panels for all screens — no routing needed
+2. **ES modules throughout** — no bundler plugins required, clean import graph
+3. **Three.js for everything 3D** — including cockpit HUD, not just game world
+4. **Original DOS data files included** — MUZAX.LZS, SFX.SND for authentic audio
+5. **Dual audio system** — procedural synthesizer + OPL2 FM for retro authenticity
+6. **LocalStorage for all persistence** — progress, settings, ship config, leaderboards
+7. **Responsive design** with dedicated mobile touch controls and customizer
+8. **Theme-per-level visual variety** — 14 themes prevent visual monotony
+9. **Physics presets per ship class** — different handling characteristics per ship
+10. **Automated visual playtest pipeline** — Puppeteer screenshots for regression
+11. **Standalone CLI scripts** for asset generation — decoupled from game runtime
+12. **Static physics solver** validates procedurally generated levels are completable
