@@ -25,3 +25,8 @@ top100-large.zip
 .env
 .env.local
 .env.*
+
+# Blender source files (large binary, not needed in repo)
+*.blend
+*.blend1
+*.blend2
