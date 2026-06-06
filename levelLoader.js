@@ -13,8 +13,8 @@ import customDecalRefillUrl from './assets/custom/decal_refill.png';
 import customDecalStickyUrl from './assets/custom/decal_sticky.png';
 import customDecalSlipperyUrl from './assets/custom/decal_slippery.png';
 
-// Import RoundedBoxGeometry
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+// RoundedBoxGeometry no longer used — switched to standard BoxGeometry with depth segments
+// for proper curvature bending (RoundedBoxGeometry collapses flat-face vertices to corners).
 
 // Dynamic Theme Assets (Cyberpunk, Industrial, Organic, Alien)
 import cpRoadDiff from './assets/custom/road_diffuse_cyberpunk.png';
@@ -97,6 +97,78 @@ export const TILE_WIDTH = 2.0;
 export const TILE_LENGTH = 4.0;
 export const ROAD_WIDTH_LANES = 7;
 export const TOTAL_ROAD_WIDTH = TILE_WIDTH * ROAD_WIDTH_LANES;
+
+// ═══════════════════════════════════════════════════════════════════
+// TRACK CURVATURE SYSTEM — Ring-road visual effect via vertex shader
+// Bends the flat track along a circular arc so the road curves upward
+// in the distance, like driving on the inside of a giant ring world.
+// Physics stays flat — curvature is purely visual (GPU-side).
+// ═══════════════════════════════════════════════════════════════════
+
+/** Shared curvature uniforms — updated each frame by GraphicsEngine */
+export const curvatureUniforms = {
+  uCurvatureRadius: new THREE.Uniform(200.0),  // Ring radius (smaller = more curve)
+  uCameraZ:         new THREE.Uniform(0.0),     // Camera Z position (updated per frame)
+  uCurvatureOn:     new THREE.Uniform(0.0),     // 0.0 = flat, 1.0 = curved
+};
+
+/** GLSL vertex shader chunk that bends world-space vertices along a cylinder.
+ *  Works correctly for rotated meshes (tunnels, ribs, cylinders) by computing
+ *  the displacement in world space and converting back via inverse(modelMatrix). */
+const CURVATURE_VERTEX_GLSL = `
+  // ── Track Curvature (ring-road effect) ──
+  if (uCurvatureOn > 0.5) {
+    vec4 wp = modelMatrix * vec4(transformed, 1.0);
+    float d = uCameraZ - wp.z;        // distance ahead (positive = in front)
+    float ang = d / uCurvatureRadius;
+
+    // Displace in WORLD space (Y = up, Z = forward)
+    wp.y += uCurvatureRadius * (1.0 - cos(ang));   // always >= 0 (curves up)
+    wp.z += uCurvatureRadius * sin(ang) - d;        // Z compression
+
+    // Convert displaced world position back to MODEL space
+    // This correctly handles meshes with rotation (tunnels, ribs, etc.)
+    transformed = (inverse(modelMatrix) * wp).xyz;
+  }
+`;
+
+/**
+ * Inject curvature vertex shader into any THREE.Material.
+ * Uses onBeforeCompile to modify the vertex shader at GPU compile time.
+ * Zero per-frame cost beyond the single uniform update.
+ */
+export function applyCurvatureShader(material) {
+  if (!material || material.isShaderMaterial) return material;
+
+  material.onBeforeCompile = (shader) => {
+    // Attach shared uniforms (single objects, so updating them in
+    // GraphicsEngine updates ALL materials simultaneously)
+    shader.uniforms.uCurvatureRadius = curvatureUniforms.uCurvatureRadius;
+    shader.uniforms.uCameraZ         = curvatureUniforms.uCameraZ;
+    shader.uniforms.uCurvatureOn     = curvatureUniforms.uCurvatureOn;
+
+    // Inject uniform declarations before void main()
+    shader.vertexShader = shader.vertexShader.replace(
+      'void main() {',
+      `uniform float uCurvatureRadius;
+       uniform float uCameraZ;
+       uniform float uCurvatureOn;
+       void main() {`
+    );
+
+    // Inject curvature displacement after #include <begin_vertex>
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      '#include <begin_vertex>\n' + CURVATURE_VERTEX_GLSL
+    );
+  };
+
+  // Force Three.js to recompile when curvature is toggled
+  material.customProgramCacheKey = () =>
+    'curvature_' + (curvatureUniforms.uCurvatureOn.value > 0.5 ? '1' : '0');
+
+  return material;
+}
 
 // Number of rows to process per async chunk before yielding
 const CHUNK_SIZE = 50;
@@ -1028,7 +1100,7 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   }
 
   // Use MeshStandardMaterial for high fidelity support, MeshPhongMaterial as raw color fallback if needed
-  return new THREE.MeshStandardMaterial(matParams);
+  return applyCurvatureShader(new THREE.MeshStandardMaterial(matParams));
 }
 
 const loadedObjCache = new Map();
@@ -1183,13 +1255,13 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
           const slopeAngle = Math.atan2(endY - startY, TILE_LENGTH);
           decalGeom.rotateX(-Math.PI / 2 + slopeAngle);
 
-          const decalMat = new THREE.MeshStandardMaterial({
+          const decalMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
             map: decalTex,
             transparent: true,
             emissive: themeBehavior.emissive || new THREE.Color(1, 1, 1),
             emissiveIntensity: 3.0,
             depthWrite: false,
-          });
+          }));
 
           if (behavior === 'boost' || behavior === 'super_boost' || behavior === 'sticky' || behavior === 'burning' || behavior === 'refill') {
             decalMat.userData = {
@@ -1249,8 +1321,8 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
   const baseColor = getPaletteColor(palette, behaviorColor);
   const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior || (isObstacle ? 'obstacle' : null), behaviorColor, levelData);
 
-  // Main block mesh
-  const geom = new THREE.BoxGeometry(TILE_WIDTH, height, TILE_LENGTH);
+  // Main block mesh — 2 depth segments for smooth curvature bending
+  const geom = new THREE.BoxGeometry(TILE_WIDTH, height, TILE_LENGTH, 1, 1, 2);
   adjustBoxUVs(geom, TILE_WIDTH, height, TILE_LENGTH);
   const mesh = new THREE.Mesh(geom, material);
   // Raise obstacles slightly above road surface to eliminate z-fighting with the flat road tile beneath
@@ -1357,7 +1429,7 @@ function buildMergedTunnel(group, r, palette, scene, collidables, roadMeshes, ro
     if (themeTunnel.normalMap) tunnelNormalMap = getLoadedTexture(themeTunnel.normalMap);
   }
 
-  const tunnelMaterial = new THREE.MeshStandardMaterial({
+  const tunnelMaterial = applyCurvatureShader(new THREE.MeshStandardMaterial({
     color: tunnelColor,
     map: tunnelMap,
     normalMap: tunnelNormalMap,
@@ -1366,7 +1438,7 @@ function buildMergedTunnel(group, r, palette, scene, collidables, roadMeshes, ro
     transparent: true,
     opacity: tunnelMap ? 0.7 : 0.35,
     side: THREE.DoubleSide,
-  });
+  }));
 
   const halfL = TILE_LENGTH / 2;
 
@@ -1486,13 +1558,13 @@ function buildMergedTunnel(group, r, palette, scene, collidables, roadMeshes, ro
   const ribWidth = 0.35;
   const ribGeom = new THREE.CylinderGeometry(ribRadius, ribRadius, ribWidth, radialSegments, 1, openEnded, thetaStart, thetaLength);
   
-  const ribMaterial = new THREE.MeshStandardMaterial({
+  const ribMaterial = applyCurvatureShader(new THREE.MeshStandardMaterial({
     color: 0x00ffcc, // Cyan-turquoise neon highlight
     emissive: 0x00ffcc,
     emissiveIntensity: 2.2,
     transparent: false,
     side: THREE.DoubleSide
-  });
+  }));
 
   const ribZOffsets = [-halfL + ribWidth / 2, 0.0, halfL - ribWidth / 2];
   
@@ -1587,11 +1659,11 @@ function buildTunnel(tile, xPos, yPos, height, zPos, palette, scene, collidables
 function buildFinishLine(trackLength, scene, roadMeshes, zOffset = 0, isInfiniteMode = false) {
   const finishZ = -trackLength - 2.0 + zOffset;
   const finishWidth = TOTAL_ROAD_WIDTH + 4.0;
-  const finishMat = new THREE.MeshStandardMaterial({
+  const finishMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
     color: 0x00ffff,
     emissive: 0x00ffff,
     emissiveIntensity: 2.0,
-  });
+  }));
 
   // Ground strip
   const finishGeom = new THREE.BoxGeometry(finishWidth, 0.2, 2.0);
@@ -1631,14 +1703,14 @@ function buildFinishLine(trackLength, scene, roadMeshes, zOffset = 0, isInfinite
     const openEnded = true;
     const tubeGeom = new THREE.CylinderGeometry(tubeRadius, tubeRadius, tubeLength, radialSegments, 1, openEnded, 0, Math.PI * 2);
     
-    const tubeMat = new THREE.MeshStandardMaterial({
+    const tubeMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
       color: 0x00ffff,
       emissive: 0x00ffff,
       emissiveIntensity: 0.8,
       transparent: true,
       opacity: 0.25,
       side: THREE.DoubleSide
-    });
+    }));
     
     const tubeMesh = new THREE.Mesh(tubeGeom, tubeMat);
     tubeMesh.rotation.x = Math.PI / 2;
@@ -1651,13 +1723,13 @@ function buildFinishLine(trackLength, scene, roadMeshes, zOffset = 0, isInfinite
     // Add glowing support ring arches inside the cylinder for a gorgeous synthwave layout
     const ribWidth = 0.35;
     const ribGeom = new THREE.CylinderGeometry(tubeRadius + 0.04, tubeRadius + 0.04, ribWidth, radialSegments, 1, openEnded, 0, Math.PI * 2);
-    const ribMat = new THREE.MeshStandardMaterial({
+    const ribMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
       color: 0xff00ff, // Hot pink neon support rings!
       emissive: 0xff00ff,
       emissiveIntensity: 2.2,
       transparent: false,
       side: THREE.DoubleSide
-    });
+    }));
     
     const numRibs = 5;
     for (let i = 0; i < numRibs; i++) {
@@ -1832,10 +1904,12 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
       
       const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData);
 
-      // Rounded Box Geometry only on the merged block boundaries!
-      // Bevel radius is scaled dynamically.
-      const bevelRadius = Math.min(0.08, height * 0.25);
-      const geom = new RoundedBoxGeometry(width, height, length, 3, bevelRadius);
+      // Use standard BoxGeometry with Z-only subdivisions for smooth curvature bending.
+      // RoundedBoxGeometry collapses intermediate vertices to corners (Math.sign snap),
+      // giving zero actual depth subdivisions on flat faces — ship clips through on curves.
+      // One depth segment per tile-span ensures the curvature shader has vertices every ~4 units.
+      const depthSegments = Math.max(1, spanZ);
+      const geom = new THREE.BoxGeometry(width, height, length, 1, 1, depthSegments);
       
       // Apply seamless world-space UV coordinate mapping
       adjustBoxUVs(geom, width, height, length, xPos, zPos_center, yPos);
@@ -1885,13 +1959,13 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
             const decalGeom = new THREE.PlaneGeometry(width, length);
             decalGeom.rotateX(-Math.PI / 2);
 
-            const decalMat = new THREE.MeshStandardMaterial({
+            const decalMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
               map: decalTex,
               transparent: true,
               emissive: themeBehavior.emissive || new THREE.Color(1, 1, 1),
               emissiveIntensity: 3.0,
               depthWrite: false,
-            });
+            }));
 
             // Tag as animated decal for the update loop in graphics.js
             if (behavior === 'boost' || behavior === 'super_boost' || behavior === 'sticky' || behavior === 'burning' || behavior === 'refill') {
@@ -2006,10 +2080,9 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
       
       const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior || (isObstacle ? 'obstacle' : null), behaviorColor, levelData);
 
-      // Rounded Box Geometry only on the merged block boundaries!
-      // Bevel radius is scaled dynamically.
-      const bevelRadius = Math.min(0.08, height * 0.25);
-      const geom = new RoundedBoxGeometry(width, height, length, 3, bevelRadius);
+      // Use standard BoxGeometry with Z-only subdivisions for smooth curvature.
+      const depthSegments = Math.max(1, spanZ);
+      const geom = new THREE.BoxGeometry(width, height, length, 1, 1, depthSegments);
       
       // Apply seamless world-space UV coordinate mapping
       adjustBoxUVs(geom, width, height, length, xPos, zPos_center, yPos);
@@ -2086,13 +2159,13 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
             const decalGeom = new THREE.PlaneGeometry(width, length);
             decalGeom.rotateX(-Math.PI / 2);
 
-            const decalMat = new THREE.MeshStandardMaterial({
+            const decalMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
               map: decalTex,
               transparent: true,
               emissive: themeBehavior.emissive || new THREE.Color(1, 1, 1),
               emissiveIntensity: 3.0,
               depthWrite: false,
-            });
+            }));
 
             // Tag as animated decal for the update loop in graphics.js
             if (behavior === 'boost' || behavior === 'super_boost' || behavior === 'sticky' || behavior === 'burning' || behavior === 'refill') {

@@ -2,9 +2,10 @@
 import { loadLevelPack, getCachedPack } from './levels.js';
 import { GraphicsEngine } from './graphics.js';
 import { PhysicsEngine, KeyboardController, SHIP_LENGTH } from './physics.js';
-import { buildLevelAsync, disposeUnusedThemes, getActiveThemeIndex } from './levelLoader.js';
+import { buildLevelAsync, disposeUnusedThemes, getActiveThemeIndex, curvatureUniforms } from './levelLoader.js';
 import { gameAudio } from './audio.js';
 import { ShipPreviewEngine } from './preview.js';
+import { TouchControlManager } from './touchControls.js';
 
 const SKIN_DETAILS = {
   default: { name: "DEFAULT", desc: "Standard spaceforce combat livery" },
@@ -94,11 +95,14 @@ class GameManager {
     this.infiniteLevelTransitioning = false;
     this.preSettingsState = 'menu';
     this.stateHistory = [];
-    this.lastRewindTime = 0;
-    this.lastRewindSnapshot = null;
     this.rewindPressedLastFrame = false;
     this.rewindKeyHeldStart = 0;
     this.rewindTimeoutId = null;
+    this.isRewinding = false;
+    this.rewindHistoryIndex = -1;
+    this.rewindBudget = Infinity;
+    this.rewindBudgetMax = Infinity;
+    this.rewindOverlay = null;
   }
 
   init() {
@@ -160,9 +164,13 @@ class GameManager {
     this.keyboard.mouseControlsEnabled = savedMousePlay;
     this.updateMouseToggleBtn();
 
-    // Load persisted touch setting from localStorage
-    const savedTouchPlay = localStorage.getItem('skyroads_touch_controls') === 'true';
-    this.keyboard.touchControlsEnabled = savedTouchPlay;
+    // Load persisted touch setting — auto-detect on first visit
+    const savedTouchPref = localStorage.getItem('skyroads_touch_controls');
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    const touchEnabled = savedTouchPref !== null
+      ? savedTouchPref === 'true'
+      : isTouchDevice;
+    this.keyboard.touchControlsEnabled = touchEnabled;
     this.updateTouchToggleBtn();
 
     // Load persisted boat throttle setting from localStorage
@@ -303,6 +311,17 @@ class GameManager {
         gameAudio.playClick();
         this.graphics.adjustCameraPitch(-1); // look down
       }
+      if (e.code === 'KeyB') {
+        gameAudio.playClick();
+        const label = this.graphics.cycleTrackCurvature();
+        const curveEl = document.getElementById('hud-track-curve');
+        if (curveEl) curveEl.innerText = label;
+        // Sync slider and value display
+        const slider = document.getElementById('hud-curve-slider');
+        if (slider) slider.value = String(this.graphics.trackCurvatureRadius);
+        const valEl = document.getElementById('hud-curve-val');
+        if (valEl) valEl.innerText = String(Math.round(this.graphics.trackCurvatureRadius));
+      }
       if (e.code === 'KeyO') {
         gameAudio.playClick();
         this.physics.settings.gravityFactor = Math.min(3.0, (this.physics.settings.gravityFactor || 1.0) + 0.1);
@@ -340,9 +359,9 @@ class GameManager {
       this.handleMenuKeyboard(e);
     });
 
-    // 5. Load and apply customizable touch controls layout
-    this.loadTouchConfig();
-    this.setupTouchCustomizerEvents();
+    // 5. Initialize new touch control system
+    this.touchManager = new TouchControlManager();
+    this.touchManager.init(this.keyboard, this.graphics, this);
 
     // 6. Start high-frequency background render loop (stars sparkling)
     this.lastTime = performance.now();
@@ -931,6 +950,30 @@ class GameManager {
       });
     }
 
+    // Track Curvature (Tilt) slider
+    const curveSlider = document.getElementById('hud-curve-slider');
+    if (curveSlider) {
+      curveSlider.addEventListener('input', (e) => {
+        const radius = parseFloat(e.target.value);
+        this.graphics.setTrackCurvatureRadius(radius);
+        // Auto-enable curvature when slider is moved
+        if (!this.graphics.trackCurvatureEnabled) {
+          this.graphics.trackCurvatureEnabled = true;
+          curvatureUniforms.uCurvatureOn.value = 1.0;
+        }
+        // Update HUD displays
+        const valEl = document.getElementById('hud-curve-val');
+        if (valEl) valEl.innerText = String(Math.round(radius));
+        const labelEl = document.getElementById('hud-track-curve');
+        if (labelEl) {
+          if (radius <= 50) labelEl.innerText = 'EXTREME';
+          else if (radius <= 100) labelEl.innerText = 'DRAMATIC';
+          else if (radius <= 200) labelEl.innerText = 'GENTLE';
+          else labelEl.innerText = 'SUBTLE';
+        }
+      });
+    }
+
     // Start Infinite Road Mode
     const btnStartInfinite = document.getElementById('btn-start-infinite');
     if (btnStartInfinite) {
@@ -1401,30 +1444,7 @@ class GameManager {
 
     // Deprecated multi-layout toggle removed for single unified premium layout
 
-    // Floating Touch Camera buttons
-    const btnTouchCamMode = document.getElementById('btn-touch-cam-mode');
-    if (btnTouchCamMode) {
-      btnTouchCamMode.addEventListener('click', () => {
-        gameAudio.playClick();
-        this.graphics.toggleCameraMode();
-      });
-    }
-
-    const btnTouchZoomIn = document.getElementById('btn-touch-zoom-in');
-    if (btnTouchZoomIn) {
-      btnTouchZoomIn.addEventListener('click', () => {
-        gameAudio.playClick();
-        this.graphics.cycleZoomLevel(-1); // Zoom in
-      });
-    }
-
-    const btnTouchZoomOut = document.getElementById('btn-touch-zoom-out');
-    if (btnTouchZoomOut) {
-      btnTouchZoomOut.addEventListener('click', () => {
-        gameAudio.playClick();
-        this.graphics.cycleZoomLevel(1); // Zoom out
-      });
-    }
+    // Touch camera/zoom buttons are now handled by TouchControlManager
 
     // Fullscreen Toggle button listener
     const btnFullscreenTrigger = document.getElementById('btn-fullscreen-trigger');
@@ -1467,8 +1487,17 @@ class GameManager {
       this.togglePhysicsCalibrator(false);
     }
 
-    // If no target specified, just hide everything
-    if (!screenId) return;
+    // If no target specified, just hide everything (return to gameplay)
+    if (!screenId) {
+      // Restore touch controls when returning to active gameplay
+      if (this.keyboard.touchControlsEnabled && this.gameState === 'playing') {
+        this.touchManager.show();
+      }
+      return;
+    }
+
+    // An overlay is opening — hide touch buttons so they don't intercept taps
+    this.touchManager.hide();
 
     // Show target screen
     const target = document.getElementById(screenId);
@@ -1561,15 +1590,16 @@ class GameManager {
     const TILE_LENGTH = 4.0;
     const TILE_WIDTH = 2.0;
     const rows = this.currentLevelData.rows;
-    let spawnRow = 0;
+    let spawnRow = Math.max(0, Math.min(2, rows.length - 1)); // Start at row 2 minimum for runway buffer if possible
     for (let r = 0; r < rows.length; r++) {
-      if (rows[r].some(t => t !== null)) {
-        spawnRow = r;
+      if (rows[r] && rows[r].some(t => t !== null)) {
+        spawnRow = Math.max(Math.max(0, Math.min(2, rows.length - 1)), r);
         break;
       }
     }
+    spawnRow = Math.max(0, Math.min(spawnRow, rows.length - 1));
 
-    const spawnRowTiles = rows[spawnRow];
+    const spawnRowTiles = rows[spawnRow] || [null, null, null, null, null, null, null];
     let spawnCol = 3;
     let minDistance = Infinity;
     for (let c = 0; c < spawnRowTiles.length; c++) {
@@ -1618,11 +1648,24 @@ class GameManager {
     this.speedTicks = 0;
     this.wallHits = 0;
     this.stateHistory = [];
-    this.lastRewindTime = 0;
-    this.lastRewindSnapshot = null;
     this.rewindPressedLastFrame = false;
     this.rewindKeyHeldStart = 0;
     this.rewindTimeoutId = null;
+    this.isRewinding = false;
+    this.rewindHistoryIndex = -1;
+    // Rewind budget: unlimited on easy, 10s on harder difficulties
+    const isEasyRewind = this.physics.difficulty === 'easy';
+    this.rewindBudgetMax = isEasyRewind ? Infinity : 10.0;
+    this.rewindBudget = this.rewindBudgetMax;
+    // Show/hide rewind budget HUD
+    const rewindRow = document.getElementById('hud-rewind-row');
+    if (rewindRow) {
+      rewindRow.classList.toggle('hidden', !this.rewindEnabled);
+    }
+    const rewindText = document.getElementById('hud-rewind-text');
+    if (rewindText) {
+      rewindText.innerText = isEasyRewind ? '∞' : '10.0s';
+    }
     
     // Bind to window to allow physics engine's gap detection lookup
     window.currentGamePack = this.currentPack;
@@ -1716,15 +1759,10 @@ class GameManager {
     if (btnInGamePause) btnInGamePause.classList.remove('hidden');
 
     // Toggle Mobile Touch controls HUD visibility
-    const touchHud = document.getElementById('mobile-touch-hud');
-    if (touchHud) {
-      if (this.keyboard.touchControlsEnabled) {
-        touchHud.classList.remove('hidden');
-        this.applyTouchConfig();
-        this.setupTouchControlsDOMEvents();
-      } else {
-        touchHud.classList.add('hidden');
-      }
+    if (this.keyboard.touchControlsEnabled) {
+      this.touchManager.show();
+    } else {
+      this.touchManager.hide();
     }
 
     // 6. Trigger Continuous Sound Hum
@@ -1739,11 +1777,9 @@ class GameManager {
     this.gameState = 'menu';
     document.getElementById('hud').classList.add('hidden');
     
-    // Hide in-game trigger and touch HUD
+    // Hide in-game trigger
     const btnInGamePause = document.getElementById('btn-in-game-pause');
     if (btnInGamePause) btnInGamePause.classList.add('hidden');
-    const touchHud = document.getElementById('mobile-touch-hud');
-    if (touchHud) touchHud.classList.add('hidden');
 
     gameAudio.stopEngine();
     gameAudio.startMusic(false);
@@ -1757,9 +1793,6 @@ class GameManager {
     const btnInGamePause = document.getElementById('btn-in-game-pause');
     if (btnInGamePause) btnInGamePause.classList.add('hidden');
     
-    const touchHud = document.getElementById('mobile-touch-hud');
-    if (touchHud) touchHud.classList.add('hidden');
-    
     this.showScreen('pause-screen');
   }
 
@@ -1772,115 +1805,21 @@ class GameManager {
     const btnInGamePause = document.getElementById('btn-in-game-pause');
     if (btnInGamePause) btnInGamePause.classList.remove('hidden');
     
-    const touchHud = document.getElementById('mobile-touch-hud');
-    if (touchHud && this.keyboard.touchControlsEnabled) {
-      touchHud.classList.remove('hidden');
-      this.applyTouchConfig();
-    }
-    
     this.showScreen(''); // Hide pause overlay
-  }
-
-  setupTouchControlsDOMEvents() {
-    if (this._touchControlsSetupDone) return;
-    this._touchControlsSetupDone = true;
-
-    // Simple buttons binding
-    const touchButtons = document.querySelectorAll('.touch-btn, .dpad-btn');
-    touchButtons.forEach(btn => {
-      const action = btn.getAttribute('data-action');
-      if (!action) return;
-      
-      const pressStart = (e) => {
-        e.preventDefault();
-        btn.classList.add('pressed');
-        this.keyboard.setTouchState(action, true);
-      };
-
-      const pressEnd = (e) => {
-        e.preventDefault();
-        btn.classList.remove('pressed');
-        this.keyboard.setTouchState(action, false);
-      };
-
-      btn.addEventListener('touchstart', pressStart);
-      btn.addEventListener('touchend', pressEnd);
-      btn.addEventListener('touchcancel', pressEnd);
-
-      // Pointer events (for simulator testing and desktop mouse clicks)
-      btn.addEventListener('pointerdown', pressStart);
-      btn.addEventListener('pointerup', pressEnd);
-      btn.addEventListener('pointerleave', pressEnd);
-    });
-
-    // Joystick 2D circular drag and steer (PS2 Analog Stick styling & continuous response)
-    const joystickBase = document.getElementById('joystick-base');
-    const joystickKnob = document.getElementById('joystick-knob');
-    if (joystickBase && joystickKnob) {
-      let isDragging = false;
-      const maxDist = 50; // Max drag radius in pixels
-
-      const handleMove = (e) => {
-        if (!isDragging) return;
-        const rect = joystickBase.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-
-        let dx = e.clientX - centerX;
-        let dy = e.clientY - centerY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        const ctrlScale = (this.touchConfig && this.touchConfig.controls && this.touchConfig.controls.steer && this.touchConfig.controls.steer.scale) || 1.0;
-        const dynamicMaxDist = maxDist * ctrlScale;
-
-        if (dist > dynamicMaxDist) {
-          dx = (dx / dist) * dynamicMaxDist;
-          dy = (dy / dist) * dynamicMaxDist;
-        }
-
-        joystickKnob.style.transform = `translate(${dx / ctrlScale}px, ${dy / ctrlScale}px)`;
-        this.keyboard.setTouchSteerAmount(dx / dynamicMaxDist);
-        this.keyboard.setTouchJoystickY(dy / dynamicMaxDist);
-      };
-
-      const handleEnd = (e) => {
-        if (!isDragging) return;
-        isDragging = false;
-        joystickBase.classList.remove('dragging');
-        joystickBase.releasePointerCapture(e.pointerId);
-
-        // Quick, springy return animation
-        joystickKnob.style.transition = 'transform 0.15s cubic-bezier(0.25, 0.8, 0.25, 1.4)';
-        joystickKnob.style.transform = 'translate(0px, 0px)';
-        this.keyboard.setTouchSteerAmount(0);
-        this.keyboard.setTouchJoystickY(0);
-      };
-
-      joystickBase.addEventListener('pointerdown', (e) => {
-        isDragging = true;
-        joystickBase.classList.add('dragging');
-        joystickKnob.style.transition = 'none'; // Disable transition for lag-free dragging
-        joystickBase.setPointerCapture(e.pointerId);
-        handleMove(e);
-      });
-      joystickBase.addEventListener('pointermove', handleMove);
-      joystickBase.addEventListener('pointerup', handleEnd);
-      joystickBase.addEventListener('pointercancel', handleEnd);
-    }
   }
 
   toggleSettingsMenu() {
     if (this.gameState === 'settings') {
       // Close settings menu and restore state
-      const screenId = this.preSettingsState === 'playing' ? '' : (this.preSettingsState === 'paused' ? 'pause-screen' : 'menu-screen');
-      this.showScreen(screenId);
-      
       if (this.preSettingsState === 'playing') {
         this.gameState = 'playing';
         gameAudio.startEngine();
         gameAudio.startMusic(true);
+        this.showScreen('');
       } else {
         this.gameState = this.preSettingsState;
+        const screenId = this.preSettingsState === 'paused' ? 'pause-screen' : 'menu-screen';
+        this.showScreen(screenId);
       }
     } else {
       // Open settings menu
@@ -2006,8 +1945,8 @@ class GameManager {
     const dt = (timestamp - this.lastTime) / 1000.0;
     this.lastTime = timestamp;
 
-    if (this.keyboard && typeof this.keyboard.pollGamepad === 'function') {
-      this.keyboard.pollGamepad();
+    if (this.keyboard && typeof this.keyboard.updateCombinedState === 'function') {
+      this.keyboard.updateCombinedState();
     }
 
     if (this.keyboard && typeof this.keyboard.consumeTogglePause === 'function' && this.keyboard.consumeTogglePause()) {
@@ -2070,60 +2009,87 @@ class GameManager {
     }
 
     if (this.gameState === 'playing' || this.gameState === 'death') {
-      // --- Manual Rewind Input Handling ---
+      // --- Rewind Input Handling (Hold R / X to visually rewind) ---
       const rewindPressed = !!(this.keyboard && this.keyboard.rewind);
 
-      if (rewindPressed && !this.rewindPressedLastFrame) {
-        // Fresh press
-        this.rewindKeyHeldStart = timestamp;
+      if (this.gameState === 'death' && !this.isRewinding) {
+        // Start rewinding on fresh press during death state
+        if (rewindPressed && !this.rewindPressedLastFrame && this.rewindEnabled && this.rewindBudget > 0 && this.stateHistory.length > 0) {
+          this.isRewinding = true;
+          this.rewindHistoryIndex = this.stateHistory.length - 1;
 
-        if (this.gameState === 'playing') {
-          // Trigger a manual rewind immediately
-          this.physics.isDead = true;
-          this.physics.deathReason = 'MANUAL REWIND';
-          this.handleDeath();
-        } else if (this.gameState === 'death' && this.rewindTimeoutId !== null) {
-          // Loop-break: abort the active rewind animation
-          clearTimeout(this.rewindTimeoutId);
-          this.rewindTimeoutId = null;
-          // Clean up any VHS overlays still present
-          document.querySelectorAll('.rewind-glitch-overlay, .vhs-rewind-indicator, .vhs-tracking-line').forEach(el => el.remove());
-          // Show the death screen immediately
-          const msg = 'Manual navigation abort initiated.';
-          const reasonEl = document.getElementById('death-reason');
-          if (reasonEl) reasonEl.innerText = msg;
-          this.showScreen('death-screen');
-        }
-      } else if (rewindPressed && this.rewindKeyHeldStart > 0) {
-        // Hold logic — 4 second self-destruct
-        const heldDuration = timestamp - this.rewindKeyHeldStart;
-        if (heldDuration >= 4000) {
-          // Abort any active rewind
+          // Cancel any pending death screen timeout
           if (this.rewindTimeoutId !== null) {
             clearTimeout(this.rewindTimeoutId);
             this.rewindTimeoutId = null;
           }
-          document.querySelectorAll('.rewind-glitch-overlay, .vhs-rewind-indicator, .vhs-tracking-line').forEach(el => el.remove());
-          // Force a no-rewind death
-          const wasRewindEnabled = this.rewindEnabled;
-          this.rewindEnabled = false;
-          this.physics.isDead = true;
-          this.physics.deathReason = 'MANUAL ABORT';
-          this.gameState = 'playing'; // reset so handleDeath() doesn't short-circuit
-          this.handleDeath();
-          this.rewindEnabled = wasRewindEnabled;
-          this.rewindKeyHeldStart = 0;
-          // Override death reason display
-          const reasonEl = document.getElementById('death-reason');
-          if (reasonEl) reasonEl.innerText = 'Manual self-destruct sequence initiated.';
+
+          // Hide death screen elements, show rewind overlay
+          const deathScreenEl = document.getElementById('death-screen');
+          if (deathScreenEl) {
+            deathScreenEl.classList.remove('active');
+            deathScreenEl.classList.add('hidden');
+          }
+          const promptEl = document.getElementById('death-rewind-prompt');
+          if (promptEl) promptEl.classList.add('hidden');
+
+          // Show ship again and clear explosion
+          if (this.graphics.shipMesh) this.graphics.shipMesh.visible = true;
+          if (this.graphics.particles) {
+            for (const p of this.graphics.particles) {
+              this.graphics.scene.remove(p.mesh);
+              if (p.mesh.geometry) p.mesh.geometry.dispose();
+              if (p.mesh.material) p.mesh.material.dispose();
+            }
+            this.graphics.particles = [];
+          }
+
+          // Add rewind visual overlay
+          this.rewindOverlay = document.createElement('div');
+          this.rewindOverlay.className = 'rewind-active-overlay';
+          document.body.appendChild(this.rewindOverlay);
+
+          gameAudio.stopEngine();
         }
       }
 
-      if (!rewindPressed) {
-        this.rewindKeyHeldStart = 0;
+      if (this.isRewinding) {
+        if (rewindPressed && this.rewindHistoryIndex > 0) {
+          // Step backwards through history (3 frames per tick for visible speed)
+          const stepsPerFrame = 3;
+          for (let s = 0; s < stepsPerFrame && this.rewindHistoryIndex > 0; s++) {
+            this.rewindHistoryIndex--;
+          }
+
+          // Deduct from budget (hard mode)
+          if (this.rewindBudget !== Infinity) {
+            this.rewindBudget = Math.max(0, this.rewindBudget - dt);
+          }
+
+          // Apply the historical state visually (ship position only)
+          const snap = this.stateHistory[this.rewindHistoryIndex];
+          if (snap) {
+            copyVector(this.physics.position, snap.position);
+            copyVector(this.physics.velocity, snap.velocity);
+            this.physics.onGround = snap.onGround;
+            this.physics.groundHeight = snap.groundHeight;
+          }
+
+          // Update camera to follow rewinding ship
+          this.graphics.update(this.physics, dt);
+
+          // Force budget-depleted stop
+          if (this.rewindBudget <= 0) {
+            this._finishRewind();
+          }
+        } else if (!rewindPressed || this.rewindHistoryIndex <= 0) {
+          // Released or reached start — resume gameplay
+          this._finishRewind();
+        }
       }
+
       this.rewindPressedLastFrame = rewindPressed;
-      // --- End Manual Rewind Input Handling ---
+      // --- End Rewind Input Handling ---
 
       if (this.gameState === 'playing') {
         if (this.keyboard && typeof this.keyboard.consumeCycleCamera === 'function' && this.keyboard.consumeCycleCamera()) {
@@ -2134,8 +2100,8 @@ class GameManager {
         // 1. Advance Physics Engine (DT capped internally to prevent tunneling)
         this.physics.update(dt, this.keyboard, this.levelInfo);
 
-        // Record history snapshot for rewind mechanic
-        if (this.stateHistory && !this.physics.isDead && !this.physics.isTransitioning) {
+        // Record history snapshot for rewind mechanic (full level run, capped at 10k frames)
+        if (this.stateHistory && !this.physics.isDead && !this.physics.isTransitioning && !this.isRewinding) {
           const currentTimestamp = typeof timestamp === 'number' ? timestamp : performance.now();
           this.stateHistory.push({
             timestamp: currentTimestamp,
@@ -2154,8 +2120,8 @@ class GameManager {
             speedAccumulator: this.speedAccumulator,
             speedTicks: this.speedTicks
           });
-          const cutoff = currentTimestamp - 3000;
-          while (this.stateHistory.length > 1 && this.stateHistory[0].timestamp < cutoff) {
+          // Cap at 10,000 frames (~2.7 min at 60fps) to prevent memory issues
+          if (this.stateHistory.length > 10000) {
             this.stateHistory.shift();
           }
         }
@@ -2342,104 +2308,6 @@ class GameManager {
   handleDeath() {
     if (this.gameState === 'death') return;
 
-    if (this.rewindEnabled && this.stateHistory && this.stateHistory.length > 0) {
-      this.gameState = 'death';
-      gameAudio.stopEngine();
-      gameAudio.playExplosion();
-      this.graphics.triggerExplosion(this.physics.position);
-
-      // Create glitch and VHS overlays dynamically
-      const glitchOverlay = document.createElement('div');
-      glitchOverlay.className = 'rewind-glitch-overlay';
-      
-      const vhsIndicator = document.createElement('div');
-      vhsIndicator.className = 'vhs-rewind-indicator';
-      vhsIndicator.innerText = '<< REW';
-
-      const trackingLine = document.createElement('div');
-      trackingLine.className = 'vhs-tracking-line';
-      
-      document.body.appendChild(glitchOverlay);
-      document.body.appendChild(vhsIndicator);
-      document.body.appendChild(trackingLine);
-
-      const isTestEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') || (typeof window !== 'undefined' && window.__vitest_worker__);
-      const delay = isTestEnv ? 600 : 1200;
-
-      this.rewindTimeoutId = setTimeout(() => {
-        this.rewindTimeoutId = null;
-        // Cleanup visual overlays
-        glitchOverlay.remove();
-        vhsIndicator.remove();
-        trackingLine.remove();
-
-        const now = performance.now();
-        // Cooldown reset check (5.0 seconds = 5000ms)
-        const inCooldown = (now - this.lastRewindTime) < 5000;
-        
-        let snap;
-        if (inCooldown && this.lastRewindSnapshot) {
-          snap = this.lastRewindSnapshot;
-        } else {
-          snap = this.stateHistory[0];
-          this.lastRewindSnapshot = snap;
-        }
-        
-        this.lastRewindTime = now;
-
-        // Restore state from snapshot
-        if (snap) {
-          copyVector(this.physics.position, snap.position);
-          copyVector(this.physics.velocity, snap.velocity);
-          this.physics.onGround = snap.onGround;
-          this.physics.groundHeight = snap.groundHeight;
-          this.physics.isRebounding = snap.isRebounding;
-          this.physics.reboundTimer = snap.reboundTimer;
-          this.physics.justRebounded = snap.justRebounded;
-          
-          // Grace resource boosts to prevent instant re-death loops
-          this.physics.fuel = Math.max(snap.fuel, 500);
-          this.physics.oxygen = Math.max(snap.oxygen, 15);
-          
-          this.physics.activeEffects = { ...snap.activeEffects };
-          this.physics.isDead = false;
-          this.physics.deathReason = '';
-
-          // Restore GameManager stats
-          this.wallHits = snap.wallHits;
-          this.totalTime = snap.totalTime;
-          this.speedAccumulator = snap.speedAccumulator;
-          this.speedTicks = snap.speedTicks;
-        }
-
-        // Restore ship mesh visibility
-        if (this.graphics.shipMesh) {
-          this.graphics.shipMesh.visible = true;
-        }
-
-        // Clear active explosion particles from the scene
-        if (this.graphics.particles) {
-          for (const p of this.graphics.particles) {
-            this.graphics.scene.remove(p.mesh);
-            if (p.mesh.geometry) p.mesh.geometry.dispose();
-            if (p.mesh.material) p.mesh.material.dispose();
-          }
-          this.graphics.particles = [];
-        }
-
-        // Clear history list
-        this.stateHistory = [];
-
-        // Resume gameplay
-        this.gameState = 'playing';
-        gameAudio.startEngine();
-        this.lastTime = performance.now();
-      }, delay);
-
-      return;
-    }
-
-    // Original fallback death behavior (if toggle is OFF or history is empty)
     this.gameState = 'death';
     gameAudio.stopEngine();
     gameAudio.playExplosion();
@@ -2457,16 +2325,136 @@ class GameManager {
       msg = "Your hull melted immediately on contact with a burning tile.";
     }
 
-    document.getElementById('death-reason').innerText = msg;
-    
-    // Delay death menu overlay to admire the explosion (faster under Vitest environment for test runner compliance)
-    const isTestEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') || (typeof window !== 'undefined' && window.__vitest_worker__);
-    const delay = isTestEnv ? 1200 : 2200;
-    setTimeout(() => {
-      if (this.gameState === 'death') {
-        this.showScreen('death-screen');
+    const reasonEl = document.getElementById('death-reason');
+    if (reasonEl) reasonEl.innerText = msg;
+
+    // Check if rewind is available
+    const canRewind = this.rewindEnabled && this.rewindBudget > 0 && this.stateHistory.length > 0;
+
+    // Detect gamepad for prompt text
+    const rewindKeyEl = document.getElementById('death-rewind-prompt');
+    if (rewindKeyEl) {
+      const keySpan = rewindKeyEl.querySelector('.rewind-key');
+      if (keySpan) {
+        keySpan.innerText = (this.keyboard && this.keyboard.gamepadConnected) ? 'X' : 'R';
       }
-    }, delay);
+    }
+
+    // Hide rewind prompt initially, hide depleted message
+    const promptEl = document.getElementById('death-rewind-prompt');
+    if (promptEl) promptEl.classList.add('hidden');
+    const depletedEl = document.getElementById('death-rewind-depleted');
+    if (depletedEl) depletedEl.classList.add('hidden');
+
+    // Show death screen with "YOU DIED" immediately (title + reason, no buttons yet)
+    const deathScreen = document.getElementById('death-screen');
+    const deathButtons = deathScreen ? deathScreen.querySelector('.menu-buttons') : null;
+    if (deathButtons) deathButtons.style.display = 'none';
+    this.showScreen('death-screen');
+
+    if (canRewind) {
+      // After 1 second, show the rewind prompt
+      const promptTimeout = setTimeout(() => {
+        if (this.gameState === 'death' && !this.isRewinding) {
+          if (promptEl) promptEl.classList.remove('hidden');
+        }
+      }, 1000);
+
+      // After 4 seconds total (3s window), if they haven't pressed rewind, show full death screen
+      this.rewindTimeoutId = setTimeout(() => {
+        this.rewindTimeoutId = null;
+        if (this.gameState === 'death' && !this.isRewinding) {
+          // Time expired — show retry/menu buttons
+          if (promptEl) promptEl.classList.add('hidden');
+          if (deathButtons) deathButtons.style.display = '';
+        }
+      }, 4000);
+    } else {
+      // No rewind available — show buttons after explosion admiration delay
+      if (!canRewind && this.rewindEnabled && this.rewindBudget <= 0) {
+        // Budget depleted — show depleted message
+        if (depletedEl) depletedEl.classList.remove('hidden');
+      }
+
+      const delay = 2200;
+      setTimeout(() => {
+        if (this.gameState === 'death') {
+          if (deathButtons) deathButtons.style.display = '';
+        }
+      }, delay);
+    }
+  }
+
+  _finishRewind() {
+    if (!this.isRewinding) return;
+
+    // Apply the final snapshot state fully
+    const snap = this.stateHistory[this.rewindHistoryIndex];
+    if (snap) {
+      copyVector(this.physics.position, snap.position);
+      copyVector(this.physics.velocity, snap.velocity);
+      this.physics.onGround = snap.onGround;
+      this.physics.groundHeight = snap.groundHeight;
+      this.physics.isRebounding = snap.isRebounding;
+      this.physics.reboundTimer = snap.reboundTimer;
+      this.physics.justRebounded = snap.justRebounded;
+
+      // Grace resource boosts to prevent instant re-death loops
+      this.physics.fuel = Math.max(snap.fuel, 500);
+      this.physics.oxygen = Math.max(snap.oxygen, 15);
+
+      this.physics.activeEffects = { ...snap.activeEffects };
+
+      // Restore stats
+      this.wallHits = snap.wallHits;
+      this.totalTime = snap.totalTime;
+      this.speedAccumulator = snap.speedAccumulator;
+      this.speedTicks = snap.speedTicks;
+    }
+
+    // Trim history to the rewind point (discard future frames)
+    this.stateHistory = this.stateHistory.slice(0, this.rewindHistoryIndex + 1);
+
+    // Reset physics death state
+    this.physics.isDead = false;
+    this.physics.deathReason = '';
+
+    // Ensure ship is visible
+    if (this.graphics.shipMesh) this.graphics.shipMesh.visible = true;
+
+    // Clear explosion particles
+    if (this.graphics.particles) {
+      for (const p of this.graphics.particles) {
+        this.graphics.scene.remove(p.mesh);
+        if (p.mesh.geometry) p.mesh.geometry.dispose();
+        if (p.mesh.material) p.mesh.material.dispose();
+      }
+      this.graphics.particles = [];
+    }
+
+    // Remove rewind overlay
+    if (this.rewindOverlay) {
+      this.rewindOverlay.remove();
+      this.rewindOverlay = null;
+    }
+
+    // Update rewind budget HUD
+    const rewindText = document.getElementById('hud-rewind-text');
+    if (rewindText) {
+      rewindText.innerText = this.rewindBudget === Infinity ? '∞' : this.rewindBudget.toFixed(1) + 's';
+      if (this.rewindBudget !== Infinity && this.rewindBudget <= 3.0) {
+        rewindText.style.color = '#ff3366';
+      } else {
+        rewindText.style.color = '#00ffcc';
+      }
+    }
+
+    // Resume gameplay
+    this.isRewinding = false;
+    this.rewindHistoryIndex = -1;
+    this.gameState = 'playing';
+    gameAudio.startEngine();
+    this.lastTime = performance.now();
   }
 
   handleSuccess() {
@@ -2573,8 +2561,14 @@ class GameManager {
       // Re-create listener to avoid multiple click bindings
       const newSubmitBtn = submitBtn.cloneNode(true);
       submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
+      // Reset state from any previous submission
+      newSubmitBtn.disabled = false;
+      newSubmitBtn.style.opacity = '';
+      newSubmitBtn.style.cursor = '';
+      newSubmitBtn.innerText = 'SUBMIT';
       
       newSubmitBtn.addEventListener('click', () => {
+        if (newSubmitBtn.disabled) return; // Guard against double-submit
         gameAudio.playClick();
         const initials = inputInitials.value.trim().toUpperCase();
         
@@ -2582,6 +2576,12 @@ class GameManager {
           alert("Please enter exactly 3 uppercase letters or numbers!");
           return;
         }
+
+        // Disable submit button immediately to prevent multiple submissions
+        newSubmitBtn.disabled = true;
+        newSubmitBtn.style.opacity = '0.4';
+        newSubmitBtn.style.cursor = 'default';
+        newSubmitBtn.innerText = 'SUBMITTED ✓';
 
         // Save initials preference
         localStorage.setItem('skyroads_saved_initials', initials);
@@ -2615,6 +2615,14 @@ class GameManager {
         // Hide submission form and refresh leaderboard list with active highlighting!
         if (inputBox) inputBox.style.display = 'none';
         renderLeaderboardTable(newRecord);
+
+        // Move focus to NEXT ROAD button
+        const nextBtn = document.getElementById('btn-success-next');
+        if (nextBtn && !nextBtn.classList.contains('hidden')) {
+          nextBtn.focus();
+          // Also update menu navigation index for gamepad
+          this.selectedMenuIndex = 0;
+        }
       });
     }
 
@@ -2763,545 +2771,7 @@ class GameManager {
     }
   }
 
-  loadTouchConfig() {
-    this.touchConfig = {
-      leftPos: { left: '60px', bottom: '160px' },
-      rightPos: { right: '60px', bottom: '160px' },
-      type: 'stick',
-      scale: 1.0,
-      swapped: false,
-      buttons: 'full',
-      controls: {
-        steer: { left: '60px', right: '', bottom: '160px', scale: 1.0 },
-        brake: { left: '', right: '180px', bottom: '160px', scale: 1.0 },
-        jump: { left: '', right: '110px', bottom: '250px', scale: 1.0 },
-        thrust: { left: '', right: '40px', bottom: '160px', scale: 1.0 }
-      }
-    };
 
-    try {
-      const saved = localStorage.getItem('skyroads_touch_config');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.controls) {
-          Object.assign(this.touchConfig, parsed);
-        } else {
-          // Migrate old legacy config structure
-          const scale = parsed.scale || 1.0;
-          const swapped = parsed.swapped || false;
-          this.touchConfig.type = parsed.type || 'stick';
-          this.touchConfig.swapped = swapped;
-          this.touchConfig.buttons = parsed.buttons || 'full';
-          this.touchConfig.controls = {
-            steer: { left: swapped ? '' : '60px', right: swapped ? '60px' : '', bottom: '160px', scale: scale },
-            brake: { left: swapped ? '180px' : '', right: swapped ? '' : '180px', bottom: '160px', scale: scale },
-            jump: { left: swapped ? '110px' : '', right: swapped ? '' : '110px', bottom: '250px', scale: scale },
-            thrust: { left: swapped ? '40px' : '', right: swapped ? '' : '40px', bottom: '160px', scale: scale }
-          };
-        }
-      }
-    } catch (e) {
-      // safe fallback
-    }
-
-    this.applyTouchConfig();
-  }
-
-  applyTouchConfig() {
-    const containers = [
-      { id: 'touch-steer-container', key: 'steer' },
-      { id: 'touch-brake-container', key: 'brake' },
-      { id: 'touch-jump-container', key: 'jump' },
-      { id: 'touch-thrust-container', key: 'thrust' }
-    ];
-
-    containers.forEach(c => {
-      const el = document.getElementById(c.id);
-      if (!el) return;
-
-      const ctrl = this.touchConfig.controls[c.key];
-      if (!ctrl) return;
-
-      el.style.left = ctrl.left || '';
-      el.style.right = ctrl.right || '';
-      el.style.bottom = ctrl.bottom || '160px';
-      el.style.transform = `scale(${ctrl.scale || 1.0})`;
-    });
-
-    // Apply steer type (joystick vs dpad)
-    const joyView = document.getElementById('touch-joystick-view');
-    const dpadView = document.getElementById('touch-dpad-view');
-    if (joyView && dpadView) {
-      if (this.touchConfig.type === 'dpad') {
-        joyView.classList.add('hidden');
-        dpadView.classList.remove('hidden');
-      } else {
-        joyView.classList.remove('hidden');
-        dpadView.classList.add('hidden');
-      }
-    }
-
-    // Apply action buttons complexity (full vs simple)
-    const brakeCont = document.getElementById('touch-brake-container');
-    const thrustCont = document.getElementById('touch-thrust-container');
-    if (brakeCont && thrustCont) {
-      if (this.touchConfig.buttons === 'simple') {
-        brakeCont.classList.add('hidden');
-        thrustCont.classList.add('hidden');
-      } else {
-        brakeCont.classList.remove('hidden');
-        thrustCont.classList.remove('hidden');
-      }
-    }
-
-    // Update customizer options labels
-    const btnType = document.getElementById('btn-cust-type');
-    if (btnType) btnType.innerText = `TYPE: ${this.touchConfig.type.toUpperCase()}`;
-
-    const btnSwap = document.getElementById('btn-cust-swap');
-    if (btnSwap) btnSwap.innerText = `SWAP SIDES: ${this.touchConfig.swapped ? 'ON' : 'OFF'}`;
-
-    const btnButtons = document.getElementById('btn-cust-buttons');
-    if (btnButtons) btnButtons.innerText = `BUTTONS: ${this.touchConfig.buttons.toUpperCase()}`;
-
-    this.updateCustomizerDashboardInfo();
-  }
-
-  validateLayout(elemId) {
-    const elem = document.getElementById(elemId);
-    const hud = document.getElementById('mobile-touch-hud');
-    if (!elem || !hud) return true;
-
-    const elemRect = elem.getBoundingClientRect();
-    const hudRect = hud.getBoundingClientRect();
-
-    // Check bounds: must be fully inside hud (with 1.5px subpixel tolerance)
-    const isInsideHud = (
-      elemRect.left >= hudRect.left - 1.5 &&
-      elemRect.right <= hudRect.right + 1.5 &&
-      elemRect.top >= hudRect.top - 1.5 &&
-      elemRect.bottom <= hudRect.bottom + 1.5
-    );
-
-    if (!isInsideHud) {
-      return false;
-    }
-
-    // Check overlap with other active/visible controls
-    const containers = [
-      'touch-steer-container',
-      'touch-brake-container',
-      'touch-jump-container',
-      'touch-thrust-container'
-    ];
-
-    for (const otherId of containers) {
-      if (otherId === elemId) continue;
-      const otherEl = document.getElementById(otherId);
-      if (otherEl && !otherEl.classList.contains('hidden') && otherEl.style.display !== 'none') {
-        const otherRect = otherEl.getBoundingClientRect();
-        // Check AABB overlap (overlap if: A.left < B.right && A.right > B.left && A.top < B.bottom && A.bottom > B.top)
-        const overlap = (
-          elemRect.left < otherRect.right - 1.5 &&
-          elemRect.right > otherRect.left + 1.5 &&
-          elemRect.top < otherRect.bottom - 1.5 &&
-          elemRect.bottom > otherRect.top + 1.5
-        );
-        if (overlap) {
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }
-
-  validateCandidateRect(elemId, candidateRect, initialOverlapMap) {
-    const hud = document.getElementById('mobile-touch-hud');
-    if (!hud) return true;
-
-    const hudRect = hud.getBoundingClientRect();
-
-    // Check bounds: must be fully inside hud (with 1.5px subpixel tolerance)
-    const isInsideHud = (
-      candidateRect.left >= hudRect.left - 1.5 &&
-      candidateRect.right <= hudRect.right + 1.5 &&
-      candidateRect.top >= hudRect.top - 1.5 &&
-      candidateRect.bottom <= hudRect.bottom + 1.5
-    );
-
-    if (!isInsideHud) {
-      return false;
-    }
-
-    // Check overlap with other active/visible controls
-    const containers = [
-      'touch-steer-container',
-      'touch-brake-container',
-      'touch-jump-container',
-      'touch-thrust-container'
-    ];
-
-    for (const otherId of containers) {
-      if (otherId === elemId) continue;
-      const otherEl = document.getElementById(otherId);
-      if (otherEl && !otherEl.classList.contains('hidden') && otherEl.style.display !== 'none') {
-        const otherRect = otherEl.getBoundingClientRect();
-        // Check AABB overlap
-        const overlap = (
-          candidateRect.left < otherRect.right - 1.5 &&
-          candidateRect.right > otherRect.left + 1.5 &&
-          candidateRect.top < otherRect.bottom - 1.5 &&
-          candidateRect.bottom > otherRect.top + 1.5
-        );
-        if (overlap) {
-          // If they were already overlapping initially, allow movement if they are moving apart
-          if (initialOverlapMap && initialOverlapMap[otherId]) {
-            const elem = document.getElementById(elemId);
-            if (elem) {
-              const startRect = elem.getBoundingClientRect();
-              const initialCenterDist = Math.hypot(
-                (startRect.left + startRect.width / 2) - (otherRect.left + otherRect.width / 2),
-                (startRect.top + startRect.height / 2) - (otherRect.top + otherRect.height / 2)
-              );
-              const candidateCenterDist = Math.hypot(
-                (candidateRect.left + candidateRect.width / 2) - (otherRect.left + otherRect.width / 2),
-                (candidateRect.top + candidateRect.height / 2) - (otherRect.top + otherRect.height / 2)
-              );
-              if (candidateCenterDist > initialCenterDist) {
-                continue;
-              }
-            }
-          }
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }
-
-  updateCustomizerDashboardInfo() {
-    const infoLabel = document.getElementById('selected-control-info');
-    if (!infoLabel) return;
-    if (this.selectedControlKey && this.touchConfig.controls[this.selectedControlKey]) {
-      const ctrl = this.touchConfig.controls[this.selectedControlKey];
-      infoLabel.innerText = `${this.selectedControlKey.toUpperCase()}: ${ctrl.scale.toFixed(1)}x`;
-    } else {
-      infoLabel.innerText = 'SELECT A CONTROL';
-    }
-  }
-
-  setupTouchCustomizerEvents() {
-    const btnCustomize = document.getElementById('btn-touch-customize');
-    const customizerDashboard = document.getElementById('touch-customizer-dashboard');
-    const touchHud = document.getElementById('mobile-touch-hud');
-
-    if (!btnCustomize || !customizerDashboard || !touchHud) return;
-
-    const containersList = [
-      { id: 'touch-steer-container', key: 'steer' },
-      { id: 'touch-brake-container', key: 'brake' },
-      { id: 'touch-jump-container', key: 'jump' },
-      { id: 'touch-thrust-container', key: 'thrust' }
-    ];
-
-    btnCustomize.addEventListener('click', () => {
-      gameAudio.playClick();
-      const isActive = touchHud.classList.contains('customizing');
-      if (isActive) {
-        touchHud.classList.remove('customizing');
-        customizerDashboard.classList.add('hidden');
-        btnCustomize.innerText = '🔧 CUSTOMIZE';
-        btnCustomize.classList.remove('active');
-        // Clear all selected highlights on exit
-        containersList.forEach(c => {
-          const el = document.getElementById(c.id);
-          if (el) el.classList.remove('selected');
-        });
-        this.saveTouchConfig();
-      } else {
-        touchHud.classList.add('customizing');
-        customizerDashboard.classList.remove('hidden');
-        btnCustomize.innerText = '💾 SAVE';
-        btnCustomize.classList.add('active');
-
-        // Select steer by default when entering customize mode
-        this.selectedControlKey = 'steer';
-        containersList.forEach(c => {
-          const el = document.getElementById(c.id);
-          if (el) {
-            el.classList.toggle('selected', c.key === 'steer');
-          }
-        });
-        this.updateCustomizerDashboardInfo();
-      }
-    });
-
-    // Handle selection when clicking/tapping on any container
-    containersList.forEach(c => {
-      const el = document.getElementById(c.id);
-      if (!el) return;
-      el.addEventListener('pointerdown', (e) => {
-        if (!touchHud.classList.contains('customizing')) return;
-        
-        this.selectedControlKey = c.key;
-        containersList.forEach(other => {
-          const otherEl = document.getElementById(other.id);
-          if (otherEl) {
-            otherEl.classList.toggle('selected', other.key === c.key);
-          }
-        });
-        this.updateCustomizerDashboardInfo();
-      });
-    });
-
-    const btnType = document.getElementById('btn-cust-type');
-    if (btnType) {
-      btnType.addEventListener('click', () => {
-        gameAudio.playClick();
-        this.touchConfig.type = this.touchConfig.type === 'stick' ? 'dpad' : 'stick';
-        this.applyTouchConfig();
-        this.saveTouchConfig();
-      });
-    }
-
-    const btnSwap = document.getElementById('btn-cust-swap');
-    if (btnSwap) {
-      btnSwap.addEventListener('click', () => {
-        gameAudio.playClick();
-        this.touchConfig.swapped = !this.touchConfig.swapped;
-        
-        // Swap horizontal positions of all controls
-        for (const key in this.touchConfig.controls) {
-          const ctrl = this.touchConfig.controls[key];
-          const temp = ctrl.left;
-          ctrl.left = ctrl.right;
-          ctrl.right = temp;
-        }
-
-        this.applyTouchConfig();
-        this.saveTouchConfig();
-      });
-    }
-
-    const btnButtons = document.getElementById('btn-cust-buttons');
-    if (btnButtons) {
-      btnButtons.addEventListener('click', () => {
-        gameAudio.playClick();
-        this.touchConfig.buttons = this.touchConfig.buttons === 'full' ? 'simple' : 'full';
-        this.applyTouchConfig();
-        this.saveTouchConfig();
-      });
-    }
-
-    const btnDec = document.getElementById('btn-cust-scale-dec');
-    const btnInc = document.getElementById('btn-cust-scale-inc');
-
-    const handleScaleChange = (change) => {
-      gameAudio.playClick();
-      if (!this.selectedControlKey) return;
-      const ctrl = this.touchConfig.controls[this.selectedControlKey];
-      if (!ctrl) return;
-      const prevScale = ctrl.scale;
-      const nextScale = Math.max(0.6, Math.min(2.0, Math.round((prevScale + change) * 10) / 10));
-      if (nextScale === prevScale) return;
-
-      const elemId = `touch-${this.selectedControlKey}-container`;
-      const elem = document.getElementById(elemId);
-      if (!elem) return;
-
-      const prevTransform = elem.style.transform;
-      elem.style.transform = `scale(${nextScale})`;
-
-      if (!this.validateLayout(elemId)) {
-        // Revert style if invalid (overlap or out of bounds)
-        elem.style.transform = prevTransform;
-      } else {
-        ctrl.scale = nextScale;
-        this.updateCustomizerDashboardInfo();
-        this.saveTouchConfig();
-      }
-    };
-
-    if (btnDec) {
-      btnDec.addEventListener('click', () => handleScaleChange(-0.1));
-    }
-    if (btnInc) {
-      btnInc.addEventListener('click', () => handleScaleChange(0.1));
-    }
-
-    const btnReset = document.getElementById('btn-cust-reset');
-    if (btnReset) {
-      btnReset.addEventListener('click', () => {
-        gameAudio.playClick();
-        const swapped = this.touchConfig.swapped;
-        this.touchConfig.controls = {
-          steer: { left: swapped ? '' : '60px', right: swapped ? '60px' : '', bottom: '160px', scale: 1.0 },
-          brake: { left: swapped ? '180px' : '', right: swapped ? '' : '180px', bottom: '160px', scale: 1.0 },
-          jump: { left: swapped ? '110px' : '', right: swapped ? '' : '110px', bottom: '250px', scale: 1.0 },
-          thrust: { left: swapped ? '40px' : '', right: swapped ? '' : '40px', bottom: '160px', scale: 1.0 }
-        };
-        this.applyTouchConfig();
-        this.saveTouchConfig();
-      });
-    }
-
-    const btnSave = document.getElementById('btn-cust-save');
-    if (btnSave) {
-      btnSave.addEventListener('click', () => {
-        gameAudio.playClick();
-        touchHud.classList.remove('customizing');
-        customizerDashboard.classList.add('hidden');
-        btnCustomize.innerText = '🔧 CUSTOMIZE';
-        btnCustomize.classList.remove('active');
-        containersList.forEach(c => {
-          const el = document.getElementById(c.id);
-          if (el) el.classList.remove('selected');
-        });
-        this.saveTouchConfig();
-      });
-    }
-
-    const makeMovable = (elemId, key) => {
-      const elem = document.getElementById(elemId);
-      if (!elem) return;
-      const handle = elem.querySelector('.drag-handle');
-      if (!handle) return;
-
-      let isDragging = false;
-      let startX, startY;
-      let startRect = null;
-      let initialLeftVal = 0;
-      let initialRightVal = 0;
-      let initialBottomVal = 0;
-      let initialOverlapMap = {};
-
-      const onPointerDown = (e) => {
-        if (!touchHud.classList.contains('customizing')) return;
-        isDragging = true;
-        handle.setPointerCapture(e.pointerId);
-
-        startX = e.clientX;
-        startY = e.clientY;
-
-        startRect = elem.getBoundingClientRect();
-
-        const ctrl = this.touchConfig.controls[key];
-        initialLeftVal = ctrl.left ? parseFloat(ctrl.left) : 0;
-        initialRightVal = ctrl.right ? parseFloat(ctrl.right) : 0;
-        initialBottomVal = parseFloat(ctrl.bottom);
-
-        // Find initial overlapping elements
-        initialOverlapMap = {};
-        const containers = [
-          'touch-steer-container',
-          'touch-brake-container',
-          'touch-jump-container',
-          'touch-thrust-container'
-        ];
-        containers.forEach(otherId => {
-          if (otherId === elemId) return;
-          const otherEl = document.getElementById(otherId);
-          if (otherEl && !otherEl.classList.contains('hidden') && otherEl.style.display !== 'none') {
-            const otherRect = otherEl.getBoundingClientRect();
-            const overlap = (
-              startRect.left < otherRect.right - 1.5 &&
-              startRect.right > otherRect.left + 1.5 &&
-              startRect.top < otherRect.bottom - 1.5 &&
-              startRect.bottom > otherRect.top + 1.5
-            );
-            if (overlap) {
-              initialOverlapMap[otherId] = true;
-            }
-          }
-        });
-
-        e.preventDefault();
-      };
-
-      const onPointerMove = (e) => {
-        if (!isDragging || !startRect) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-
-        // 1. Mathematically predict candidate visual bounding rect (no DOM writes)
-        const candidateRect = {
-          left: startRect.left + dx,
-          right: startRect.right + dx,
-          top: startRect.top + dy,
-          bottom: startRect.bottom + dy,
-          width: startRect.width,
-          height: startRect.height
-        };
-
-        // 2. Perform layout validation against predicted coordinates
-        if (this.validateCandidateRect(elemId, candidateRect, initialOverlapMap)) {
-          const ctrl = this.touchConfig.controls[key];
-          const hasLeft = ctrl.left !== '';
-
-          // 3. Update logical values relative to client pointer move delta
-          let nextLeft = initialLeftVal + dx;
-          let nextRight = initialRightVal - dx;
-          let nextBottom = initialBottomVal - dy;
-
-          if (hasLeft) {
-            elem.style.right = '';
-            elem.style.left = `${nextLeft}px`;
-            ctrl.left = elem.style.left;
-            ctrl.right = '';
-          } else {
-            elem.style.left = '';
-            elem.style.right = `${nextRight}px`;
-            ctrl.left = '';
-            ctrl.right = elem.style.right;
-          }
-          elem.style.bottom = `${nextBottom}px`;
-          ctrl.bottom = elem.style.bottom;
-        }
-      };
-
-      const onPointerUp = (e) => {
-        if (!isDragging) return;
-        isDragging = false;
-        startRect = null;
-        initialOverlapMap = {};
-        handle.releasePointerCapture(e.pointerId);
-        this.saveTouchConfig();
-      };
-
-      handle.addEventListener('pointerdown', onPointerDown);
-      handle.addEventListener('pointermove', onPointerMove);
-      handle.addEventListener('pointerup', onPointerUp);
-      handle.addEventListener('pointercancel', onPointerUp);
-    };
-
-    makeMovable('touch-steer-container', 'steer');
-    makeMovable('touch-brake-container', 'brake');
-    makeMovable('touch-jump-container', 'jump');
-    makeMovable('touch-thrust-container', 'thrust');
-  }
-
-  saveTouchConfig() {
-    try {
-      if (this.touchConfig.controls) {
-        this.touchConfig.scale = this.touchConfig.controls.steer.scale;
-        this.touchConfig.leftPos = {
-          left: this.touchConfig.controls.steer.left,
-          right: this.touchConfig.controls.steer.right,
-          bottom: this.touchConfig.controls.steer.bottom
-        };
-        this.touchConfig.rightPos = {
-          left: this.touchConfig.controls.thrust.left,
-          right: this.touchConfig.controls.thrust.right,
-          bottom: this.touchConfig.controls.thrust.bottom
-        };
-      }
-      localStorage.setItem('skyroads_touch_config', JSON.stringify(this.touchConfig));
-    } catch (e) {
-      // safe fallback
-    }
-  }
 
   highlightMenuButton(buttons) {
     buttons.forEach(btn => {

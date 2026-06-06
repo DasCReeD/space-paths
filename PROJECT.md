@@ -8,21 +8,22 @@
 
 | Module | Lines | Purpose |
 |--------|-------|---------|
-| [app.js](file:///c:/dev/Sky%20roads/app.js) | ~3,044 | GameManager — state machine, UI, game loop, input, garage, settings |
+| [app.js](file:///c:/dev/Sky%20roads/app.js) | ~2,797 | GameManager — state machine, UI, game loop, input, garage, settings |
 | [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) | ~1,800 | Three.js rendering, particles, skybox, ship models, theming |
 | [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) | ~2,200 | Level geometry builder, themed textures, async building, VRAM |
 | [worldBuilder.js](file:///c:/dev/Sky%20roads/worldBuilder.js) | ~1,695 | Procedural level generation (standalone CLI with physics solver) |
 | [physics.js](file:///c:/dev/Sky%20roads/physics.js) | ~850 | Physics engine, collision, ship classes, keyboard/gamepad input |
 | [audio.js](file:///c:/dev/Sky%20roads/audio.js) | ~1,281 | Web Audio synthesizer, music sequencer, SFX |
 | [cockpitConsole.js](file:///c:/dev/Sky%20roads/cockpitConsole.js) | ~400 | 3D cockpit dashboard HUD + path scanner minimap |
+| [touchControls.js](file:///c:/dev/Sky%20roads/touchControls.js) | ~751 | Touch input manager — individual button system |
 | [preview.js](file:///c:/dev/Sky%20roads/preview.js) | ~600 | Ship garage preview engine (isolated Three.js scene) |
 | [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) | ~637 | OPL2 FM synthesis (Yamaha YM3812) + LZS decompressor |
 | [levels.js](file:///c:/dev/Sky%20roads/levels.js) | ~78 | Level pack fetch + cache loader |
 | [generate_textures.js](file:///c:/dev/Sky%20roads/generate_textures.js) | ~511 | Procedural PNG texture generator (standalone CLI) |
 | [debug_coords.js](file:///c:/dev/Sky%20roads/debug_coords.js) | ~220 | Puppeteer-based UI debug automation |
 | [vitest.setup.js](file:///c:/dev/Sky%20roads/vitest.setup.js) | ~103 | Test harness — asset stub generation |
-| [index.html](file:///c:/dev/Sky%20roads/index.html) | ~975 | Full game UI structure |
-| [index.css](file:///c:/dev/Sky%20roads/index.css) | ~2,744 | Retro-futuristic glassmorphism design system |
+| [index.html](file:///c:/dev/Sky%20roads/index.html) | ~967 | Full game UI structure |
+| [index.css](file:///c:/dev/Sky%20roads/index.css) | ~3,145 | Retro-futuristic glassmorphism design system |
 
 ---
 
@@ -77,20 +78,22 @@ interface GamepadManager {
 ### TouchControlManager
 ```typescript
 interface TouchControlManager {
-  setTouchState(touches: Touch[]): void
-  setTouchSteerAmount(amount: number): void
-  setMode(mode: 'analog' | 'dpad'): void
-  setScale(scale: number): void
-  swapSides(): void
-  resetLayout(): void
-  saveLayout(): void
+  init(keyboard: any, graphics: any, app: any): void
+  registerButtons(): void
+  show(): void
+  hide(): void
+  loadConfig(): void
+  saveConfig(): void
+  resetConfig(): void
+  applyConfig(): void
+  enterCustomizeMode(): void
+  exitCustomizeMode(): void
 }
 ```
 
 ### CockpitConsole3D
 ```typescript
 interface CockpitConsole3D {
-  constructor(): void
   update(physicsState: PhysicsState): void
   setVisible(visible: boolean): void
 }
@@ -99,7 +102,6 @@ interface CockpitConsole3D {
 ### PathScannerMinimap
 ```typescript
 interface PathScannerMinimap {
-  constructor(canvas: HTMLCanvasElement): void
   update(levelData: LevelData, shipZ: number, shipX: number): void
   setTheme(themeIndex: number): void
 }
@@ -121,9 +123,9 @@ interface WorldBuilder {
 
 | Branch | Commits | Status | Description |
 |--------|---------|--------|-------------|
-| `main` | 24 | Stable | Production branch, deploys to GitHub Pages |
-| `feature/visual-ui-overhaul` | 25 | Active | +1 commit: visual UI overhaul, responsive touch, asset pipelines |
-| `subagent-*` | 25 | Stale | Teamwork preview branch (mirrors feature branch) |
+| `main` | 33 | Stable | Production branch, deploys to GitHub Pages |
+| `feature/visual-ui-overhaul` | 27 | Merged | Completed visual UI overhaul, PBR textures, ship models |
+| `subagent-*` | 27 | Stale | Teamwork preview branch (mirrors feature branch) |
 
 ### Remotes
 - `origin/main` — Primary repository

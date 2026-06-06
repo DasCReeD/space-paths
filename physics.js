@@ -256,18 +256,19 @@ export class PhysicsEngine {
     }
 
     // 3. Forward Movement Acceleration / Drag
-    let targetMaxSpeed = this.maxSpeedNormal;
+    //
+    // Boost mechanics: boost tiles are CUMULATIVE with no top speed cap.
+    // Each frame spent on a boost tile adds acceleration proportional to dt,
+    // so longer contact = more speed gained. Speed persists after leaving
+    // the tile — it only drops via natural drag, braking, or collisions.
     if (this.activeEffects.superBoost) {
-      targetMaxSpeed = 96.0; // Triple speed!
-      // Super boost forces forward acceleration extremely aggressively
+      // Super boost: aggressive cumulative acceleration (no cap)
       this.velocity.z -= this.accelForward * 5.0 * dt;
     } else if (this.activeEffects.boost) {
-      targetMaxSpeed = this.maxSpeedBoost;
-      // Boost forces forward acceleration
+      // Boost: cumulative acceleration (no cap)
       this.velocity.z -= this.accelForward * 2.5 * dt;
     } else if (this.activeEffects.sticky) {
-      targetMaxSpeed = this.maxSpeedSticky;
-      // Sticky aggressively decelerates
+      // Sticky aggressively decelerates toward sticky max speed
       if (Math.abs(this.velocity.z) > this.maxSpeedSticky) {
         this.velocity.z += this.decelBrakes * dt;
       }
@@ -275,17 +276,22 @@ export class PhysicsEngine {
 
     // Process player forward controls (positive/negative Z)
     // Note: Z-axis is negative for forward movement
+    // Manual acceleration is still capped at maxSpeedNormal to give boost tiles purpose
     if (keyboard.forward && !this.activeEffects.boost && !this.activeEffects.superBoost) {
-      if (this.velocity.z > -targetMaxSpeed) {
+      if (this.velocity.z > -this.maxSpeedNormal) {
         this.velocity.z -= this.accelForward * dt;
+        // Only cap manual acceleration, not boost-accumulated speed
+        if (this.velocity.z < -this.maxSpeedNormal) {
+          this.velocity.z = -this.maxSpeedNormal;
+        }
       }
     } else if (keyboard.backward) {
       if (this.velocity.z < 0) {
         this.velocity.z += this.decelBrakes * dt;
       }
     } else {
-      // Natural rolling drag
-      if (!this.boatThrottleEnabled) {
+      // Natural rolling drag (only applies when not on boost and not pressing forward)
+      if (!this.boatThrottleEnabled && !this.activeEffects.boost && !this.activeEffects.superBoost) {
         if (this.velocity.z < 0) {
           this.velocity.z += this.dragZ * dt;
           if (this.velocity.z > 0) this.velocity.z = 0;
@@ -293,10 +299,8 @@ export class PhysicsEngine {
       }
     }
 
-    // Cap speed
-    if (this.velocity.z < -targetMaxSpeed) {
-      this.velocity.z = -targetMaxSpeed;
-    }
+    // No global speed cap — boost is cumulative and uncapped.
+    // Only sticky tiles enforce a speed limit (handled above).
 
     // 4. Steering (Left / Right along X axis)
     let steeringDrag = this.dragSteer;
@@ -830,7 +834,8 @@ export class KeyboardController {
       backward: false,
       left: false,
       right: false,
-      jump: false
+      jump: false,
+      rewind: false
     };
 
     // Separate keyboard and mouse state tracking to allow seamless combinations
@@ -1032,7 +1037,7 @@ export class KeyboardController {
     this.left = this.keys.left || (this.mouseControlsEnabled && this.mouse.left) || (this.touchControlsEnabled && this.touch.left) || this.gamepad.left;
     this.right = this.keys.right || (this.mouseControlsEnabled && this.mouse.right) || (this.touchControlsEnabled && this.touch.right) || this.gamepad.right;
     this.jump = this.keys.jump || (this.mouseControlsEnabled && this.mouse.jump) || (this.touchControlsEnabled && this.touch.jump) || this.gamepad.jump;
-    this.rewind = this.keys.rewind || this.gamepad.rewind;
+    this.rewind = this.keys.rewind || (this.touchControlsEnabled && this.touch.rewind) || this.gamepad.rewind;
     this.spacePressed = this.keys.jump || (this.mouseControlsEnabled && this.mouse.jump) || (this.touchControlsEnabled && this.touch.jump) || this.gamepad.jump;
 
     // Steer Amount: prioritize analog gamepad stick, then touch/mouse steer amount

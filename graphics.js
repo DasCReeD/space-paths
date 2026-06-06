@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { SHIP_WIDTH, SHIP_HEIGHT, SHIP_LENGTH } from './physics.js';
 import { CockpitConsole3D } from './cockpitConsole.js';
-import { getLevelObjUrl, getLevelAssetUrl, getActiveThemeIndex, THEMES } from './levelLoader.js';
+import { getLevelObjUrl, getLevelAssetUrl, getActiveThemeIndex, THEMES, curvatureUniforms } from './levelLoader.js';
 import spaceshipHullPlatingUrl from './spaceship_hull_plating.png';
 import roadMetallicUrl from './road_metallic_plate.png';
 import hudOverlayUrl from './hud_overlay.jfif';
@@ -303,6 +303,10 @@ export class GraphicsEngine {
     }
     this.cockpitStyleIndex = 0;
     this.cameraPitchAdjust = 0.0;
+
+    // Track Curvature (ring-road visual effect)
+    this.trackCurvatureEnabled = false;
+    this.trackCurvatureRadius = 200.0; // Ring radius: 50=extreme, 100=dramatic, 200=gentle, 400=subtle
   }
 
   init(container) {
@@ -453,6 +457,48 @@ export class GraphicsEngine {
     const maxAdjust = 0.5;  // 28.6 degrees
     this.cameraPitchAdjust = Math.max(minAdjust, Math.min(maxAdjust, this.cameraPitchAdjust + direction * step));
     this.updateCameraHUD();
+  }
+
+  // ── Track Curvature Controls ──
+
+  toggleTrackCurvature() {
+    this.trackCurvatureEnabled = !this.trackCurvatureEnabled;
+    curvatureUniforms.uCurvatureOn.value = this.trackCurvatureEnabled ? 1.0 : 0.0;
+    this.updateCameraHUD();
+  }
+
+  setTrackCurvatureRadius(radius) {
+    this.trackCurvatureRadius = Math.max(30, Math.min(500, radius));
+    curvatureUniforms.uCurvatureRadius.value = this.trackCurvatureRadius;
+  }
+
+  cycleTrackCurvature() {
+    // Cycles: Off → Subtle(400) → Gentle(200) → Dramatic(100) → Extreme(50) → Off
+    const presets = [
+      { enabled: false, radius: 200, label: 'OFF' },
+      { enabled: true,  radius: 400, label: 'SUBTLE' },
+      { enabled: true,  radius: 200, label: 'GENTLE' },
+      { enabled: true,  radius: 100, label: 'DRAMATIC' },
+      { enabled: true,  radius: 50,  label: 'EXTREME' },
+    ];
+
+    // Find current preset
+    let currentIdx = 0;
+    if (this.trackCurvatureEnabled) {
+      currentIdx = presets.findIndex(p => p.enabled && p.radius === this.trackCurvatureRadius);
+      if (currentIdx < 0) currentIdx = 2; // default to gentle
+    }
+
+    const nextIdx = (currentIdx + 1) % presets.length;
+    const next = presets[nextIdx];
+
+    this.trackCurvatureEnabled = next.enabled;
+    this.trackCurvatureRadius = next.radius;
+    curvatureUniforms.uCurvatureOn.value = next.enabled ? 1.0 : 0.0;
+    curvatureUniforms.uCurvatureRadius.value = next.radius;
+
+    this.updateCameraHUD();
+    return next.label;
   }
 
   setCameraFOV(fov) {
@@ -1529,6 +1575,9 @@ export class GraphicsEngine {
       this.lastOnGroundHeight = physics.groundHeight;
     }
 
+    // Update track curvature center point (follows camera Z for consistent ring-road bend)
+    curvatureUniforms.uCameraZ.value = physics.position.z;
+
     // 1. Position the spaceship
     this.shipMesh.position.copy(physics.position);
 
@@ -1537,7 +1586,13 @@ export class GraphicsEngine {
     this.shipMesh.rotation.z += (targetRoll - this.shipMesh.rotation.z) * 0.15;
     
     // Pitch forward (nose down) when rising to keep the road visible; pitch back (nose up, flare) when falling
-    const targetPitch = -physics.velocity.y * 0.0075;
+    let curvaturePitch = 0;
+    if (this.trackCurvatureEnabled) {
+      // The tangent angle of the ring curve at the ship's position (d=0) is 0,
+      // but looking 1 tile ahead gives a gentle forward tilt matching the curve
+      curvaturePitch = -1.0 / this.trackCurvatureRadius; // Subtle nose-down to follow ring
+    }
+    const targetPitch = -physics.velocity.y * 0.0075 + curvaturePitch;
     this.shipMesh.rotation.x += (targetPitch - this.shipMesh.rotation.x) * 0.15;
 
     // 2. Smooth Chase Camera (with distance scaling and multiple camera modes)
@@ -1574,20 +1629,50 @@ export class GraphicsEngine {
       const offsetZ = physics.settings.cockpitOffsetZ !== undefined ? physics.settings.cockpitOffsetZ : 0.0;
 
       // Place camera slightly forward and above the ship origin, adjusted by height control and custom offsets
-      const heightOffset = metrics.height + 0.15 + (this.cameraHeightAdjust * 0.1) + offsetY;
+      let heightOffset = metrics.height + 0.15 + (this.cameraHeightAdjust * 0.1) + offsetY;
+
+      // When curvature is on, raise the cockpit camera to prevent road surface clipping
+      if (this.trackCurvatureEnabled) {
+        heightOffset += 0.5;
+      }
+
       const cockpitOffset = new THREE.Vector3(offsetX, heightOffset, -metrics.offset - 0.2 + offsetZ);
       // Apply ship rotation
       cockpitOffset.applyEuler(this.shipMesh.rotation);
       
       idealCamPos.copy(physics.position).add(cockpitOffset);
       
-      // Target is directly ahead along ship forward direction, rotated by pitch controls
-      const forward = new THREE.Vector3(0, 0, -10.0);
+      // Target is directly ahead along ship forward direction, rotated by pitch controls.
+      // When curvature is on, look further ahead (40 units instead of 10) so the camera
+      // tracks ALONG the ring arc instead of staring at its steep base.
+      const lookDist = this.trackCurvatureEnabled ? 40.0 : 10.0;
+      const forward = new THREE.Vector3(0, 0, -lookDist);
       const pitchEuler = new THREE.Euler(this.cameraPitchAdjust, 0, 0);
       forward.applyEuler(pitchEuler);
       
       forward.applyEuler(this.shipMesh.rotation);
       idealCamTarget.copy(physics.position).add(forward);
+    }
+
+    // ── Apply track curvature to camera ──
+    // Displace the camera position and look-at target by the same ring-road
+    // math used in the vertex shader so the camera "rides" the curve.
+    // Without this, the camera stays flat while the road bends upward.
+    if (this.trackCurvatureEnabled) {
+      const R = this.trackCurvatureRadius;
+      const refZ = physics.position.z; // Same reference as uCameraZ in shader
+
+      // Displace camera position
+      const dCam = refZ - idealCamPos.z;
+      const angCam = dCam / R;
+      idealCamPos.y += R * (1 - Math.cos(angCam));
+      idealCamPos.z += R * Math.sin(angCam) - dCam;
+
+      // Displace look-at target
+      const dTarget = refZ - idealCamTarget.z;
+      const angTarget = dTarget / R;
+      idealCamTarget.y += R * (1 - Math.cos(angTarget));
+      idealCamTarget.z += R * Math.sin(angTarget) - dTarget;
     }
 
     if (physics.isDead) {

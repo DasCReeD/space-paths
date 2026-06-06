@@ -24,15 +24,16 @@
 
 | File | Size | Lines | Responsibility |
 |------|------|-------|----------------|
-| [app.js](file:///c:/dev/Sky%20roads/app.js) | 120 KB | ~3,044 | GameManager — state machine, UI, game loop, input, garage, settings |
+| [app.js](file:///c:/dev/Sky%20roads/app.js) | 111 KB | ~2,797 | GameManager — state machine, UI, game loop, input, garage, settings |
 | [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) | 93 KB | ~1,800 | Three.js rendering, particles, skybox, theming, ship models |
 | [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) | 88 KB | ~2,200 | Level geometry builder, themed textures, async building, VRAM disposal |
-| [index.css](file:///c:/dev/Sky%20roads/index.css) | 68 KB | ~2,744 | Retro-futuristic glassmorphism design system |
-| [index.html](file:///c:/dev/Sky%20roads/index.html) | 61 KB | ~975 | Full game UI — menus, HUD, settings, garage, touch controls |
+| [index.css](file:///c:/dev/Sky%20roads/index.css) | 78 KB | ~3,145 | Retro-futuristic glassmorphism design system |
+| [index.html](file:///c:/dev/Sky%20roads/index.html) | 61 KB | ~967 | Full game UI — menus, HUD, settings, garage, touch controls |
 | [worldBuilder.js](file:///c:/dev/Sky%20roads/worldBuilder.js) | 50 KB | ~1,695 | Procedural level generation (standalone CLI) |
 | [physics.js](file:///c:/dev/Sky%20roads/physics.js) | 42 KB | ~850 | Physics engine, collision, ship class presets, keyboard/gamepad input |
 | [audio.js](file:///c:/dev/Sky%20roads/audio.js) | 41 KB | ~1,281 | Web Audio synthesizer, music sequencer, SFX |
 | [cockpitConsole.js](file:///c:/dev/Sky%20roads/cockpitConsole.js) | 35 KB | ~400 | 3D cockpit dashboard HUD + path scanner minimap |
+| [touchControls.js](file:///c:/dev/Sky%20roads/touchControls.js) | 24 KB | ~751 | Touch input manager — individual button system |
 | [preview.js](file:///c:/dev/Sky%20roads/preview.js) | 23 KB | ~600 | Ship garage preview engine (isolated Three.js scene) |
 | [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) | 19 KB | ~637 | OPL2 FM synthesis + LZS decompressor |
 | [generate_textures.js](file:///c:/dev/Sky%20roads/generate_textures.js) | 18 KB | ~511 | Procedural PNG texture generator (standalone CLI) |
@@ -51,6 +52,7 @@ graph TD
     APP --> AUD["audio.js<br/>AudioSynthesizer"]
     APP --> PRV["preview.js<br/>ShipPreviewEngine"]
     APP --> LVL["levels.js<br/>Pack Loader"]
+    APP --> TC["touchControls.js<br/>TouchControlManager"]
 
     GFX --> PHY
     GFX --> CC["cockpitConsole.js<br/>CockpitConsole3D + Minimap"]
@@ -65,6 +67,10 @@ graph TD
     PRV --> THREE
 
     AUD --> OPL["oplSynth.js<br/>OPL2 FM Synth"]
+
+    TC --> PHY
+    TC --> GFX
+    TC --> APP
 
     LVL -->|"fetch"| SD["data/standard_levels.json"]
     LVL -->|"fetch"| XD["data/xmas_levels.json"]
@@ -221,7 +227,7 @@ flowchart TD
 - Polling via Gamepad API
 
 ### 3. Touch Controls
-- `TouchControlManager` class in [app.js](file:///c:/dev/Sky%20roads/app.js)
+- `TouchControlManager` class in [touchControls.js](file:///c:/dev/Sky%20roads/touchControls.js)
 - Virtual analog stick (PS2-style)
 - D-pad mode alternative
 - Throttle axis (vertical joystick maps to forward/backward)

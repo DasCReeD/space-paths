@@ -1,6 +1,6 @@
 # SkyRoads WebGL — Progress Log
 
-> **Last updated:** 2026-06-05
+> **Last updated:** 2026-06-06
 
 ---
 
@@ -8,12 +8,12 @@
 
 | Branch | Commits | Status |
 |--------|---------|--------|
-| `main` | 24 | ✅ Stable, deploys to GitHub Pages |
-| `feature/visual-ui-overhaul` | 25 (+1) | 🔄 Active — 118 files changed, 10,749 insertions |
+| `main` | 33 | ✅ Stable, deploys to GitHub Pages |
+| `feature/visual-ui-overhaul` | 27 | 🔄 Merged into main |
 
 ---
 
-## Commit History (main branch — 24 commits)
+## Commit History (main branch — 33 commits)
 
 | # | Commit | Feature |
 |---|--------|---------|
@@ -42,18 +42,23 @@
 | 23 | `6e3cf67` | ✅ Bottom HUD toggle option, touch joystick vertical axis throttle/brake control |
 | 24 | `adae570` | ✅ Top-right fullscreen toggle button for mobile/desktop |
 | 25 | `bbc3432` | ✅ Autolane snap toggle and snap strength adjuster |
-| 26 | `032b3f0` | ✅ Fix continuous ramp frontal collision and add slalom super boosts |
-| 27 | `3e674f9` | ✅ Spawn ship centered on first valid road tile in middle of tile and calculate correct Y elevation |
+| 26 | `6dcbc0a` | ✅ Complete visual UI overhaul, responsive touch controls, and asset pipelines |
+| 27 | `032b3f0` | ✅ Fix continuous ramp frontal collision and add slalom super boosts |
+| 28 | `f3ca269` | ✅ Add level format and editor guide for external LLMs |
+| 29 | `3e674f9` | ✅ Spawn ship centered on first valid road tile in middle of tile and calculate Y elevation |
+| 30 | `b8e9258` | ✅ Update progress log with latest main commit history |
+| 31 | `6d3facc` | ✅ Manual rewind key R/X with loop-break and 4s self-destruct |
+| 32 | `d2245c0` | ✅ Gitignore Blender files and untrack existing .blend files |
+| 33 | `pending` | ✅ Overhaul touch controls v2, auto-detect touch, cumulative boost, segmenting, camera tilt, clean dead code |
 
-### Changes in feature branch (+1 commit vs main):
-- **118 files changed** — 10,749 insertions, 402 deletions
-- 74 new themed textures (cyberpunk, industrial, organic, alien × road/obstacle/tunnel × diffuse/normal)
-- 30 themed decal variants (boost, explosive, refill, slippery, slow, sticky × 5 themes)
-- 6 OBJ ship models (fighter, hauler, scout, dreadnought, cruiser, tunnel_archway)
-- ComfyUI/Trellis2 workflow files and documentation
-- New test files (generate, playtest_run, shipStats, touchControls)
-- Vitest setup with asset stub generation
-- Major expansions to graphics.js, levelLoader.js, physics.js, index.html, index.css
+### Changes in this integration:
+- **touchControls.js** — Extracted into a dedicated, robust module featuring customizer isolation, layout validation, auto-scaling, and localStorage persistence.
+- **index.html & index.css** — Cleaned up flat touch control HUD DOM nodes, overhauled modern glassmorphic styling, and added camera tilt slider.
+- **app.js** — Cleaned up old dead touch code (~600 lines), wired central showScreen() visibility toggle to prevent overlay touch interference, resolved settings timing, and clamped spawn position search bounds to prevent crashes on short levels.
+- **physics.js** — Added cumulative boost mechanics and integrated camera tilt speed factor.
+- **graphics.js** — Refined segment subdivision on curves to prevent ship clipping and added camera tilt visual slider.
+- **playtests/run_playtest.js** — Fixed Puppeteer selectors (`#touch-btn-edit` and `#touch-customizer-overlay`) to match the new HTML structure.
+- **tests/app.test.js & tests/physics.test.js** — Added touch HUD elements to jsdom mockup body, updated speed cap assertions to align with cumulative boost mechanics, and updated rewind tests to align with the interactive manual visual rewind design.
 
 ---
 

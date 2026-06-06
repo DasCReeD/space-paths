@@ -272,12 +272,12 @@ async function run() {
         } else {
           console.log('[DEBUG] #mobile-touch-hud NOT found!');
         }
-        const btn = document.getElementById('btn-touch-customize');
+        const btn = document.getElementById('touch-btn-edit');
         if (btn) {
           const rect = btn.getBoundingClientRect();
-          console.log(`[DEBUG] Button #btn-touch-customize properties - display: ${getComputedStyle(btn).display}, visibility: ${getComputedStyle(btn).visibility}, opacity: ${getComputedStyle(btn).opacity}, rect: {x: ${rect.x}, y: ${rect.y}, w: ${rect.width}, h: ${rect.height}}`);
+          console.log(`[DEBUG] Button #touch-btn-edit properties - display: ${getComputedStyle(btn).display}, visibility: ${getComputedStyle(btn).visibility}, opacity: ${getComputedStyle(btn).opacity}, rect: {x: ${rect.x}, y: ${rect.y}, w: ${rect.width}, h: ${rect.height}}`);
         } else {
-          console.log('[DEBUG] Button #btn-touch-customize NOT found in DOM!');
+          console.log('[DEBUG] Button #touch-btn-edit NOT found in DOM!');
         }
         if (window.gameManagerInstance) {
           console.log(`[DEBUG] gameManagerInstance state - gameState: ${window.gameManagerInstance.gameState}, touchControlsEnabled: ${window.gameManagerInstance.keyboard.touchControlsEnabled}`);
@@ -286,15 +286,15 @@ async function run() {
         }
       });
       try {
-        await page.click('#btn-touch-customize');
+        await page.click('#touch-btn-edit');
       } catch (clickErr) {
         console.warn('[WARNING] Puppeteer click failed, trying JS click fallback:', clickErr.message);
         await page.evaluate(() => {
-          const btn = document.getElementById('btn-touch-customize');
+          const btn = document.getElementById('touch-btn-edit');
           if (btn) btn.click();
         });
       }
-      await page.waitForSelector('#touch-customizer-dashboard', { visible: true, timeout: 5000 });
+      await page.waitForSelector('#touch-customizer-overlay:not(.hidden)', { timeout: 5000 });
       await delay(500);
       await page.screenshot({ path: path.join(playtestsDir, `touch_customizer${suffix}.png`) });
       console.log(`Saved touch_customizer${suffix}.png`);

@@ -852,18 +852,21 @@ function solveLevel(levelData) {
         const nextTile = rows[nextRow][nextLane];
         let canStep = false;
         let stepHeight = h;
-
         if (nextTile && nextTile.top_color !== 13) {
-          if (nextTile.ramp) {
-            if (Math.abs(nextTile.startY - h) < 0.1) {
-              canStep = true;
-              stepHeight = nextTile.endY;
-            }
-          } else {
-            const hNext = getTileObstacleHeight(nextTile);
-            if (Math.abs(hNext - h) < 0.1) {
-              canStep = true;
-              stepHeight = hNext;
+          // Obstacles (full/half) are WALLS — never walkable or landable
+          const isObstacle = !!(nextTile.full || nextTile.half);
+          if (!isObstacle) {
+            if (nextTile.ramp) {
+              if (Math.abs(nextTile.startY - h) < 0.1) {
+                canStep = true;
+                stepHeight = nextTile.endY;
+              }
+            } else {
+              const hNext = getTileObstacleHeight(nextTile);
+              if (Math.abs(hNext - h) < 0.1) {
+                canStep = true;
+                stepHeight = hNext;
+              }
             }
           }
         }
@@ -917,9 +920,17 @@ function solveLevel(levelData) {
           }
 
           obsHeight = getTileObstacleHeight(checkTile);
-
           if (checkTile) {
-            if (t >= tUp && yFlight <= obsHeight + 0.15) {
+            const isObs = !!(checkTile.full || checkTile.half);
+            if (isObs) {
+              // Obstacles are walls — crash if flight arc touches them
+              if (yFlight < obsHeight + 0.4) {
+                crashed = true;
+                break;
+              }
+              // Arc still above obstacle — continue flight over it
+            } else if (t >= tUp && yFlight <= obsHeight + 0.5) {
+              // Landing on a flat road tile (no obstacle)
               if (checkTile.top_color === 13) {
                 crashed = true;
               } else {
@@ -927,7 +938,7 @@ function solveLevel(levelData) {
                 jumpTime = t;
               }
               break;
-            } else if (yFlight < obsHeight + 0.1) {
+            } else if (yFlight < obsHeight + 0.4) {
               crashed = true;
               break;
             }
@@ -1409,793 +1420,358 @@ function generateVoidLevel(levelIndex, difficulty, seed) {
       rows: state.rows
     };
   } else {
-    // Simple placeholder levels 62 & 63
-    const totalRows = [150, 160, 170][difficulty];
-    const width = 4;
-    addStartRunway(state, width, 1, 15);
-    addRunway(state, totalRows - 30, width, 1);
-    // Simple gaps so they compile correctly
-    for (let g = 0; g < 2; g++) {
-      const idx = 30 + g * 40;
-      if (idx + 1 < state.rows.length) {
-        state.rows[idx] = createEmptyRow();
-        state.rows[idx + 1] = createEmptyRow();
-      }
-      if (state.rows[idx + 2]) {
-        state.rows[idx + 2][3] = { ...state.rows[idx + 2][3], top_color: 10, bottom_color: 10 };
-      }
-    }
-    addEndRunway(state, width, 1, 15);
-    normalizeRows(state.rows);
-    return {
-      level_index: levelIndex,
+    // Void levels 62 & 63 — assembled from segment library
+    return assembleFromSegments({
+      levelIndex, difficulty, seed,
+      biome: 'void',
+      name: `VOID ${difficulty === 0 ? 'I' : difficulty === 1 ? 'II' : 'III'}`,
       gravity: 8,
-      fuel: 150,
-      oxygen: 100,
-      palette: PALETTES['void'],
-      rows: state.rows
-    };
+      fuel:       [360, 300, 260][difficulty],
+      oxygen:     [240, 200, 160][difficulty],
+      targetRows: [300, 340, 380][difficulty],
+      diffRange:  [[1, 3], [2, 4], [3, 5]][difficulty],
+      categoryPrefs: ['slalom', 'jump', 'narrow_passage', 'tunnel', 'obstacle_course', 'mixed', 'hazard_zone', 'speed_section'],
+      refillSpacing: 30,
+    });
   }
 }
 
-// ---------------------------------------------------------------------------
-// World 1: RIDGE (levels 64-66) — elevation changes, narrow track, high gravity
-// ---------------------------------------------------------------------------
-function generateRidgeLevel(levelIndex, difficulty, seed) {
+// ==========================================================================
+// SECTION 7B: SHARED SEGMENT-LIBRARY ASSEMBLER
+// All biome generators use this to build levels from extracted real-game
+// chunks ("lego pieces") with biome-specific configuration.
+// ==========================================================================
+
+/** Cache the segment library so we only read disk once */
+let _segmentLibraryCache = null;
+function getSegmentLibrary() {
+  if (!_segmentLibraryCache) {
+    const libPath = path.resolve('data/segment_library.json');
+    _segmentLibraryCache = JSON.parse(fs.readFileSync(libPath, 'utf8'));
+  }
+  return _segmentLibraryCache;
+}
+
+/**
+ * Assemble a level from segment library chunks.
+ * @param {object} config — biome-specific configuration
+ * @returns {object} level data object
+ */
+function assembleFromSegments(config) {
+  const {
+    levelIndex, difficulty, seed, biome, name,
+    gravity, fuel, oxygen, targetRows,
+    diffRange = [1, 5],
+    categoryPrefs = ['slalom', 'jump', 'narrow_passage', 'tunnel', 'obstacle_course', 'mixed', 'hazard_zone', 'speed_section'],
+    refillSpacing = 30,
+    roadColor = 1,
+    postProcess = null,
+  } = config;
+
   const rng = createRng(seed);
-  const totalRows = [120, 140, 160][difficulty];
-  const width = [4, 3, 3][difficulty];
-  const state = makeState(rng, 'ridge', levelIndex);
+  const state = makeState(rng, biome, levelIndex);
+  const allSegments = getSegmentLibrary();
+  const [minDiff, maxDiff] = diffRange;
 
-  // Pass 1 SKELETON: Narrow track with gentle lateral drift
-  addStartRunway(state, width, 1, 15);
-  const sectionLen = Math.floor((totalRows - 30) / 5);
+  const candidates = allSegments.filter(s =>
+    s.difficulty >= minDiff && s.difficulty <= maxDiff &&
+    s.length >= 4 && s.length <= 50 && s.category !== 'runway'
+  );
 
-  // Pass 2 ELEVATION: Multiple ramp pairs, profile 0→2→0→2→0
-  // Section 1: flat at 0
-  addRunway(state, sectionLen, width, 1);
-  // Ramp up to 1.0
-  addRampUp(state, 1.0, width, 1);
-  addRunway(state, sectionLen, width, 1);
-  // Ramp up to 2.0
-  addRampUp(state, 2.0, width, 1);
-  addRunway(state, sectionLen, width, 1);
-  // Ramp down to 0.0 via tunnel + gap
-  addTunnelRun(state, 3, width, 1);
+  const byCategory = {};
+  for (const seg of candidates) {
+    if (!byCategory[seg.category]) byCategory[seg.category] = [];
+    byCategory[seg.category].push(seg);
+  }
+  const availableCategories = categoryPrefs.filter(c => byCategory[c] && byCategory[c].length > 0);
 
-  // Pass 3 VOIDS: Short gaps (1-2 rows) — with runway before each
-  const gapLen = [1, 1, 2][difficulty];
-  addRunway(state, 5, width, 1);
-  addGap(state, gapLen);
-  state.height = 0.0;
-  addRunway(state, 5, width, 1);
-
-  // Second elevation cycle
-  addRampUp(state, 1.0, width, 1);
-  addRunway(state, sectionLen, width, 1);
-  addRampUp(state, 2.0, width, 1);
-  addRunway(state, Math.max(5, sectionLen - 5), width, 1);
-  // Tunnel down
-  addTunnelRun(state, 3, width, 1);
-  addGap(state, gapLen);
-  state.height = 0.0;
-
-  // Fill remaining rows
-  const remaining = totalRows - state.rows.length - 8;
-  if (remaining > 0) addRunway(state, remaining, width, 1);
-  addEndRunway(state, width, 1);
-
-  // Pass 4 OBSTACLES: Full-height archway markers before drops
-  for (let r = 10; r < state.rows.length - 5; r++) {
-    const row = state.rows[r];
-    if (!row) continue;
-    // Check if next row is a gap
-    if (r + 1 < state.rows.length && state.rows[r + 1].every(t => t === null)) {
-      // Place full obstacles flanking the path
-      let leftEdge = -1, rightEdge = -1;
-      for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
-        if (row[l]) { if (leftEdge < 0) leftEdge = l; rightEdge = l; }
-      }
-      if (leftEdge > 0 && !row[leftEdge - 1]) {
-        row[leftEdge - 1] = createObstacle('full', 2);
-      }
-      if (rightEdge < 6 && !row[rightEdge + 1]) {
-        row[rightEdge + 1] = createObstacle('full', 2);
-      }
+  function buildAdapter(exitIface, entryIface) {
+    const adapterRows = [];
+    const exitW = exitIface.width || 4, entryW = entryIface.width || 4;
+    const exitC = exitIface.center, entryC = entryIface.center;
+    const totalLen = Math.max(2, Math.abs(exitW - entryW), Math.abs(exitC - entryC));
+    for (let i = 0; i < totalLen; i++) {
+      const t = (i + 1) / totalLen;
+      const w = Math.max(1, Math.round(exitW + (entryW - exitW) * t));
+      const c = Math.round(exitC + (entryC - exitC) * t);
+      adapterRows.push(createRoadRow(clamp(c, 1, 5), w, roadColor));
     }
+    return adapterRows;
   }
 
-  // Pass 5-6 AUDIT/REFINE
-  const audit = auditLevel(state.rows, 'ridge', BIOME_RULES.ridge);
-  refineLevel(state.rows, audit, 'ridge', rng);
+  function interfaceDistance(exitIface, entryIface) {
+    return Math.abs((exitIface.width || 4) - (entryIface.width || 4)) +
+           Math.abs((exitIface.center || 3) - (entryIface.center || 3)) * 2 +
+           Math.abs((exitIface.height || 0) - (entryIface.height || 0)) * 10;
+  }
 
-  // Pass 7 SPECIALS: Refill on plateaus, boost before downhill
-  for (let r = 0; r < state.rows.length; r++) {
-    const row = state.rows[r];
-    if (!row) continue;
-    // Refill every 30 rows on non-empty rows
-    if (r % 30 === 0 && r > 0) {
+  const usedSegmentIds = new Set();
+  let lastCategory = '', sameCategoryCount = 0;
+  let lastExit = { width: 5, lanes: [1,2,3,4,5], height: 0, center: 3 };
+
+  addStartRunway(state, 5, roadColor, rngInt(rng, 10, 14));
+
+  while (state.rows.length < targetRows - 15) {
+    let catPool = availableCategories;
+    if (sameCategoryCount >= 2) catPool = catPool.filter(c => c !== lastCategory);
+    if (catPool.length === 0) catPool = availableCategories;
+    if (catPool.length === 0) break;
+
+    const category = rngChoice(rng, catPool);
+    const catSegments = byCategory[category] || [];
+    if (catSegments.length === 0) continue;
+
+    let scored = catSegments
+      .filter(s => !usedSegmentIds.has(s.id))
+      .map(s => ({ segment: s, distance: interfaceDistance(lastExit, s.entry) }))
+      .sort((a, b) => a.distance - b.distance);
+    if (scored.length === 0) {
+      const reuse = rngChoice(rng, catSegments);
+      scored = [{ segment: reuse, distance: interfaceDistance(lastExit, reuse.entry) }];
+    }
+
+    const topN = scored.slice(0, Math.min(5, scored.length));
+    const pick = rngChoice(rng, topN);
+    const seg = pick.segment;
+
+    if (state.rows.length + seg.length > targetRows + 30) {
+      const shorter = topN.filter(s => state.rows.length + s.segment.length <= targetRows + 20);
+      if (shorter.length === 0) break;
+      const sp = rngChoice(rng, shorter);
+      if (sp.distance > 2) for (const row of buildAdapter(lastExit, sp.segment.entry)) state.rows.push(row);
+      addRunway(state, rngInt(rng, 3, 5), Math.max(3, sp.segment.entry.width || 4), roadColor);
+      for (const row of sp.segment.rows) state.rows.push(row.map(t => t ? { ...t } : null));
+      usedSegmentIds.add(sp.segment.id);
+      lastExit = sp.segment.exit;
+      break;
+    }
+
+    if (pick.distance > 2) for (const row of buildAdapter(lastExit, seg.entry)) state.rows.push(row);
+
+    const transLen = rngInt(rng, 3, 6);
+    addRunway(state, transLen, Math.max(3, seg.entry.width || 4), roadColor);
+
+    const refillRow = state.rows.length - Math.floor(transLen / 2);
+    if (refillRow >= 0 && refillRow < state.rows.length) {
+      const rRow = state.rows[refillRow];
+      if (rRow) {
+        const cL = _findRoadLane(rRow, 3);
+        if (cL >= 0 && rRow[cL] && rRow[cL].top_color === 0) {
+          rRow[cL] = { ...rRow[cL], top_color: 10, bottom_color: 10 };
+        }
+      }
+    }
+
+    for (const row of seg.rows) state.rows.push(row.map(t => t ? { ...t } : null));
+    usedSegmentIds.add(seg.id);
+    lastExit = seg.exit;
+    if (seg.category === lastCategory) sameCategoryCount++;
+    else { sameCategoryCount = 1; lastCategory = seg.category; }
+  }
+
+  state.lane = 3;
+  addEndRunway(state, 5, roadColor, rngInt(rng, 8, 12));
+
+  const biomeRules = BIOME_RULES[biome] || {};
+  const audit = auditLevel(state.rows, biome, biomeRules);
+  refineLevel(state.rows, audit, biome, rng);
+
+  let lastRefill = 0;
+  for (let r = 20; r < state.rows.length - 10; r++) {
+    if (r - lastRefill >= refillSpacing) {
+      const row = state.rows[r];
+      if (!row) continue;
       const cL = _findRoadLane(row, 3);
       if (cL >= 0 && row[cL] && row[cL].top_color === 0 && !row[cL].ramp) {
         row[cL] = { ...row[cL], top_color: 10, bottom_color: 10 };
+        lastRefill = r;
       }
     }
-    // Boost before tunnels (downhill)
-    if (r + 1 < state.rows.length) {
-      const next = state.rows[r + 1];
-      if (next && next.some(t => t && t.tunnel)) {
-        const bL = _findRoadLane(row, 3);
-        if (bL >= 0 && row[bL] && row[bL].top_color === 0 && !row[bL].ramp) {
-          row[bL] = { ...row[bL], top_color: 11, bottom_color: 10 };
-        }
-      }
-    }
-  }
-
-  normalizeRows(state.rows);
-  return {
-    level_index: levelIndex, gravity: 14, fuel: 150, oxygen: 100,
-    palette: PALETTES['ridge'], rows: state.rows
-  };
-}
-
-// ---------------------------------------------------------------------------
-// World 2: THRILL (levels 67-69) — wide track, speed, boost chains
-// ---------------------------------------------------------------------------
-function generateThrillLevel(levelIndex, difficulty, seed) {
-  const rng = createRng(seed);
-  const totalRows = [140, 160, 180][difficulty];
-  const width = [7, 7, 6][difficulty];
-  const state = makeState(rng, 'thrill', levelIndex);
-
-  // Pass 1 SKELETON: Wide track, straight racing
-  addStartRunway(state, width, 1, 15);
-
-  // Pass 2 ELEVATION: Flat
-  // Pass 3 VOIDS: Long gaps requiring max speed
-  const gapCount = [2, 3, 4][difficulty];
-  const gapLen = [3, 3, 4][difficulty];
-  const sectionLen = Math.floor((totalRows - 30) / (gapCount + 1));
-
-  for (let g = 0; g < gapCount; g++) {
-    // Racing section with boost pads every 3 rows
-    for (let r = 0; r < sectionLen; r++) {
-      const row = createRoadRow(3, width, 1);
-      if (r % 3 === 0) {
-        // Boost in center lanes
-        for (let l = 2; l <= 4; l++) {
-          if (row[l]) row[l] = { ...row[l], top_color: 11, bottom_color: 10 };
-        }
-      }
-      state.rows.push(row);
-    }
-    // 5+ boost pads right before gap
-    for (let b = 0; b < 5; b++) {
-      const row = createRoadRow(3, width, 1);
-      for (let l = 1; l <= 5; l++) {
-        if (row[l]) row[l] = { ...row[l], top_color: 11, bottom_color: 10 };
-      }
-      state.rows.push(row);
-    }
-    addGap(state, gapLen);
-    // Landing
-    const landing = createRoadRow(3, width, 1);
-    const cL = _findRoadLane(landing, 3);
-    if (cL >= 0) landing[cL] = { ...landing[cL], top_color: 10, bottom_color: 10 };
-    state.rows.push(landing);
-  }
-
-  // Fill remaining
-  const remaining = totalRows - state.rows.length - 8;
-  if (remaining > 0) {
-    for (let r = 0; r < remaining; r++) {
-      const row = createRoadRow(3, width, 1);
-      if (r % 3 === 0) {
-        const mid = _findRoadLane(row, 3);
-        if (mid >= 0) row[mid] = { ...row[mid], top_color: 11, bottom_color: 10 };
-      }
-      state.rows.push(row);
-    }
-  }
-  addEndRunway(state, width, 1);
-
-  // Pass 4 OBSTACLES: Very few — only edge decoration
-  for (let r = 20; r < state.rows.length - 10; r += 15) {
     const row = state.rows[r];
-    if (!row || row.every(t => t === null)) continue;
-    if (row[0] && row[0].top_color !== 11) row[0] = createObstacle('half', 2);
-    if (row[6] && row[6].top_color !== 11) row[6] = createObstacle('half', 2);
-  }
-
-  // Pass 5-6 AUDIT/REFINE
-  const audit = auditLevel(state.rows, 'thrill', BIOME_RULES.thrill);
-  refineLevel(state.rows, audit, 'thrill', rng);
-
-  // Pass 7 SPECIALS: Refills every 40 rows
-  for (let r = 40; r < state.rows.length - 10; r += 40) {
-    const row = state.rows[r];
-    if (!row) continue;
-    const cL = _findRoadLane(row, 3);
-    if (cL >= 0 && row[cL] && row[cL].top_color !== 11) {
-      row[cL] = { ...row[cL], top_color: 10, bottom_color: 10 };
+    if (row) for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
+      if (row[l] && row[l].top_color === 10) { lastRefill = r; break; }
     }
   }
 
-  normalizeRows(state.rows);
-  return {
-    level_index: levelIndex, gravity: 8, fuel: 200, oxygen: 120,
-    palette: PALETTES['thrill'], rows: state.rows
-  };
-}
+  if (postProcess) postProcess(state, rng, difficulty);
 
-// ---------------------------------------------------------------------------
-// World 3: CORE (levels 70-72) — narrow, timing gates, slalom
-// ---------------------------------------------------------------------------
-function generateCoreLevel(levelIndex, difficulty, seed) {
-  const rng = createRng(seed);
-  const totalRows = [120, 140, 160][difficulty];
-  const width = 3;
-  const state = makeState(rng, 'core', levelIndex);
-
-  // Pass 1 SKELETON: Narrow track, center lane 3
-  addStartRunway(state, width, 1, 12);
-
-  // Pass 2 ELEVATION: Flat
-  // Pass 3 VOIDS: Minimal gaps (1-row), focus on lateral dodge
-
-  // Pass 4 OBSTACLES: Timing gates + slalom
-  const gateCount = [2, 3, 4][difficulty];
-  const gateSpacing = [12, 10, 8][difficulty];
-  const slalomRhythm = [5, 4, 3][difficulty];
-
-  // Alternating slalom and gate sections
-  for (let g = 0; g < gateCount; g++) {
-    // Slalom section
-    addSlalom(state, 15, slalomRhythm, width, 1);
-    // Runway before gate
-    addRunway(state, 3, width, 1);
-    // Sticky pad before gate
-    const stickyRow = createRoadRow(state.lane, width, 1);
-    if (stickyRow[state.lane]) {
-      stickyRow[state.lane] = { ...stickyRow[state.lane], top_color: 3, bottom_color: 3 };
-    }
-    state.rows.push(stickyRow);
-    addRunway(state, 2, width, 1);
-    // Timing gate
-    const openLane = clamp(state.lane + (rng() < 0.5 ? -1 : 0), 2, 4);
-    addTimingGate(state, openLane, width, 1);
-    // Boost after gate
-    const boostRow = createRoadRow(state.lane, width, 1);
-    if (boostRow[openLane]) {
-      boostRow[openLane] = { ...boostRow[openLane], top_color: 11, bottom_color: 10 };
-    }
-    state.rows.push(boostRow);
-    addRunway(state, 3, width, 1);
-    // Small gap
-    if (g < gateCount - 1) {
-      addGap(state, 1);
-      addRunway(state, 3, width, 1);
-    }
-  }
-
-  // Final slalom
-  addSlalom(state, 15, slalomRhythm, width, 1);
-
-  // Fill remaining
-  const remaining = totalRows - state.rows.length - 8;
-  if (remaining > 0) addRunway(state, remaining, width, 1);
-  addEndRunway(state, width, 1);
-
-  // Pass 5-6 AUDIT/REFINE
-  const audit = auditLevel(state.rows, 'core', BIOME_RULES.core);
-  refineLevel(state.rows, audit, 'core', rng);
-
-  // Pass 7 SPECIALS: Refills every 35 rows
-  for (let r = 35; r < state.rows.length - 10; r += 35) {
-    const row = state.rows[r];
-    if (!row) continue;
-    const cL = _findRoadLane(row, 3);
-    if (cL >= 0 && row[cL] && row[cL].top_color === 0) {
-      row[cL] = { ...row[cL], top_color: 10, bottom_color: 10 };
-    }
-  }
-
-  normalizeRows(state.rows);
-  return {
-    level_index: levelIndex, gravity: 8, fuel: 150, oxygen: 100,
-    palette: PALETTES['core'], rows: state.rows
-  };
-}
-
-// ---------------------------------------------------------------------------
-// World 4: GLITCH (levels 73-75) — floating islands, high gap ratio
-// ---------------------------------------------------------------------------
-function generateGlitchLevel(levelIndex, difficulty, seed) {
-  const rng = createRng(seed);
-  const totalRows = [130, 150, 170][difficulty];
-  const islandWidth = [4, 3, 2][difficulty];
-  const islandLen = [6, 5, 4][difficulty];
-  const gapLen = 3;
-  const state = makeState(rng, 'glitch', levelIndex);
-
-  // Pass 1 SKELETON: Variable width islands
-  addStartRunway(state, 5, 1, 12);
-
-  // Pass 2 ELEVATION: Flat
-  // Pass 3 VOIDS: Floating island pattern
-  const islandCount = Math.floor((totalRows - 30) / (islandLen + gapLen + 2));
-  for (let i = 0; i < islandCount; i++) {
-    // Drift laterally between islands
-    state.lane = clamp(state.lane + rngInt(rng, -2, 2), 1, 5);
-    // Boost on pre-gap runway
-    const preRow = createRoadRow(state.lane, islandWidth, 1);
-    const bL = _findRoadLane(preRow, state.lane);
-    if (bL >= 0) preRow[bL] = { ...preRow[bL], top_color: 11, bottom_color: 10 };
-    state.rows.push(preRow);
-    addRunway(state, 1, islandWidth, 1);
-    // Gap
-    addGap(state, gapLen);
-    // Island
-    for (let r = 0; r < islandLen; r++) {
-      state.rows.push(createRoadRow(state.lane, islandWidth, 1));
-    }
-  }
-
-  // Fill remaining
-  const remaining = totalRows - state.rows.length - 8;
-  if (remaining > 0) addRunway(state, remaining, 5, 1);
-  addEndRunway(state, 5, 1);
-
-  // Pass 4 OBSTACLES: Half-height blocks in irregular patterns on islands
-  for (let r = 15; r < state.rows.length - 10; r += rngInt(rng, 5, 8)) {
-    const row = state.rows[r];
-    if (!row || row.every(t => t === null)) continue;
-    const obsLane = _findRoadLane(row, rngInt(rng, 1, 5));
-    if (obsLane >= 0 && row[obsLane] && row[obsLane].top_color === 0) {
-      row[obsLane] = createObstacle('half', 2);
-    }
-  }
-
-  // Pass 5-6 AUDIT/REFINE
-  const audit = auditLevel(state.rows, 'glitch', BIOME_RULES.glitch);
-  refineLevel(state.rows, audit, 'glitch', rng);
-
-  // Pass 7 SPECIALS: Refill every 30 rows on larger islands
-  for (let r = 30; r < state.rows.length - 10; r += 30) {
-    const row = state.rows[r];
-    if (!row) continue;
-    const cL = _findRoadLane(row, 3);
-    if (cL >= 0 && row[cL] && row[cL].top_color === 0) {
-      row[cL] = { ...row[cL], top_color: 10, bottom_color: 10 };
-    }
-  }
-
-  normalizeRows(state.rows);
-  return {
-    level_index: levelIndex, gravity: 8, fuel: 160, oxygen: 100,
-    palette: PALETTES['glitch'], rows: state.rows
-  };
-}
-
-// ---------------------------------------------------------------------------
-// World 5: TUNDRA (levels 76-78) — wide slippery track, bumper walls
-// ---------------------------------------------------------------------------
-function generateTundraLevel(levelIndex, difficulty, seed) {
-  const rng = createRng(seed);
-  const totalRows = [130, 150, 170][difficulty];
-  const width = [7, 6, 5][difficulty];
-  const state = makeState(rng, 'tundra', levelIndex);
-
-  // Pass 1 SKELETON: Wide track for drifting
-  addStartRunway(state, width, 1, 12);
-  const mainLen = totalRows - 20;
-
-  for (let r = 0; r < mainLen; r++) {
-    state.rows.push(createRoadRow(3, width, 1));
-  }
-
-  addEndRunway(state, width, 1);
-
-  // Pass 2 ELEVATION: Flat
-  // Pass 3 VOIDS: Short wide gaps
-  const gapInterval = [40, 35, 30][difficulty];
-  for (let r = 30; r < state.rows.length - 15; r += gapInterval) {
-    // Insert 1-2 row gap
-    const gLen = [1, 1, 2][difficulty];
-    // Boost before gap
-    if (r - 1 >= 0 && state.rows[r - 1]) {
-      const bL = _findRoadLane(state.rows[r - 1], 3);
-      if (bL >= 0 && state.rows[r - 1][bL]) {
-        state.rows[r - 1][bL] = { ...state.rows[r - 1][bL], top_color: 11, bottom_color: 10 };
-      }
-    }
-    for (let g = 0; g < gLen && r + g < state.rows.length; g++) {
-      state.rows[r + g] = createEmptyRow();
-    }
-  }
-
-  // Pass 4 OBSTACLES: Bumper walls on edges every 3-4 rows
-  const bumperInterval = [4, 3, 3][difficulty];
-  for (let r = 10; r < state.rows.length - 10; r += bumperInterval) {
-    const row = state.rows[r];
-    if (!row || row.every(t => t === null)) continue;
-    // Bumpers on col 0 and col 6
-    let leftEdge = -1, rightEdge = -1;
-    for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
-      if (row[l]) { if (leftEdge < 0) leftEdge = l; rightEdge = l; }
-    }
-    if (leftEdge >= 0 && row[leftEdge] && !row[leftEdge].ramp) {
-      row[leftEdge] = createObstacle('half', 2);
-    }
-    if (rightEdge >= 0 && rightEdge !== leftEdge && row[rightEdge] && !row[rightEdge].ramp) {
-      row[rightEdge] = createObstacle('half', 2);
-    }
-  }
-
-  // Pass 5-6 AUDIT/REFINE: ≥80% slippery, bumpers present
-  // Apply slippery in pass 7 first, then audit
-  // Pass 7 SPECIALS: 80% slippery tiles, normal brake tiles at intervals
   for (let r = 0; r < state.rows.length; r++) {
     for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
-      const t = state.rows[r][l];
-      if (t && !t.ramp && !t.tunnel && t.top_color === 0 && !t.full && !t.half) {
-        if (rng() < 0.85) {
-          state.rows[r][l] = { ...t, bottom_color: 9 };
-        }
+      const tile = state.rows[r][l];
+      if (tile && !tile.ramp && tile.bottom_color === 1 && roadColor !== 1) {
+        tile.bottom_color = roadColor;
+        tile.low3 = roadColor;
       }
     }
   }
-  // Normal brake tiles at regular intervals
-  for (let r = 15; r < state.rows.length - 10; r += 12) {
-    const row = state.rows[r];
-    if (!row) continue;
-    for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
-      if (row[l] && !row[l].ramp && !row[l].full && !row[l].half) {
-        row[l] = { ...row[l], bottom_color: 1 };
-      }
-    }
-  }
-  // Refills every 35 rows
-  for (let r = 35; r < state.rows.length - 10; r += 35) {
-    const row = state.rows[r];
-    if (!row) continue;
-    const cL = _findRoadLane(row, 3);
-    if (cL >= 0 && row[cL] && row[cL].top_color === 0 && !row[cL].half) {
-      row[cL] = { ...row[cL], top_color: 10, bottom_color: 10 };
-    }
-  }
-
-  const audit = auditLevel(state.rows, 'tundra', BIOME_RULES.tundra);
-  refineLevel(state.rows, audit, 'tundra', rng);
 
   normalizeRows(state.rows);
-  return {
-    level_index: levelIndex, gravity: 8, fuel: 160, oxygen: 100,
-    palette: PALETTES['tundra'], rows: state.rows
-  };
+  return { level_index: levelIndex, name, gravity, fuel, oxygen, palette: PALETTES[biome], rows: state.rows };
 }
 
 // ---------------------------------------------------------------------------
-// World 6: FURNACE (levels 79-81) — burning edges, low resources
+// World 1: RIDGE — elevation changes, heavy gravity, jump-focused
+// ---------------------------------------------------------------------------
+function generateRidgeLevel(levelIndex, difficulty, seed) {
+  const d = difficulty;
+  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'ridge',
+    name: ['RIDGE I','RIDGE II','RIDGE III'][d], gravity: 14,
+    fuel: [300,260,220][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
+    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 25,
+    categoryPrefs: ['jump','narrow_passage','obstacle_course','tunnel','slalom','mixed'],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// World 2: THRILL — wide tracks, boost chains, speed focus
+// ---------------------------------------------------------------------------
+function generateThrillLevel(levelIndex, difficulty, seed) {
+  const d = difficulty;
+  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'thrill',
+    name: ['THRILL I','THRILL II','THRILL III'][d], gravity: 8,
+    fuel: [400,350,300][d], oxygen: [240,210,180][d], targetRows: [280,320,360][d],
+    diffRange: [[1,3],[1,4],[2,4]][d], refillSpacing: 35,
+    categoryPrefs: ['speed_section','slalom','jump','mixed','tunnel','narrow_passage'],
+    postProcess: (state, rng) => {
+      for (let r = 20; r < state.rows.length - 15; r += 3) {
+        if (rng() < 0.25) {
+          const row = state.rows[r]; if (!row) continue;
+          const cL = _findRoadLane(row, 3);
+          if (cL >= 0 && row[cL] && row[cL].top_color === 0 && !row[cL].ramp && !row[cL].full && !row[cL].half)
+            row[cL] = { ...row[cL], top_color: 11, bottom_color: 11, low3: 11 };
+        }
+      }
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// World 3: CORE — circuit board precision, narrow dodging
+// ---------------------------------------------------------------------------
+function generateCoreLevel(levelIndex, difficulty, seed) {
+  const d = difficulty;
+  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'core',
+    name: ['CORE I','CORE II','CORE III'][d], gravity: 8,
+    fuel: [300,260,220][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
+    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 28, roadColor: 2,
+    categoryPrefs: ['obstacle_course','narrow_passage','tunnel','mixed','slalom','hazard_zone'],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// World 4: GLITCH — phasing terrain, sticky hazards
+// ---------------------------------------------------------------------------
+function generateGlitchLevel(levelIndex, difficulty, seed) {
+  const d = difficulty;
+  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'glitch',
+    name: ['GLITCH I','GLITCH II','GLITCH III'][d], gravity: 8,
+    fuel: [320,280,240][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
+    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 25,
+    categoryPrefs: ['jump','hazard_zone','narrow_passage','obstacle_course','slalom','mixed'],
+    postProcess: (state, rng) => {
+      for (let r = 30; r < state.rows.length - 20; r++) {
+        if (rng() < 0.08) { const row = state.rows[r]; if (!row) continue;
+          for (let l = 0; l < ROAD_WIDTH_LANES; l++)
+            if (row[l] && row[l].top_color === 0 && !row[l].ramp && !row[l].full && !row[l].half && rng() < 0.35)
+              row[l] = { ...row[l], top_color: 3, bottom_color: 3, low3: 3 };
+        }
+      }
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// World 5: TUNDRA — ice physics, wide frictionless drift
+// ---------------------------------------------------------------------------
+function generateTundraLevel(levelIndex, difficulty, seed) {
+  const d = difficulty;
+  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'tundra',
+    name: ['TUNDRA I','TUNDRA II','TUNDRA III'][d], gravity: 8,
+    fuel: [320,280,240][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
+    diffRange: [[1,3],[1,4],[2,4]][d], refillSpacing: 30,
+    categoryPrefs: ['slalom','speed_section','jump','mixed','narrow_passage','tunnel'],
+    postProcess: (state, rng) => {
+      for (let r = 15; r < state.rows.length - 10; r++) {
+        const row = state.rows[r]; if (!row) continue;
+        for (let l = 0; l < ROAD_WIDTH_LANES; l++)
+          if (row[l] && row[l].top_color === 0 && !row[l].ramp && !row[l].full && !row[l].half && rng() < 0.40)
+            row[l] = { ...row[l], top_color: 9, bottom_color: 9, low3: 9 };
+      }
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// World 6: FURNACE — resource starvation, burn tiles everywhere
 // ---------------------------------------------------------------------------
 function generateFurnaceLevel(levelIndex, difficulty, seed) {
-  const rng = createRng(seed);
-  const totalRows = [120, 140, 160][difficulty];
-  const width = 4;
-  const safeWidth = [3, 2, 2][difficulty];
-  const state = makeState(rng, 'furnace', levelIndex);
-
-  // Pass 1 SKELETON: Track width 4
-  addStartRunway(state, width, 1, 10);
-
-  // Pass 2 ELEVATION: Flat
-  // Build main track with burn zones
-  const sectionLen = Math.floor((totalRows - 30) / 4);
-  for (let s = 0; s < 4; s++) {
-    // Safe runway section
-    addRunway(state, Math.floor(sectionLen * 0.3), width, 1);
-    // Burn zone section
-    addBurnZone(state, Math.floor(sectionLen * 0.5), width, safeWidth, 1);
-    // Safe exit
-    addRunway(state, Math.floor(sectionLen * 0.2), width, 1);
-
-    // Pass 3: 2-row gaps with refill on landing
-    if (s < 3) {
-      // Boost before gap
-      const preRow = createRoadRow(state.lane, width, 1);
-      if (preRow[state.lane]) {
-        preRow[state.lane] = { ...preRow[state.lane], top_color: 11, bottom_color: 10 };
+  const d = difficulty;
+  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'furnace',
+    name: ['FURNACE I','FURNACE II','FURNACE III'][d], gravity: 8,
+    fuel: [200,170,140][d], oxygen: [100,80,60][d], targetRows: [260,300,340][d],
+    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 20,
+    categoryPrefs: ['hazard_zone','obstacle_course','narrow_passage','jump','mixed','tunnel'],
+    postProcess: (state, rng) => {
+      const burnChance = [0.15, 0.25, 0.35][d];
+      for (let r = 20; r < state.rows.length - 15; r++) {
+        const row = state.rows[r]; if (!row) continue;
+        for (let l = 0; l < ROAD_WIDTH_LANES; l++)
+          if (row[l] && row[l].top_color === 0 && !row[l].ramp && !row[l].full && !row[l].half && rng() < burnChance)
+            row[l] = { ...row[l], top_color: 13, bottom_color: 13, low3: 13 };
       }
-      state.rows.push(preRow);
-      addGap(state, 2);
-      // Landing with refill
-      const landRow = createRoadRow(state.lane, width, 1);
-      if (landRow[state.lane]) {
-        landRow[state.lane] = { ...landRow[state.lane], top_color: 10, bottom_color: 10 };
-      }
-      state.rows.push(landRow);
-    }
-  }
-
-  // Fill remaining
-  const remaining = totalRows - state.rows.length - 8;
-  if (remaining > 0) addRunway(state, remaining, width, 1);
-  addEndRunway(state, width, 1);
-
-  // Pass 4 OBSTACLES: Full-height walls flanking burn zones
-  for (let r = 15; r < state.rows.length - 10; r += 10) {
-    const row = state.rows[r];
-    if (!row || row.every(t => t === null)) continue;
-    // If this row has burning tiles, add walls
-    const hasBurn = row.some(t => t && (t.top_color === 13 || t.bottom_color === 13));
-    if (hasBurn) {
-      let leftEdge = -1, rightEdge = -1;
-      for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
-        if (row[l]) { if (leftEdge < 0) leftEdge = l; rightEdge = l; }
-      }
-      if (leftEdge > 0) row[leftEdge - 1] = createObstacle('full', 2);
-      if (rightEdge < 6) row[rightEdge + 1] = createObstacle('full', 2);
-    }
-  }
-
-  // Pass 5-6 AUDIT/REFINE
-  const audit = auditLevel(state.rows, 'furnace', BIOME_RULES.furnace);
-  refineLevel(state.rows, audit, 'furnace', rng);
-
-  // Pass 7 SPECIALS: Extra refill pads (resources are scarce)
-  for (let r = 20; r < state.rows.length - 10; r += 20) {
-    const row = state.rows[r];
-    if (!row) continue;
-    const cL = _findRoadLane(row, state.lane);
-    if (cL >= 0 && row[cL] && row[cL].top_color === 0 && row[cL].bottom_color !== 13) {
-      row[cL] = { ...row[cL], top_color: 10, bottom_color: 10 };
-    }
-  }
-
-  normalizeRows(state.rows);
-  return {
-    level_index: levelIndex, gravity: 8, fuel: 100, oxygen: 50,
-    palette: PALETTES['furnace'], rows: state.rows
-  };
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
-// World 7: SHALLOWS (levels 82-84) — guide rails, tunnels, narrow
+// World 7: SHALLOWS — fog, tunnel-heavy, reduced visibility
 // ---------------------------------------------------------------------------
 function generateShallowsLevel(levelIndex, difficulty, seed) {
-  const rng = createRng(seed);
-  const totalRows = [120, 140, 160][difficulty];
-  const width = [4, 4, 3][difficulty];
-  const state = makeState(rng, 'shallows', levelIndex);
-
-  // Pass 1 SKELETON: Track width 3-4
-  addStartRunway(state, width, 1, 10);
-
-  // Pass 2 ELEVATION: Flat
-  // Build sections alternating between guide rails and tunnels
-  const tunnelInterval = [20, 18, 15][difficulty];
-  const tunnelLen = [4, 5, 5][difficulty];
-  const guideLen = [8, 6, 5][difficulty];
-  let rowsGenerated = state.rows.length;
-
-  while (rowsGenerated < totalRows - 20) {
-    // Guide rail section
-    addGuideRails(state, guideLen, width, 1);
-    rowsGenerated += guideLen;
-
-    // Normal runway between features
-    const runLen = Math.max(3, tunnelInterval - guideLen - tunnelLen);
-    addRunway(state, runLen, width, 1);
-    rowsGenerated += runLen;
-
-    // Tunnel section
-    addTunnelRun(state, tunnelLen, width, 2);
-    rowsGenerated += tunnelLen;
-
-    // Pass 3: Short gap every 15-20 rows
-    if (rowsGenerated < totalRows - 25) {
-      // Boost before gap
-      const preRow = createRoadRow(state.lane, width, 1);
-      if (preRow[state.lane]) {
-        preRow[state.lane] = { ...preRow[state.lane], top_color: 11, bottom_color: 10 };
-      }
-      state.rows.push(preRow);
-      addGap(state, 2);
-      addRunway(state, 3, width, 1);
-      rowsGenerated += 6;
-    }
-  }
-
-  // Fill remaining
-  const remaining = totalRows - state.rows.length - 8;
-  if (remaining > 0) addRunway(state, remaining, width, 1);
-  addEndRunway(state, width, 1);
-
-  // Pass 4: Guide rails already placed in skeleton
-  // Pass 5-6 AUDIT/REFINE
-  const audit = auditLevel(state.rows, 'shallows', BIOME_RULES.shallows);
-  refineLevel(state.rows, audit, 'shallows', rng);
-
-  // Pass 7 SPECIALS: Boost guide strips in center, refills every 30 rows
-  for (let r = 15; r < state.rows.length - 10; r += 8) {
-    const row = state.rows[r];
-    if (!row) continue;
-    const cL = _findRoadLane(row, state.lane);
-    if (cL >= 0 && row[cL] && row[cL].top_color === 0 && !row[cL].tunnel && !row[cL].half) {
-      if (r % 30 === 0) {
-        row[cL] = { ...row[cL], top_color: 10, bottom_color: 10 };
-      }
-    }
-  }
-
-  normalizeRows(state.rows);
-  return {
-    level_index: levelIndex, gravity: 8, fuel: 150, oxygen: 100,
-    palette: PALETTES['shallows'], rows: state.rows
-  };
+  const d = difficulty;
+  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'shallows',
+    name: ['SHALLOWS I','SHALLOWS II','SHALLOWS III'][d], gravity: 8,
+    fuel: [300,260,220][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
+    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 25,
+    categoryPrefs: ['tunnel','narrow_passage','slalom','mixed','jump','obstacle_course'],
+  });
 }
 
 // ---------------------------------------------------------------------------
-// World 8: SPIRE (levels 85-87) — tiny floating islands, low gravity
+// World 8: SPIRE — low gravity, island hopping, floaty jumps
 // ---------------------------------------------------------------------------
 function generateSpireLevel(levelIndex, difficulty, seed) {
-  const rng = createRng(seed);
-  const totalRows = [130, 150, 170][difficulty];
-  const islandWidth = [3, 3, 2][difficulty];
-  const islandLen = [4, 3, 3][difficulty];
-  const gapLen = [3, 4, 5][difficulty];
-  const state = makeState(rng, 'spire', levelIndex);
-
-  // Pass 1 SKELETON: Very narrow islands
-  addStartRunway(state, 3, 1, 10);
-
-  // Pass 2 ELEVATION: Flat
-  // Pass 3 VOIDS: Floating islands with large gaps (low gravity = floaty jumps)
-  let islandNum = 0;
-  while (state.rows.length < totalRows - 15) {
-    // Drift laterally
-    state.lane = clamp(state.lane + rngInt(rng, -1, 1), 2, 4);
-
-    // Boost on last row before gap
-    const preRow = createRoadRow(state.lane, islandWidth, 1);
-    const bL = _findRoadLane(preRow, state.lane);
-    if (bL >= 0) preRow[bL] = { ...preRow[bL], top_color: 11, bottom_color: 10 };
-    state.rows.push(preRow);
-
-    // Gap
-    addGap(state, gapLen);
-
-    // Island
-    for (let r = 0; r < islandLen; r++) {
-      state.rows.push(createRoadRow(state.lane, islandWidth, 1));
-    }
-
-    // Refill every 4th island
-    islandNum++;
-    if (islandNum % 4 === 0 && state.rows.length > 0) {
-      const lastRow = state.rows[state.rows.length - 1];
-      const rL = _findRoadLane(lastRow, state.lane);
-      if (rL >= 0 && lastRow[rL]) {
-        lastRow[rL] = { ...lastRow[rL], top_color: 10, bottom_color: 10 };
-      }
-    }
-  }
-
-  addEndRunway(state, 3, 1);
-
-  // Pass 4 OBSTACLES: Half-height markers on islands
-  for (let r = 15; r < state.rows.length - 10; r += rngInt(rng, 8, 14)) {
-    const row = state.rows[r];
-    if (!row || row.every(t => t === null)) continue;
-    const obsLane = _findRoadLane(row, state.lane);
-    if (obsLane >= 0 && row[obsLane] && row[obsLane].top_color === 0 && !row[obsLane].half) {
-      // Place on edge of island, not center
-      let edgeLane = obsLane - 1;
-      if (edgeLane >= 0 && row[edgeLane] && !row[edgeLane].half) {
-        row[edgeLane] = createObstacle('half', 2);
-      }
-    }
-  }
-
-  // Pass 5-6 AUDIT/REFINE
-  const audit = auditLevel(state.rows, 'spire', BIOME_RULES.spire);
-  refineLevel(state.rows, audit, 'spire', rng);
-
-  // Pass 7 SPECIALS: Already placed boosts and refills above
-
-  normalizeRows(state.rows);
-  return {
-    level_index: levelIndex, gravity: 4, fuel: 180, oxygen: 120,
-    palette: PALETTES['spire'], rows: state.rows
-  };
+  const d = difficulty;
+  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'spire',
+    name: ['SPIRE I','SPIRE II','SPIRE III'][d], gravity: 4,
+    fuel: [360,310,260][d], oxygen: [240,200,160][d], targetRows: [260,300,340][d],
+    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 30,
+    categoryPrefs: ['jump','narrow_passage','slalom','obstacle_course','mixed','hazard_zone'],
+  });
 }
 
 // ---------------------------------------------------------------------------
-// World 9: PULSE (levels 88-90) — timing gates with sticky brakes
+// World 9: PULSE — timing gates, momentum, mechanical precision
 // ---------------------------------------------------------------------------
 function generatePulseLevel(levelIndex, difficulty, seed) {
-  const rng = createRng(seed);
-  const totalRows = [130, 150, 170][difficulty];
-  const width = [5, 4, 4][difficulty];
-  const state = makeState(rng, 'pulse', levelIndex);
-
-  // Pass 1 SKELETON: Track width 4-5
-  addStartRunway(state, width, 1, 10);
-
-  // Pass 2 ELEVATION: Flat
-  // Pass 4 OBSTACLES: Timing gates every 8-12 rows
-  const gateSpacing = [12, 10, 8][difficulty];
-  const gateCount = Math.floor((totalRows - 30) / (gateSpacing + 5));
-
-  for (let g = 0; g < gateCount; g++) {
-    // Approach section
-    addRunway(state, gateSpacing - 5, width, 1);
-
-    // Sticky brakes 2-3 rows before gate
-    for (let s = 0; s < 3; s++) {
-      const stickyRow = createRoadRow(state.lane, width, 1);
-      for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
-        if (stickyRow[l]) {
-          stickyRow[l] = { ...stickyRow[l], top_color: 3, bottom_color: 3 };
+  const d = difficulty;
+  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'pulse',
+    name: ['PULSE I','PULSE II','PULSE III'][d], gravity: 8,
+    fuel: [300,260,220][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
+    diffRange: [[2,4],[3,5],[3,5]][d], refillSpacing: 28,
+    categoryPrefs: ['obstacle_course','tunnel','narrow_passage','hazard_zone','slalom','jump','mixed'],
+    postProcess: (state, rng) => {
+      for (let r = 25; r < state.rows.length - 15; r += 8) {
+        if (rng() < 0.30) {
+          const row = state.rows[r]; if (!row) continue;
+          const cL = _findRoadLane(row, 3);
+          if (cL >= 0 && row[cL] && row[cL].top_color === 0 && !row[cL].ramp && !row[cL].full && !row[cL].half)
+            row[cL] = { ...row[cL], top_color: 3, bottom_color: 3, low3: 3 };
         }
       }
-      state.rows.push(stickyRow);
-    }
-
-    // 1 row buffer
-    addRunway(state, 1, width, 1);
-
-    // Timing gate — open lane varies
-    const openLane = clamp(state.lane + rngInt(rng, -1, 1), 1, 5);
-    addTimingGate(state, openLane, width, 1);
-
-    // Boost 2 rows after gate
-    for (let b = 0; b < 2; b++) {
-      const boostRow = createRoadRow(state.lane, width, 1);
-      if (boostRow[openLane]) {
-        boostRow[openLane] = { ...boostRow[openLane], top_color: 11, bottom_color: 10 };
-      }
-      state.rows.push(boostRow);
-    }
-
-    // Pass 3: 2-row gaps between gate sequences
-    if (g < gateCount - 1 && g % 2 === 1) {
-      // Boost before gap
-      const preRow = createRoadRow(state.lane, width, 1);
-      if (preRow[state.lane]) {
-        preRow[state.lane] = { ...preRow[state.lane], top_color: 11, bottom_color: 10 };
-      }
-      state.rows.push(preRow);
-      addGap(state, 2);
-      addRunway(state, 3, width, 1);
-    }
-  }
-
-  // Fill remaining
-  const remaining = totalRows - state.rows.length - 8;
-  if (remaining > 0) addRunway(state, remaining, width, 1);
-  addEndRunway(state, width, 1);
-
-  // Pass 5-6 AUDIT/REFINE
-  const audit = auditLevel(state.rows, 'pulse', BIOME_RULES.pulse);
-  refineLevel(state.rows, audit, 'pulse', rng);
-
-  // Pass 7 SPECIALS: Refills every 35 rows
-  for (let r = 35; r < state.rows.length - 10; r += 35) {
-    const row = state.rows[r];
-    if (!row) continue;
-    const cL = _findRoadLane(row, 3);
-    if (cL >= 0 && row[cL] && row[cL].top_color === 0) {
-      row[cL] = { ...row[cL], top_color: 10, bottom_color: 10 };
-    }
-  }
-
-  normalizeRows(state.rows);
-  return {
-    level_index: levelIndex, gravity: 8, fuel: 150, oxygen: 100,
-    palette: PALETTES['pulse'], rows: state.rows
-  };
+    },
+  });
 }
+
 
 // ---------------------------------------------------------------------------
 // Internal helper: find the closest road lane to a target

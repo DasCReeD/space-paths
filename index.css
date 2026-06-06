@@ -16,6 +16,13 @@
   
   --shadow-neon: 0 0 20px var(--color-primary-glow), 0 0 40px var(--color-primary-glow);
   --shadow-neon-sec: 0 0 20px var(--color-secondary-glow), 0 0 40px var(--color-secondary-glow);
+  
+  /* Touch control sizing — auto-scales with viewport */
+  --touch-btn-size: clamp(48px, 8vmin, 96px);
+  --touch-btn-sm: clamp(36px, 6vmin, 64px);
+  --touch-btn-font: clamp(14px, 2.5vmin, 24px);
+  --touch-joystick-size: clamp(100px, 16vmin, 180px);
+  --touch-knob-size: clamp(44px, 7vmin, 72px);
 }
 
 * {
@@ -292,6 +299,75 @@ body, html {
   color: var(--color-text-muted);
   margin-bottom: 35px;
   line-height: 1.5;
+}
+
+/* Rewind Prompt — pulsing cyan glow on death screen */
+.rewind-prompt {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #00ffcc;
+  text-shadow: 0 0 15px rgba(0, 255, 204, 0.8), 0 0 30px rgba(0, 255, 204, 0.4);
+  animation: rewindPulse 1.2s ease-in-out infinite;
+  margin-bottom: 20px;
+}
+
+.rewind-prompt .rewind-key {
+  display: inline-block;
+  background: rgba(0, 255, 204, 0.15);
+  border: 2px solid #00ffcc;
+  color: #00ffcc;
+  padding: 3px 12px;
+  margin: 0 6px;
+  font-size: 1rem;
+  box-shadow: 0 0 10px rgba(0, 255, 204, 0.4), inset 0 0 5px rgba(0, 255, 204, 0.1);
+}
+
+@keyframes rewindPulse {
+  0%, 100% { opacity: 1; text-shadow: 0 0 15px rgba(0, 255, 204, 0.8), 0 0 30px rgba(0, 255, 204, 0.4); }
+  50% { opacity: 0.5; text-shadow: 0 0 5px rgba(0, 255, 204, 0.3); }
+}
+
+.rewind-depleted {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #ff3366;
+  text-shadow: 0 0 10px rgba(255, 51, 102, 0.6);
+  margin-bottom: 20px;
+}
+
+/* Rewind active screen overlay — subtle VHS-style scan effect */
+.rewind-active-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 50;
+  pointer-events: none;
+  border: 3px solid rgba(0, 255, 204, 0.3);
+  box-shadow: inset 0 0 60px rgba(0, 255, 204, 0.1);
+  animation: rewindBorder 0.3s ease-in-out infinite alternate;
+}
+
+.rewind-active-overlay::before {
+  content: '⏪ REWINDING';
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #00ffcc;
+  letter-spacing: 4px;
+  text-shadow: 0 0 20px rgba(0, 255, 204, 0.8);
+  animation: rewindPulse 0.6s ease-in-out infinite;
+}
+
+@keyframes rewindBorder {
+  0% { border-color: rgba(0, 255, 204, 0.3); }
+  100% { border-color: rgba(0, 255, 204, 0.6); }
 }
 
 /* How to Play Content */
@@ -1560,25 +1636,265 @@ body, html {
   transform: scale(0.92);
 }
 
-/* Mobile Touch Controls HUD Styling with high-fidelity glassmorphism */
+/* ══════════════════════════════════════════════════════════════
+   TOUCH CONTROLS v2 — Individual Button System
+   Each button is position:absolute with tight bounding boxes.
+   ══════════════════════════════════════════════════════════════ */
+
 .touch-hud {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
   z-index: 99;
   pointer-events: none;
-  overflow: hidden;
 }
 
-.pointer-events-none {
-  pointer-events: none !important;
+/* ── Individual Button Base ── */
+.touch-btn-ind {
+  position: absolute;
+  touch-action: none;
+  pointer-events: auto;
+  padding: 0; margin: 0;
+  box-sizing: border-box;
+  border: 2px solid rgba(255,255,255,0.15);
+  background: rgba(20,20,35,0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: var(--touch-btn-font);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 100;
+  transition: transform 0.1s ease, border-color 0.15s ease;
+  cursor: pointer;
+  outline: none;
+}
+.touch-btn-ind:active,
+.touch-btn-ind.pressed {
+  transform: scale(0.9) !important;
+  border-color: #00ffcc;
+  background: rgba(0,255,200,0.2);
 }
 
-.pointer-events-auto {
+/* ── Action Buttons (round, for thrust/brake/jump) ── */
+.touch-btn-action {
+  width: var(--touch-btn-size);
+  height: var(--touch-btn-size);
+  border-radius: 50%;
+  font-size: calc(var(--touch-btn-font) * 1.4);
+}
+.action-throttle {
+  border-color: rgba(0,255,136,0.4);
+  background: rgba(0,255,136,0.15);
+}
+.action-brake {
+  border-color: rgba(255,80,80,0.4);
+  background: rgba(255,80,80,0.15);
+}
+.action-jump {
+  border-color: rgba(0,180,255,0.4);
+  background: rgba(0,180,255,0.15);
+}
+
+/* ── Small Buttons (camera, rewind, curve, zoom, pause) ── */
+.touch-btn-sm {
+  width: var(--touch-btn-sm);
+  height: var(--touch-btn-sm);
+  border-radius: 12px;
+  font-size: calc(var(--touch-btn-font) * 0.85);
+}
+
+/* ── Edit Button ── */
+.touch-edit-btn {
+  border-color: rgba(0,255,136,0.5);
+  background: rgba(0,255,136,0.15);
+}
+
+/* ── Top Bar (pause + edit) ── */
+.touch-top-bar {
+  position: absolute;
+  top: 10px; left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  z-index: 101;
+  pointer-events: auto;
+}
+.touch-top-bar .touch-btn-ind {
+  position: relative;
+}
+
+/* ── Joystick ── */
+.touch-steer-area {
+  width: var(--touch-joystick-size);
+  height: var(--touch-joystick-size);
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.1);
+  background: rgba(20,20,35,0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.joystick-base {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  position: relative;
+  touch-action: none;
+}
+.joystick-knob {
+  width: var(--touch-knob-size);
+  height: var(--touch-knob-size);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(0,255,200,0.6), rgba(0,180,255,0.3));
+  border: 2px solid rgba(0,255,200,0.5);
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+  pointer-events: auto;
+  transition: none;
+}
+
+/* ── D-Pad ── */
+.touch-dpad-view {
+  width: 100%; height: 100%;
+  position: relative;
+}
+.dpad-btn {
+  position: absolute;
+  width: 40%; height: 40%;
+  background: rgba(20,20,35,0.6);
+  border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  color: #fff;
+  font-size: var(--touch-btn-font);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  pointer-events: auto;
+  outline: none;
+}
+.dpad-up { top: 0; left: 30%; }
+.dpad-down { bottom: 0; left: 30%; }
+.dpad-left { left: 0; top: 30%; }
+.dpad-right { right: 0; top: 30%; }
+.dpad-btn:active, .dpad-btn.pressed {
+  background: rgba(0,255,200,0.2);
+  border-color: #00ffcc;
+}
+
+/* ── Customizer Mode ── */
+.touch-hud.customizing .touch-btn-ind {
+  border: 2px dashed rgba(255,0,255,0.6);
+  animation: pulse-border 1.5s infinite;
+}
+.touch-hud.customizing .touch-btn-ind.dragging {
+  border-color: #ff00ff;
+  box-shadow: 0 0 20px rgba(255,0,255,0.5);
+  z-index: 110;
+  opacity: 1 !important;
   pointer-events: auto !important;
 }
+.touch-hud.customizing .touch-btn-ind:not(.dragging):not(.touch-edit-btn) {
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.touch-customizer-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  pointer-events: none;
+  z-index: 105;
+}
+.touch-customizer-bar {
+  position: absolute;
+  bottom: 50%; left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(10,10,20,0.85);
+  border: 1px solid rgba(255,0,255,0.3);
+  border-radius: 12px;
+  pointer-events: auto;
+}
+.cust-btn {
+  padding: 8px 14px;
+  background: rgba(40,40,60,0.8);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  touch-action: none;
+  white-space: nowrap;
+  outline: none;
+}
+.cust-btn:active { background: rgba(0,255,200,0.2); border-color: #00ffcc; }
+.cust-btn.btn-danger { border-color: rgba(255,80,80,0.5); color: #ff5050; }
+.cust-btn.btn-success { border-color: rgba(0,255,136,0.5); color: #00ff88; }
+
+@keyframes pulse-border {
+  0%, 100% { border-color: rgba(255,0,255,0.3); }
+  50% { border-color: rgba(255,0,255,0.8); }
+}
+
+/* ── Settings Menu Touch Optimization ── */
+.settings-section-header {
+  color: #8c8f99;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin: 16px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+@media (pointer: coarse) {
+  .settings-options .btn {
+    min-height: 48px;
+    font-size: 16px;
+    padding: 12px 16px;
+  }
+  .settings-options input[type="range"] {
+    height: 44px;
+  }
+  .settings-options input[type="range"]::-webkit-slider-thumb {
+    width: 28px; height: 28px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #00ffcc;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  #settings-screen {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: 90vh;
+  }
+}
+
+/* ── Responsive Touch Breakpoints ── */
+@media (orientation: portrait) {
+  :root {
+    --touch-btn-size: clamp(44px, 10vmin, 80px);
+    --touch-btn-sm: clamp(32px, 7vmin, 56px);
+    --touch-joystick-size: clamp(90px, 18vmin, 160px);
+  }
+}
+@media (max-width: 480px) {
+  :root {
+    --touch-btn-size: clamp(40px, 12vw, 72px);
+    --touch-btn-sm: clamp(30px, 8vw, 52px);
+    --touch-joystick-size: clamp(80px, 22vw, 140px);
+  }
+}
+
 
 .touch-layout-btn {
   position: absolute;

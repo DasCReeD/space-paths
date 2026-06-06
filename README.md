@@ -101,13 +101,14 @@ npm run build
 
 | Module | Size | Responsibility |
 |--------|------|----------------|
-| [app.js](docs/module-map.md#appjs) | 120 KB | GameManager — state machine, UI, game loop |
-| [graphics.js](docs/module-map.md#graphicsjs) | 93 KB | Three.js rendering, particles, skybox |
+| [app.js](docs/module-map.md#appjs) | 111 KB | GameManager — state machine, UI, game loop |
+| [graphics.js](docs/docs/module-map.md#graphicsjs) | 93 KB | Three.js rendering, particles, skybox |
 | [levelLoader.js](docs/module-map.md#levelloaderjs) | 88 KB | Level geometry builder, themed textures |
 | [worldBuilder.js](docs/module-map.md#worldbuilderjs) | 50 KB | Procedural level generation |
 | [physics.js](docs/module-map.md#physicsjs) | 42 KB | Physics engine, ship classes |
 | [audio.js](docs/module-map.md#audiojs) | 41 KB | Audio system, OPL2 FM synthesis |
 | [cockpitConsole.js](docs/module-map.md#cockpitconsolejs) | 35 KB | 3D cockpit HUD, minimap |
+| [touchControls.js](docs/module-map.md#touchcontrolsjs) | 24 KB | Touch input manager — individual button system |
 | [preview.js](docs/module-map.md#previewjs) | 23 KB | Ship garage preview |
 | [oplSynth.js](docs/module-map.md#oplsynthjs) | 19 KB | OPL2 FM synthesis engine |
 | [generate_textures.js](docs/module-map.md#generate_texturesjs) | 18 KB | Procedural texture generation |
@@ -120,6 +121,7 @@ graph TD
     APP --> AUD["audio.js"]
     APP --> PRV["preview.js"]
     APP --> LVL["levels.js"]
+    APP --> TC["touchControls.js"]
     GFX --> CC["cockpitConsole.js"]
     GFX --> LL
     AUD --> OPL["oplSynth.js"]

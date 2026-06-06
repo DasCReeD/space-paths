@@ -1,6 +1,6 @@
 # SkyRoads WebGL — Module Map
 
-> **Last updated:** 2026-06-05
+> **Last updated:** 2026-06-06
 > Authoritative code map for all source modules, their exports, dependencies, and relationships.
 
 ---
@@ -18,17 +18,18 @@
 9. [preview.js — Garage Preview](#previewjs)
 10. [oplSynth.js — OPL2 FM Synth](#oplsynthjs)
 11. [levels.js — Level Pack Loader](#levelsjs)
-12. [generate_textures.js — Texture Generator](#generate_texturesjs)
-13. [debug_coords.js — Debug Overlay](#debug_coordsjs)
-14. [vitest.setup.js — Test Setup](#vitestsetupjs)
-15. [index.html — UI Structure](#indexhtml)
-16. [index.css — Design System](#indexcss)
-17. [vite.config.js — Build Config](#viteconfigjs)
-18. [package.json — Project Metadata](#packagejson)
-19. [Cross-Module Dependency Graph](#cross-module-dependency-graph)
-20. [Theme System](#theme-system)
-21. [Asset Structure](#asset-structure)
-22. [Data Files](#data-files)
+12. [touchControls.js — Touch Input Manager](#touchcontrolsjs)
+13. [generate_textures.js — Texture Generator](#generate_texturesjs)
+14. [debug_coords.js — Debug Overlay](#debug_coordsjs)
+15. [vitest.setup.js — Test Setup](#vitestsetupjs)
+16. [index.html — UI Structure](#indexhtml)
+17. [index.css — Design System](#indexcss)
+18. [vite.config.js — Build Config](#viteconfigjs)
+19. [package.json — Project Metadata](#packagejson)
+20. [Cross-Module Dependency Graph](#cross-module-dependency-graph)
+21. [Theme System](#theme-system)
+22. [Asset Structure](#asset-structure)
+23. [Data Files](#data-files)
 
 ---
 
@@ -36,15 +37,16 @@
 
 | File | Size | Lines (approx) | Purpose |
 |------|------|-----------------|---------|
-| [app.js](file:///c:/dev/Sky%20roads/app.js) | 120 KB | ~3,044 | GameManager — state machine, UI, game loop, input, garage, settings |
+| [app.js](file:///c:/dev/Sky%20roads/app.js) | 111 KB | ~2,797 | GameManager — state machine, UI, game loop, input, garage, settings |
 | [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) | 93 KB | ~1,800 | Three.js rendering, particles, skybox, theming, ship models |
 | [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) | 88 KB | ~2,200 | Level geometry builder, themed textures, async building |
-| [index.css](file:///c:/dev/Sky%20roads/index.css) | 68 KB | ~2,744 | Retro-futuristic glassmorphism design system |
-| [index.html](file:///c:/dev/Sky%20roads/index.html) | 61 KB | ~975 | Full game UI — menus, HUD, settings, garage, touch controls |
+| [index.css](file:///c:/dev/Sky%20roads/index.css) | 78 KB | ~3,145 | Retro-futuristic glassmorphism design system |
+| [index.html](file:///c:/dev/Sky%20roads/index.html) | 61 KB | ~967 | Full game UI — menus, HUD, settings, garage, touch controls |
 | [worldBuilder.js](file:///c:/dev/Sky%20roads/worldBuilder.js) | 50 KB | ~1,695 | Procedural level generation (standalone Node.js CLI) |
-| [physics.js](file:///c:/dev/Sky%20roads/physics.js) | 42 KB | ~850 | Physics engine, collision detection, keyboard/gamepad controller |
+| [physics.js](file:///c:/dev/Sky%20roads/physics.js) | 46 KB | ~1,050 | Physics engine, collision detection, keyboard/gamepad controller |
 | [audio.js](file:///c:/dev/Sky%20roads/audio.js) | 41 KB | ~1,281 | Web Audio API synthesizer, music sequencer, SFX |
 | [cockpitConsole.js](file:///c:/dev/Sky%20roads/cockpitConsole.js) | 35 KB | ~400 | 3D cockpit dashboard HUD + path scanner minimap |
+| [touchControls.js](file:///c:/dev/Sky%20roads/touchControls.js) | 24 KB | ~752 | Touch input manager — individual button system |
 | [preview.js](file:///c:/dev/Sky%20roads/preview.js) | 23 KB | ~600 | Ship garage preview engine (isolated Three.js scene) |
 | [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) | 19 KB | ~637 | OPL2 FM synthesis (Yamaha YM3812) + LZS decompressor |
 | [generate_textures.js](file:///c:/dev/Sky%20roads/generate_textures.js) | 18 KB | ~511 | Procedural PNG texture generator (standalone Node.js) |
@@ -59,7 +61,7 @@
 
 **Purpose:** Central GameManager singleton that wires together all subsystems. Manages the game state machine, all UI events, localStorage persistence, input modes (keyboard, gamepad, touch, mouse), scoring, ship garage, physics calibrator, and the main requestAnimationFrame game loop.
 
-**Stats:** ~3,044 lines · 120 KB
+**Stats:** ~2,797 lines · 111 KB
 
 **Exports:** None (side-effect module — instantiates `GameManager` and attaches to `window.gameManagerInstance`)
 
@@ -79,7 +81,6 @@
 | `GameManager.toggleFullscreen()` | method | Fullscreen API toggle |
 | `GameManager.updateAutoLaneSnap()` | method | Autolane snapping toggle + strength slider |
 | `GamepadManager` | class (internal) | Xbox/generic gamepad polling, button mapping, deadzone config |
-| `TouchControlManager` | class (internal) | Virtual analog stick, D-pad, throttle axis, layout customizer |
 | `SKIN_DETAILS` | const object | Display names and descriptions for ship skins |
 
 **Dependencies:**
@@ -89,6 +90,7 @@
 - [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) → `buildLevelAsync`, `disposeUnusedThemes`, `getActiveThemeIndex`
 - [audio.js](file:///c:/dev/Sky%20roads/audio.js) → `gameAudio`
 - [preview.js](file:///c:/dev/Sky%20roads/preview.js) → `ShipPreviewEngine`
+- [touchControls.js](file:///c:/dev/Sky%20roads/touchControls.js) → `TouchControlManager`
 - `three` (npm)
 
 ---
@@ -332,6 +334,49 @@
 
 ---
 
+## touchControls.js
+
+**Purpose:** Extracted touch input module providing individually-positionable HUD buttons with tight bounding boxes. Replaces the old container-based touch controls that were inline in app.js. Each button uses an anchor-based positioning system (bl/br/tl/tr/tc + offset) for viewport-independent layout. Includes a customizer mode where buttons can be individually dragged to reposition, with all other buttons isolated (no accidental inputs). Config is versioned and persisted to localStorage.
+
+**Stats:** ~752 lines · 24 KB
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `TouchControlManager` | class | Touch HUD manager |
+| `.init(keyboard, graphics, app)` | method | Wire up DOM buttons, load config, bind events |
+| `.show()` / `.hide()` | methods | Toggle touch HUD visibility |
+| `.loadConfig()` | method | Load from localStorage (`skyroads_touch_v2`, version 2) |
+| `.saveConfig()` | method | Persist to localStorage |
+| `.resetConfig()` | method | Restore factory defaults |
+| `.applyConfig()` | method | Position all buttons using anchor math |
+| `.anchorToCSS(anchor, x, y, w, h)` | method | Convert anchor-relative coords to CSS left/top |
+| `.cssToAnchor(anchor, left, top, w, h)` | method | Inverse: CSS left/top → anchor coords |
+| `.bindGameEvents()` | method | Wire physics-state buttons + UI-action buttons |
+| `.bindJoystick()` | method | Analogue joystick with 0.15 deadzone, pointer capture |
+| `.enterCustomizeMode()` | method | Show overlay, make buttons draggable |
+| `.exitCustomizeMode()` | method | Save config, restore normal input |
+| `.makeButtonDraggable(id, el)` | method | Per-button drag-to-reposition with isolation |
+| `STORAGE_KEY` | const `'skyroads_touch_v2'` | LocalStorage key |
+| `CONFIG_VERSION` | const `2` | Schema version |
+| `JOYSTICK_DEADZONE` | const `0.15` | Analogue stick dead zone |
+
+**DOM Elements Expected:**
+- `#mobile-touch-hud` — Container overlay
+- `#touch-btn-pause`, `#touch-btn-edit` — Top bar controls
+- `#touch-btn-cam`, `#touch-btn-curve`, `#touch-btn-zoom-in`, `#touch-btn-zoom-out` — Camera cluster
+- `#touch-btn-rewind` — Rewind button
+- `#touch-btn-steer`, `#joystick-base`, `#joystick-knob` — Joystick
+- `#touch-dpad-view` + `.dpad-btn` — D-Pad alternative
+- `#touch-btn-thrust`, `#touch-btn-brake`, `#touch-btn-jump` — Action buttons
+- `#touch-customizer-overlay` — Customizer toolbar
+
+**Dependencies:**
+- [physics.js](file:///c:/dev/Sky%20roads/physics.js) → `KeyboardController` (via constructor injection)
+- [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) → `GraphicsEngine` (via constructor injection)
+- [app.js](file:///c:/dev/Sky%20roads/app.js) → `GameManager` (via constructor injection, for `toggleSettingsMenu`)
+
+---
+
 ## generate_textures.js
 
 **Purpose:** Standalone Node.js script that procedurally generates seamless 1024×1024 PNG textures from pure math (no image dependencies). Uses deterministic seeded PRNG (Mulberry32) and hand-rolled PNG encoding with CRC32 + zlib.
@@ -399,7 +444,7 @@
 
 **Purpose:** Main HTML document containing all UI screens, overlays, HUD, and the WebGL game canvas. Single-page application with overlay-based navigation.
 
-**Stats:** ~975 lines · 61 KB
+**Stats:** ~967 lines · 61 KB
 
 ### Structure
 
@@ -421,7 +466,7 @@
 | Success Screen | `#screen-success` | Run telemetry, scoring, leaderboard |
 | How To Play | `#screen-how-to-play` | Controls guide + tile color legend |
 | Loading Screen | `#screen-loading` | Spinner + progress bar |
-| Mobile Touch HUD | `#mobile-touch-hud` | Joystick, D-pad, buttons, customizer dashboard |
+| Mobile Touch HUD | `#mobile-touch-hud` | Individual buttons: joystick/d-pad, thrust, brake, jump, camera, rewind, curve, zoom, pause, edit/customize |
 
 ---
 
@@ -429,7 +474,7 @@
 
 **Purpose:** Complete game styling with retro-futuristic glassmorphism design system, responsive layouts, and animations.
 
-**Stats:** ~2,744 lines · 68 KB
+**Stats:** ~3,145 lines · 78 KB
 
 ### Major Sections
 
@@ -450,7 +495,7 @@
 15. **Ship Garage** — Model/texture/color option cards, scrollable sidebar
 16. **Cockpit Overlay** — First-person cabin bezel image
 17. **Pause/Fullscreen** — Glassmorphic floating buttons
-18. **Mobile Touch HUD** — Joystick base/knob, D-pad, action buttons, customizer dashboard
+18. **Touch Controls v2** — Individual button system with anchor positioning, customizer mode, responsive breakpoints
 19. **Physics Calibrator** — Floating panel with slider groups, preset buttons
 
 ---
@@ -505,6 +550,10 @@ graph TD
     APP --> AUD["audio.js<br/>AudioSynthesizer"]
     APP --> PRV["preview.js<br/>ShipPreviewEngine"]
     APP --> LVL["levels.js<br/>Pack Loader"]
+    APP --> TC["touchControls.js<br/>TouchControlManager"]
+
+    TC --> PHY
+    TC --> GFX
 
     GFX --> PHY
     GFX --> CC["cockpitConsole.js<br/>CockpitConsole3D"]

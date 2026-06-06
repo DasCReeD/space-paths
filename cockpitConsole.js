@@ -595,19 +595,26 @@ export class CockpitConsole3D {
     const scoreVal = physics.score || 0;
     
     // Mission metadata (from global manager)
-    let packLabel = 'STANDARD';
-    let roadLabel = 'ROAD 1';
+    let nameLabel = 'LEVEL 1';
+    let levelLabel = '1';
     let effectLabel = 'NONE';
     let effectColor = '#737680'; // dim metallic grey
 
     const manager = (typeof window !== 'undefined') ? window.gameManagerInstance : null;
     if (manager) {
-      packLabel = manager.currentPack === 'standard' ? 'STANDARD' : 'XMAS';
-      const roadNames = (manager.currentPack === 'standard')
-        ? [...(manager.standardRoadNames || []), ...(manager.xmasRoadNames || [])]
-        : (manager.xmasRoadNames || []);
       const currentIdx = manager.currentLevelIndex || 0;
-      roadLabel = roadNames[currentIdx] || `ROAD ${currentIdx + 1}`;
+      levelLabel = String(currentIdx + 1);
+
+      // Determine road name from the correct pack
+      let roadNames = [];
+      if (manager.currentPack === 'standard') {
+        roadNames = [...(manager.standardRoadNames || []), ...(manager.xmasRoadNames || [])];
+      } else if (manager.currentPack === 'xmas') {
+        roadNames = manager.xmasRoadNames || [];
+      } else {
+        roadNames = manager.generatedRoadNames || [];
+      }
+      nameLabel = roadNames[currentIdx] || ('LEVEL ' + (currentIdx + 1));
     }
 
     if (activeEffects.boost) {
@@ -625,7 +632,7 @@ export class CockpitConsole3D {
     this.drawLCD(
       speedKmh, fuel, oxygen, isRebounding, onGround, gravityVal,
       isLowFuel, isLowO2, pulseFactor, scoreVal,
-      packLabel, roadLabel, effectLabel, effectColor
+      nameLabel, levelLabel, effectLabel, effectColor
     );
     this.drawMinimapScreen(physics, levelData, isRebounding, onGround, gravityVal);
 
@@ -796,7 +803,7 @@ export class CockpitConsole3D {
     }
   }
 
-  drawLCD(speed, fuel, oxygen, isRebounding, onGround, gravityVal, isLowFuel, isLowO2, pulseFactor, scoreVal = 0, packLabel = 'STANDARD', roadLabel = 'ROAD 1', effectLabel = 'NONE', effectColor = '#737680') {
+  drawLCD(speed, fuel, oxygen, isRebounding, onGround, gravityVal, isLowFuel, isLowO2, pulseFactor, scoreVal = 0, nameLabel = 'LEVEL 1', levelLabel = '1', effectLabel = 'NONE', effectColor = '#737680') {
     if (!this.lcdCtx) return;
     const ctx = this.lcdCtx;
     const w = this.lcdCanvas.width; // 512
@@ -900,11 +907,11 @@ export class CockpitConsole3D {
 
       ctx.fillStyle = '#8c8f99';
       ctx.shadowColor = '#8c8f99';
-      ctx.fillText(`PACK: ${packLabel}`, col2X, 35);
+      ctx.fillText(`NAME: ${nameLabel}`, col2X, 35);
 
       ctx.fillStyle = '#00ffcc';
       ctx.shadowColor = '#00ffcc';
-      ctx.fillText(`ROAD: ${roadLabel}`, col2X, 80);
+      ctx.fillText(`LEVEL: ${levelLabel}`, col2X, 80);
 
       ctx.fillStyle = '#00ffcc';
       ctx.shadowColor = '#00ffcc';

@@ -182,6 +182,10 @@
             <span style="font-size: 0.58rem; color: #8c8f99; font-weight: bold; letter-spacing: 0.5px;">SCORE:</span>
             <span id="hud-score-text">000000</span>
           </div>
+          <div id="hud-rewind-row" class="hidden" style="font-size: 0.58rem; font-weight: bold; display: flex; justify-content: space-between; align-items: center; width: 100%; font-family: 'Orbitron', sans-serif; margin-top: 4px;">
+            <span style="color: #8c8f99; letter-spacing: 0.5px;">⏪ REWIND:</span>
+            <span id="hud-rewind-text" style="color: #00ffcc; font-weight: 900; text-shadow: 0 0 6px rgba(0,255,204,0.6);">∞</span>
+          </div>
         </div>
 
         <div class="telemetry-box camera-box" style="height: auto; min-height: 80px; gap: 4px;">
@@ -200,6 +204,15 @@
               <span style="font-size: 0.44rem; color: #8c8f99;">FOV</span>
               <input type="range" id="hud-cam-fov-slider" min="45" max="110" value="65" style="width: 70px; height: 4px; background: #2f3035; border: none; cursor: pointer; outline: none; flex-grow: 1;" title="Adjust Field of View">
               <span id="hud-cam-fov-val" style="font-size: 0.44rem; font-weight:900; color: #ff00ff; min-width: 22px; text-align: right;">65°</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 2px;">
+              <span>CURVE: <span id="hud-track-curve" style="font-weight:900; color: #00ff88;">OFF</span></span>
+              <span style="font-size: 0.38rem; color: #666; pointer-events: none;">[B]</span>
+            </div>
+            <div id="hud-curve-slider-row" style="display: flex; align-items: center; gap: 6px; margin-top: 2px; pointer-events: auto; width: 100%;">
+              <span style="font-size: 0.44rem; color: #8c8f99;">TILT</span>
+              <input type="range" id="hud-curve-slider" min="30" max="500" value="200" style="width: 70px; height: 4px; background: #2f3035; border: none; cursor: pointer; outline: none; flex-grow: 1;" title="Adjust Track Curvature Radius">
+              <span id="hud-curve-val" style="font-size: 0.44rem; font-weight:900; color: #00ff88; min-width: 26px; text-align: right;">200</span>
             </div>
           </div>
         </div>
@@ -271,10 +284,24 @@
       </div>
 
       <div class="settings-options" style="display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 320px; margin: 0 auto;">
+
+        <!-- ── GAME ── -->
+        <div class="settings-section-header">GAME</div>
         <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">DIFFICULTY</span>
           <button id="btn-settings-difficulty" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">DIFFICULTY: EASY</button>
         </div>
+        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">REWIND ON DEATH</span>
+          <button id="btn-settings-rewind" class="btn btn-primary btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">REWIND: ON</button>
+        </div>
+        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">LANE SNAP</span>
+          <button id="btn-settings-lane-snap" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">LANE SNAP: ON</button>
+        </div>
+
+        <!-- ── AUDIO ── -->
+        <div class="settings-section-header">AUDIO</div>
         <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">BACKGROUND MUSIC</span>
           <button id="btn-settings-music" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">MUSIC: ON</button>
@@ -295,6 +322,9 @@
           <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">SFX VOLUME</span>
           <input type="range" id="slider-settings-sfx-volume" min="0" max="100" value="80">
         </div>
+
+        <!-- ── CONTROLS ── -->
+        <div class="settings-section-header">CONTROLS</div>
         <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">MOUSE PLAY</span>
           <button id="btn-settings-mouse" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">MOUSE PLAY: OFF</button>
@@ -308,24 +338,19 @@
           <button id="btn-settings-boat-throttle" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">BOAT: OFF</button>
         </div>
         <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">BOTTOM HUD</span>
-          <button id="btn-settings-bottom-hud" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">BOTTOM HUD: ON</button>
-        </div>
-        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">STICK THROTTLE</span>
           <button id="btn-settings-stick-throttle" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">STICK THROTTLE: OFF</button>
         </div>
         <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">LANE SNAP</span>
-          <button id="btn-settings-lane-snap" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">LANE SNAP: ON</button>
-        </div>
-        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">REWIND ON DEATH</span>
-          <button id="btn-settings-rewind" class="btn btn-primary btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">REWIND: ON</button>
-        </div>
-        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">GAMEPAD</span>
           <button id="btn-settings-gamepad" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">CONFIGURE 🎮</button>
+        </div>
+
+        <!-- ── DISPLAY ── -->
+        <div class="settings-section-header">DISPLAY</div>
+        <div class="settings-control-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: #8c8f99; text-shadow: 0 0 5px rgba(140,143,153,0.3);">BOTTOM HUD</span>
+          <button id="btn-settings-bottom-hud" class="btn btn-info btn-glow" style="margin: 0; min-width: 150px; font-size: 0.75rem; padding: 8px 12px;">BOTTOM HUD: ON</button>
         </div>
         <div class="settings-control-row" style="margin-top: 10px; width: 100%;">
           <button id="btn-settings-picker" class="btn btn-secondary btn-glow" style="width: 100%; font-size: 0.8rem; padding: 10px 15px; margin: 0;">HOVERCRAFT GARAGE</button>
@@ -336,7 +361,7 @@
       </div>
       
       <div class="menu-buttons" style="margin-top: 25px;">
-        <button id="btn-settings-close" class="btn btn-primary btn-glow">CLOSE</button>
+        <button id="btn-settings-close" class="btn btn-primary btn-glow" style="min-height: 48px; font-size: 1rem; padding: 14px 32px;">CLOSE</button>
       </div>
     </div>
 
@@ -645,8 +670,10 @@
 
     <!-- DEATH SCREEN -->
     <div id="death-screen" class="overlay-screen hidden glass-card status-card">
-      <h2 class="status-title text-danger">OUT OF ROADS</h2>
+      <h2 class="status-title text-danger" id="death-title">YOU DIED</h2>
       <p id="death-reason" class="status-msg">Your hovercraft exploded in a spectacular burst of sparks.</p>
+      <p id="death-rewind-prompt" class="rewind-prompt hidden">HOLD <span class="key-badge rewind-key">R</span> TO REWIND</p>
+      <p id="death-rewind-depleted" class="rewind-depleted hidden">REWIND DEPLETED</p>
       
       <div class="menu-buttons">
         <button id="btn-death-retry" class="btn btn-primary btn-glow">TRY AGAIN</button>
@@ -887,89 +914,51 @@
 
   </div>
 
-<!-- Mobile Touch HUD Overlay -->
-<div id="mobile-touch-hud" class="touch-hud hidden pointer-events-none">
-  <button id="btn-touch-boat-throttle" class="touch-boat-btn pointer-events-auto" title="Toggle Boat Throttle Mode">
-    BOAT: OFF
-  </button>
+<!-- ═══════════════════ TOUCH CONTROLS HUD ═══════════════════ -->
+<div id="mobile-touch-hud" class="touch-hud hidden">
+  <!-- Top bar: edit + pause -->
+  <div class="touch-top-bar">
+    <button id="touch-btn-pause" class="touch-btn-ind touch-btn-sm" data-touch-id="pause">⚙️</button>
+    <button id="touch-btn-edit" class="touch-btn-ind touch-btn-sm touch-edit-btn">✏️</button>
+  </div>
 
-  <!-- Top Controls: Pause, Customize, Camera -->
-  <div class="touch-top-bar pointer-events-auto">
-    <button id="btn-touch-customize" class="touch-customize-btn" title="Reposition / Edit Controls">🔧 CUSTOMIZE</button>
-    <div id="touch-camera-dock" class="touch-camera-dock">
-      <button id="btn-touch-cam-mode" class="touch-cam-btn" title="Cycle Camera Mode">📷 VIEW</button>
-      <button id="btn-touch-zoom-in" class="touch-cam-btn" title="Zoom In">🔍 +</button>
-      <button id="btn-touch-zoom-out" class="touch-cam-btn" title="Zoom Out">🔍 -</button>
+  <!-- Camera controls cluster (top-right) -->
+  <button id="touch-btn-cam" class="touch-btn-ind touch-btn-sm" data-touch-id="cam" data-action="cam">📷</button>
+  <button id="touch-btn-curve" class="touch-btn-ind touch-btn-sm" data-touch-id="curve" data-action="curve">🌀</button>
+  <button id="touch-btn-zoom-in" class="touch-btn-ind touch-btn-sm" data-touch-id="zoom-in" data-action="zoom-in">🔍+</button>
+  <button id="touch-btn-zoom-out" class="touch-btn-ind touch-btn-sm" data-touch-id="zoom-out" data-action="zoom-out">🔍−</button>
+
+  <!-- Rewind (top-left) -->
+  <button id="touch-btn-rewind" class="touch-btn-ind touch-btn-sm" data-touch-id="rewind" data-action="rewind">⏪</button>
+
+  <!-- Joystick (bottom-left) -->
+  <div id="touch-btn-steer" class="touch-btn-ind touch-steer-area" data-touch-id="steer">
+    <div id="joystick-base" class="joystick-base">
+      <div id="joystick-knob" class="joystick-knob"></div>
+    </div>
+    <!-- D-Pad alternative (hidden by default) -->
+    <div id="touch-dpad-view" class="touch-dpad-view hidden">
+      <button class="dpad-btn dpad-up" data-action="forward">▲</button>
+      <button class="dpad-btn dpad-left" data-action="left">◀</button>
+      <button class="dpad-btn dpad-right" data-action="right">▶</button>
+      <button class="dpad-btn dpad-down" data-action="backward">▼</button>
     </div>
   </div>
 
-  <!-- Touch Controls Repositioning Customizer Dashboard (visible in customize mode) -->
-  <div id="touch-customizer-dashboard" class="touch-customizer-dashboard hidden pointer-events-auto">
-    <div class="customizer-title">HUD CONTROL CUSTOMIZER</div>
-    <div class="customizer-options">
-      <button id="btn-cust-type" class="cust-btn">TYPE: JOYSTICK</button>
-      <span id="selected-control-info" style="font-family: var(--font-display); font-size: 0.72rem; font-weight: 700; color: #00ffcc; text-shadow: 0 0 5px rgba(0,255,204,0.5); display: flex; align-items: center; min-width: 125px; justify-content: center; border: 1px solid rgba(0, 255, 204, 0.3); border-radius: 6px; padding: 6px 10px; background: rgba(0, 255, 204, 0.05);">STEER: 1.0x</span>
-      <button id="btn-cust-scale-dec" class="cust-btn" style="min-width: 40px; font-weight: bold;">-</button>
-      <button id="btn-cust-scale-inc" class="cust-btn" style="min-width: 40px; font-weight: bold;">+</button>
-      <button id="btn-cust-swap" class="cust-btn">SWAP SIDES: OFF</button>
-      <button id="btn-cust-buttons" class="cust-btn">BUTTONS: FULL</button>
+  <!-- Action buttons (bottom-right) -->
+  <button id="touch-btn-thrust" class="touch-btn-ind touch-btn-action action-throttle" data-touch-id="thrust" data-action="forward">▲</button>
+  <button id="touch-btn-brake" class="touch-btn-ind touch-btn-action action-brake" data-touch-id="brake" data-action="backward">▼</button>
+  <button id="touch-btn-jump" class="touch-btn-ind touch-btn-action action-jump" data-touch-id="jump" data-action="jump">⬆</button>
+
+  <!-- Customizer overlay (shown only in edit mode) -->
+  <div id="touch-customizer-overlay" class="touch-customizer-overlay hidden">
+    <div class="touch-customizer-bar">
+      <button id="btn-cust-type" class="cust-btn">🕹️ STICK</button>
+      <button id="btn-cust-scale-dec" class="cust-btn">➖</button>
+      <button id="btn-cust-scale-inc" class="cust-btn">➕</button>
+      <button id="btn-cust-reset" class="cust-btn btn-danger">↩️ RESET</button>
+      <button id="btn-cust-done" class="cust-btn btn-success">✅ DONE</button>
     </div>
-    <div class="customizer-actions">
-      <button id="btn-cust-reset" class="cust-action-btn btn-danger">RESET</button>
-      <button id="btn-cust-save" class="cust-action-btn btn-success">SAVE & EXIT</button>
-    </div>
-  </div>
-
-  <!-- Independent Touch Control Group 1: Steer -->
-  <div id="touch-steer-container" class="touch-control-group pointer-events-auto" style="left: 60px; bottom: 160px;">
-    <div class="drag-handle">◀ STEER ▶</div>
-    <!-- Joystick Type View -->
-    <div id="touch-joystick-view" class="joystick-outer-wrap">
-      <div id="joystick-base" class="joystick-base">
-        <div id="joystick-knob" class="joystick-knob">
-          <div class="joystick-knob-grip"></div>
-        </div>
-        <div class="joystick-crosshair-h"></div>
-        <div class="joystick-crosshair-v"></div>
-      </div>
-      <div class="joystick-guide-text">◀ STEER ▶</div>
-    </div>
-
-    <!-- D-Pad Buttons Type View -->
-    <div id="touch-dpad-view" class="dpad-hybrid-container hidden">
-      <div class="dpad-btn dpad-up" data-action="forward">▲</div>
-      <div class="dpad-btn dpad-left" data-action="left">◀</div>
-      <div class="dpad-center-stub"></div>
-      <div class="dpad-btn dpad-right" data-action="right">▶</div>
-      <div class="dpad-btn dpad-down" data-action="backward">▼</div>
-    </div>
-  </div>
-
-  <!-- Independent Touch Control Group 2: Brake -->
-  <div id="touch-brake-container" class="touch-control-group pointer-events-auto" style="right: 180px; bottom: 160px;">
-    <div class="drag-handle">◀ BRAKE ▶</div>
-    <button class="touch-btn action-brake" data-action="backward">
-      <span class="btn-icon-lbl">▼</span>
-      BRAKE
-    </button>
-  </div>
-
-  <!-- Independent Touch Control Group 3: Jump -->
-  <div id="touch-jump-container" class="touch-control-group pointer-events-auto" style="right: 110px; bottom: 250px;">
-    <div class="drag-handle">◀ JUMP ▶</div>
-    <button class="touch-btn action-jump" data-action="jump">
-      <span class="btn-icon-lbl">▲</span>
-      JUMP
-    </button>
-  </div>
-
-  <!-- Independent Touch Control Group 4: Thrust -->
-  <div id="touch-thrust-container" class="touch-control-group pointer-events-auto" style="right: 40px; bottom: 160px;">
-    <div class="drag-handle">◀ THRUST ▶</div>
-    <button class="touch-btn action-throttle" data-action="forward">
-      <span class="btn-icon-lbl">⚡</span>
-      THRUST
-    </button>
   </div>
 </div>
 

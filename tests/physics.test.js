@@ -278,21 +278,21 @@ describe('PhysicsEngine', () => {
     });
   });
 
-  // ── Speed Capping ─────────────────────────────────────────────────────
-
   describe('Speed capping', () => {
-    it('should cap speed at maxSpeedNormal (32.0)', () => {
+    it('should not globally cap speed if already exceeding maxSpeedNormal', () => {
       physics.velocity.z = -100.0;
       physics.update(0.05, keyboard, levelInfo);
-      expect(physics.velocity.z).toBe(-physics.maxSpeedNormal);
+      // Under new cumulative boost mechanic, speed is not globally capped to maxSpeedNormal (32)
+      // It only decreases due to drag: -100 + 4.0*0.05 = -99.8
+      expect(physics.velocity.z).toBeCloseTo(-99.8, 3);
     });
 
-    it('should not allow acceleration past maxSpeedNormal', () => {
+    it('should not allow manual acceleration past maxSpeedNormal', () => {
       physics.velocity.z = -31.5;
       keyboard.forward = true;
       physics.update(0.05, keyboard, levelInfo);
-      // Would accelerate to -31.5 - 0.9 = -32.4, but capped to -32.0
-      expect(physics.velocity.z).toBeGreaterThanOrEqual(-physics.maxSpeedNormal);
+      // Manual acceleration from -31.5 with dt=0.05 is capped at -32.0
+      expect(physics.velocity.z).toBe(-physics.maxSpeedNormal);
     });
   });
 
@@ -1244,12 +1244,13 @@ describe('PhysicsEngine', () => {
       expect(physics.velocity.z).toBeCloseTo(-45.9, 3);
     });
 
-    it('should cap normal speed to custom max normal speed', () => {
+    it('should cap manual acceleration to custom max normal speed', () => {
       physics.settings.maxSpeedNormal = 20.0;
-      physics.velocity.z = -25.0;
+      physics.velocity.z = -19.5;
+      keyboard.forward = true;
       physics.update(0.05, keyboard, levelInfo);
       
-      // Custom max speed is 20, so vz should be capped to -20
+      // Custom max speed is 20, so vz should be capped to -20 when accelerating
       expect(physics.velocity.z).toBe(-20.0);
     });
 
