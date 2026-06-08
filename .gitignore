@@ -30,3 +30,7 @@ top100-large.zip
 *.blend
 *.blend1
 *.blend2
+
+# Playwright Test Results
+test-results/
+

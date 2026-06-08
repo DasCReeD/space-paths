@@ -1,5 +1,6 @@
 // SkyRoads WebGL - Core Game Orchestrator & State Controller
-import { loadLevelPack, getCachedPack } from './levels.js';
+import * as THREE from 'three';
+import { loadLevelPack, getCachedPack, registerCustomPack } from './levels.js';
 import { GraphicsEngine } from './graphics.js';
 import { PhysicsEngine, KeyboardController, SHIP_LENGTH } from './physics.js';
 import { buildLevelAsync, disposeUnusedThemes, getActiveThemeIndex, curvatureUniforms } from './levelLoader.js';
@@ -103,6 +104,7 @@ class GameManager {
     this.rewindBudget = Infinity;
     this.rewindBudgetMax = Infinity;
     this.rewindOverlay = null;
+    this.collisionViewEnabled = false;
   }
 
   init() {
@@ -130,7 +132,7 @@ class GameManager {
       ship5: 'dreadnought'
     };
     
-    let savedModel = localStorage.getItem('skyroads_selected_model') || 'fighter';
+    let savedModel = localStorage.getItem('skyroads_selected_model') || 'racer';
     if (LEGACY_MODEL_ALIASES[savedModel]) {
       savedModel = LEGACY_MODEL_ALIASES[savedModel];
       localStorage.setItem('skyroads_selected_model', savedModel);
@@ -219,6 +221,10 @@ class GameManager {
     // Load persisted rewind toggle setting from localStorage
     this.rewindEnabled = localStorage.getItem('skyroads_rewind_enabled') !== 'false';
     this.updateRewindToggleBtn();
+
+    // Load persisted collision view setting from localStorage
+    this.collisionViewEnabled = localStorage.getItem('skyroads_collision_view') === 'true';
+    this.updateCollisionViewToggleBtn();
 
     // Sync sliders values with loaded volumes
     const sliderMusicVolume = document.getElementById('slider-settings-music-volume');
@@ -554,7 +560,7 @@ class GameManager {
   openShipPicker() {
     this.prePickerState = this.gameState;
     this.gameState = 'ship_picker';
-    this.tempSelectedModel = this.selectedModel || 'fighter';
+    this.tempSelectedModel = this.selectedModel || 'racer';
     this.tempSelectedSkin = this.selectedSkin || 'default';
     this.tempSelectedColor = this.selectedColor || '#ffffff';
     this.showScreen('ship-picker-screen');
@@ -809,6 +815,119 @@ class GameManager {
       gameAudio.playClick();
       this.showLevelSelection('xmas');
     });
+
+    const btnLoadCustomLevel = document.getElementById('btn-load-custom-level');
+    const customLevelLoader = document.getElementById('game-custom-level-loader');
+    if (btnLoadCustomLevel && customLevelLoader) {
+      btnLoadCustomLevel.addEventListener('click', () => {
+        gameAudio.playClick();
+        customLevelLoader.click();
+      });
+
+      customLevelLoader.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            let data = JSON.parse(evt.target.result);
+            // Validation
+            if (!data || typeof data !== 'object') throw new Error("Invalid JSON format");
+            if (typeof data.name !== 'string') throw new Error("Missing 'name' field");
+            if (!Array.isArray(data.rows)) throw new Error("Missing or invalid 'rows' array");
+
+            // If it's a draft format level, auto-convert/cook it on the fly
+            if (data.physics && typeof data.physics === 'object') {
+              const draft = data;
+              const biome = parseInt(draft.biome) || 0;
+              
+              // Standard fallback palette
+              const fallbackPalette = [
+                [0,0,0], [128,128,128], [255,255,255], [0,128,0], [0,255,0],
+                [0,0,128], [0,0,255], [128,0,0], [255,0,0], [128,128,0],
+                [255,255,0], [0,128,128], [0,255,255], [128,0,128], [255,0,255], [64,64,64]
+              ];
+              const palette = Array.isArray(draft.palette) ? draft.palette : fallbackPalette;
+
+              const cookedRows = draft.rows.map((row) => {
+                if (!Array.isArray(row)) return Array(7).fill(null);
+                return row.map((cell) => {
+                  if (!cell) return null;
+                  
+                  const colorIdx = cell.colorIdx !== undefined ? cell.colorIdx : 1;
+                  const cookedCell = {
+                    val: colorIdx,
+                    full: cell.type === 'obstacle-full',
+                    half: cell.type === 'obstacle-half',
+                    tunnel: cell.type === 'tunnel',
+                    top_color: 0,
+                    bottom_color: 0,
+                    low3: colorIdx
+                  };
+
+                  if (cookedCell.full || cookedCell.half) {
+                    cookedCell.top_color = colorIdx;
+                    cookedCell.bottom_color = 0;
+                  } else {
+                    cookedCell.top_color = 0;
+                    cookedCell.bottom_color = colorIdx;
+                  }
+
+                  if (cell.type === 'ramp') {
+                    cookedCell.ramp = true;
+                    cookedCell.startY = cell.ramp?.startY !== undefined ? cell.ramp.startY : 0.0;
+                    cookedCell.endY = cell.ramp?.endY !== undefined ? cell.ramp.endY : 1.0;
+                    cookedCell.direction = cell.ramp?.direction || 'forward';
+                    cookedCell.top_color = colorIdx;
+                    cookedCell.bottom_color = 0;
+                  }
+
+                  return cookedCell;
+                });
+              });
+
+              data = {
+                level_index: 99,
+                name: draft.name || "Loaded Level",
+                author: draft.author || "Designer",
+                parTime: parseInt(draft.parTime) || 45,
+                biome: biome,
+                gravity: parseInt(draft.physics.gravity) || 8,
+                fuel: parseInt(draft.physics.fuel) || 100,
+                oxygen: parseInt(draft.physics.oxygen) || 60,
+                palette: palette,
+                rows: cookedRows
+              };
+            }
+
+            // Safe fallbacks for optional fields
+            if (typeof data.gravity !== 'number') {
+              data.gravity = 8; // default gravity value
+            }
+            if (typeof data.fuel !== 'number') {
+              data.fuel = 100; // default starting fuel
+            }
+            if (typeof data.oxygen !== 'number') {
+              data.oxygen = 60; // default starting oxygen
+            }
+            if (!Array.isArray(data.palette)) {
+              data.palette = []; // fallback to empty palette (handled gracefully by loader)
+            }
+
+            // Register dynamic pack cache
+            registerCustomPack([data]);
+
+            // Set pack to custom and start playing level 0
+            this.currentPack = 'custom';
+            this.startLevel(0);
+          } catch (err) {
+            alert(`Failed to load level: ${err.message}`);
+          }
+        };
+        reader.readAsText(file);
+      });
+    }
 
 
     const btnToggleMouse = document.getElementById('btn-toggle-mouse');
@@ -1159,6 +1278,16 @@ class GameManager {
         this.rewindEnabled = !this.rewindEnabled;
         localStorage.setItem('skyroads_rewind_enabled', this.rewindEnabled);
         this.updateRewindToggleBtn();
+      });
+    }
+
+    const btnSettingsCollisionView = document.getElementById('btn-settings-collision-view');
+    if (btnSettingsCollisionView) {
+      btnSettingsCollisionView.addEventListener('click', () => {
+        gameAudio.playClick();
+        const nextState = !this.collisionViewEnabled;
+        this.toggleSceneCollisionView(nextState);
+        this.updateCollisionViewToggleBtn();
       });
     }
 
@@ -1771,6 +1900,10 @@ class GameManager {
 
     this.gameState = 'playing';
     this.lastTime = performance.now();
+
+    if (this.collisionViewEnabled) {
+      this.toggleSceneCollisionView(true);
+    }
   }
 
   returnToMenu() {
@@ -1891,6 +2024,10 @@ class GameManager {
 
         // Spawn city scenery flanking the new track length at the new offset
         this.graphics.spawnCityScenery(nextLevelInfo.trackLength, this.infiniteZOffset);
+
+        if (this.collisionViewEnabled) {
+          this.toggleSceneCollisionView(true);
+        }
 
         // Clean up old meshes from the scene
         oldMeshes.forEach(mesh => {
@@ -2787,6 +2924,124 @@ class GameManager {
       currentBtn.classList.add('keyboard-focused');
       currentBtn.focus();
     }
+  }
+
+  updateCollisionViewToggleBtn() {
+    const isEnabled = this.collisionViewEnabled;
+    const btn = document.getElementById('btn-settings-collision-view');
+    if (btn) {
+      if (isEnabled) {
+        btn.innerText = 'COLLISION VIEW: ON';
+        btn.classList.remove('btn-info');
+        btn.classList.add('btn-primary');
+      } else {
+        btn.innerText = 'COLLISION VIEW: OFF';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-info');
+      }
+    }
+  }
+
+  toggleSceneCollisionView(enabled) {
+    if (!this.graphics || !this.graphics.scene) return;
+    
+    this.collisionViewEnabled = enabled;
+    localStorage.setItem('skyroads_collision_view', enabled);
+    
+    // 1. Toggle visibility of non-essential visual elements
+    if (this.graphics.sceneryGroup) {
+      this.graphics.sceneryGroup.visible = !enabled;
+    }
+    if (this.graphics.skyboxMesh) {
+      this.graphics.skyboxMesh.visible = !enabled;
+    }
+    // Also toggle procedural background elements if they were active
+    if (!this.graphics.gltfLoaded || !enabled) {
+      if (this.graphics.nebulaSphere) this.graphics.nebulaSphere.visible = !enabled;
+      if (this.graphics.starField) this.graphics.starField.visible = !enabled;
+      if (this.graphics.galaxyPoints) this.graphics.galaxyPoints.visible = !enabled;
+      if (this.graphics.sunMesh) this.graphics.sunMesh.visible = !enabled;
+    }
+
+    // 2. Traverse the scene and swap materials of meshes
+    this.graphics.scene.traverse((node) => {
+      if (!node.isMesh) return;
+      
+      // Skip helper/system meshes if any
+      if (node.name === 'helper' || node.userData.isHelper) return;
+
+      // Check if it's part of the ship mesh
+      const isShip = this.graphics.shipMesh && (node === this.graphics.shipMesh || this.graphics.shipMesh.getObjectById(node.id));
+
+      if (enabled) {
+        // Hiding decals or decorative OBJ children
+        const isDecal = (node.material && node.material.transparent === true && node.material.depthWrite === false) || (node.userData && node.userData.isAnimated);
+        const isChildDecoration = node.parent && node.parent.isMesh; // e.g. obstacle loaded OBJ children
+
+        if (isDecal || isChildDecoration) {
+          if (!node.userData.hasOwnProperty('originalVisible')) {
+            node.userData.originalVisible = node.visible;
+          }
+          node.visible = false;
+          return;
+        }
+
+        // It is a solid geometry node (road, obstacle, ramp, tunnel, ship body)
+        if (!node.userData.originalMaterial) {
+          node.userData.originalMaterial = node.material;
+        }
+
+        let wireframeColor = 0x888888; // Default grey
+        if (isShip) {
+          wireframeColor = 0xff00ff; // magenta for player ship
+        } else if (node.geometry) {
+          const type = node.geometry.type;
+          if (type === 'BoxGeometry') {
+            const h = node.geometry.parameters.height;
+            if (h === 0.45) {
+              wireframeColor = 0x00ff00; // green for road
+            } else if (h === 1.0) {
+              wireframeColor = 0xffff00; // yellow for half obstacle
+            } else if (h === 2.0 || h === 3.0) {
+              wireframeColor = 0xff5500; // orange for full obstacle
+            } else {
+              wireframeColor = 0xff8800; // fallback orange
+            }
+          } else if (type === 'CylinderGeometry') {
+            wireframeColor = 0x0000ff; // blue for tunnel
+          } else {
+            // BufferGeometry (ramps, finish line beams, custom structures)
+            if (node.material && node.material.color && node.material.color.r === 0 && node.material.color.g > 0.9 && node.material.color.b > 0.9) {
+              // Finish line
+              wireframeColor = 0x00ffff;
+            } else {
+              // Ramp
+              wireframeColor = 0x00ffff; // cyan for ramps
+            }
+          }
+        }
+
+        node.material = new THREE.MeshBasicMaterial({
+          wireframe: true,
+          color: wireframeColor,
+          side: THREE.DoubleSide
+        });
+
+      } else {
+        // Reverting back to original state
+        if (node.userData.hasOwnProperty('originalVisible')) {
+          node.visible = node.userData.originalVisible;
+          delete node.userData.originalVisible;
+        } else {
+          node.visible = true;
+        }
+
+        if (node.userData.originalMaterial) {
+          node.material = node.userData.originalMaterial;
+          delete node.userData.originalMaterial;
+        }
+      }
+    });
   }
 }
 

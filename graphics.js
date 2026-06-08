@@ -294,7 +294,7 @@ export class GraphicsEngine {
       this.camOffset = new THREE.Vector3(0, 0.702575, 5.0); // Base height scaled so total height is 0.75 when zoomed out (followDistanceScale = 1.45)
       this.camTargetOffset = new THREE.Vector3(0, 0.4, -3.0);
       
-      this.cameraMode = 'fixed';
+      this.cameraMode = 'cockpit';
       this.zoomLevel = 'far'; // Zooms all the way out by default!
       this.followDistanceScale = 1.45;
       this.lastOnGroundHeight = 0.0;
@@ -305,7 +305,7 @@ export class GraphicsEngine {
     this.cameraPitchAdjust = 0.0;
 
     // Track Curvature (ring-road visual effect)
-    this.trackCurvatureEnabled = false;
+    this.trackCurvatureEnabled = true;
     this.trackCurvatureRadius = 200.0; // Ring radius: 50=extreme, 100=dramatic, 200=gentle, 400=subtle
   }
 
