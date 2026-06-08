@@ -287,6 +287,12 @@ class GameManager {
 
     // 3. Listen to camera controls during play (KeyC toggles modes, [ and ] adjusts zoom, - and = adjusts height)
     window.addEventListener('keydown', (e) => {
+      if (document.activeElement && 
+          (document.activeElement.tagName === 'INPUT' || 
+           document.activeElement.tagName === 'TEXTAREA' || 
+           document.activeElement.tagName === 'SELECT')) {
+        return;
+      }
       if (this.gameState !== 'playing') return;
 
       if (e.code === 'KeyC') {
@@ -2787,6 +2793,20 @@ class GameManager {
   }
 
   handleMenuKeyboard(e) {
+    if (typeof document !== 'undefined' && document.activeElement && 
+        (document.activeElement.tagName === 'INPUT' || 
+         document.activeElement.tagName === 'TEXTAREA' || 
+         document.activeElement.tagName === 'SELECT')) {
+      // Allow pressing Enter to submit score when focused on initials input
+      if (e.code === 'Enter' && document.activeElement.id === 'input-score-initials') {
+        e.preventDefault();
+        const submitBtn = document.getElementById('btn-score-submit');
+        if (submitBtn) {
+          submitBtn.click();
+        }
+      }
+      return;
+    }
     const activeScreen = document.querySelector('.overlay-screen.active');
     if (!activeScreen) return;
 

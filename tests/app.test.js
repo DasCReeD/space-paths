@@ -1296,5 +1296,45 @@ describe('GameManager (app.js)', () => {
       // Personal best should still remain WIN's score since it was higher
       expect(localStorage.getItem(bestScoreKey)).toBe('24200');
     });
+
+    it('should ignore menu keyboard controls when focused on initials input but allow Enter to submit', async () => {
+      localStorage.clear();
+      await loadApp();
+      await clickAndFlush('btn-play-standard');
+      const grid = document.getElementById('level-grid');
+      await clickElementAndFlush(grid.querySelector('.level-item'));
+
+      const manager = window.gameManagerInstance;
+      manager.wallHits = 0;
+      manager.handleSuccess();
+
+      const input = document.getElementById('input-score-initials');
+      input.focus();
+      expect(document.activeElement).toBe(input);
+
+      // Save initial highlighted index
+      const initialIndex = manager.selectedMenuIndex;
+
+      // Dispatch 'KeyS' (would normally navigate menu)
+      const eventS = new KeyboardEvent('keydown', { code: 'KeyS', key: 's', bubbles: true });
+      input.dispatchEvent(eventS);
+      await flushPromises();
+
+      // Menu index should not change because input is focused
+      expect(manager.selectedMenuIndex).toBe(initialIndex);
+
+      // Now enter initials and press Enter
+      input.value = 'ENT';
+      const eventEnter = new KeyboardEvent('keydown', { code: 'Enter', key: 'Enter', bubbles: true });
+      input.dispatchEvent(eventEnter);
+      await flushPromises();
+
+      // The score should have been submitted
+      const leaderboardKey = `skyroads_leaderboard_standard_0`;
+      const leaderboard = JSON.parse(localStorage.getItem(leaderboardKey));
+      expect(leaderboard).toHaveLength(1);
+      expect(leaderboard[0].initials).toBe('ENT');
+    });
   });
 });
+

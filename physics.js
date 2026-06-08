@@ -927,6 +927,12 @@ export class KeyboardController {
   }
 
   handleKey(e, isDown) {
+    if (typeof document !== 'undefined' && document.activeElement && 
+        (document.activeElement.tagName === 'INPUT' || 
+         document.activeElement.tagName === 'TEXTAREA' || 
+         document.activeElement.tagName === 'SELECT')) {
+      return;
+    }
     const code = e.code;
     if (code === 'ArrowUp' || code === 'KeyW') this.keys.forward = isDown;
     if (code === 'ArrowDown' || code === 'KeyS') this.keys.backward = isDown;
