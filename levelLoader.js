@@ -109,7 +109,7 @@ export const TOTAL_ROAD_WIDTH = TILE_WIDTH * ROAD_WIDTH_LANES;
 export const curvatureUniforms = {
   uCurvatureRadius: new THREE.Uniform(200.0),  // Ring radius (smaller = more curve)
   uCameraZ:         new THREE.Uniform(0.0),     // Camera Z position (updated per frame)
-  uCurvatureOn:     new THREE.Uniform(0.0),     // 0.0 = flat, 1.0 = curved
+  uCurvatureOn:     new THREE.Uniform(1.0),     // 0.0 = flat, 1.0 = curved
 };
 
 /** GLSL vertex shader chunk that bends world-space vertices along a cylinder.

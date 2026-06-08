@@ -9,12 +9,18 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    minify: 'esbuild'
+    minify: 'esbuild',
+    rollupOptions: {
+      input: {
+        main: './index.html',
+        editor: './editor.html'
+      }
+    }
   },
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./vitest.setup.js'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/.agents/**']
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.agents/**', '**/tests/e2e/**']
   }
 });
