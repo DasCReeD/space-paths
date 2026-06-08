@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Space Paths Hybrid Level Editor</title>
+  <!-- Google Fonts: Orbitron & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <!-- Editor Styles -->
+  <link rel="stylesheet" href="./editor.css">
+</head>
+<body class="editor-body">
+  
+  <!-- Editor UI Shell Container -->
+  <div class="editor-container">
+    
+    <!-- Top Menu Bar -->
+    <header class="editor-header">
+      <div class="header-logo">
+        <span class="logo-accent">SPACE PATHS</span> <span class="logo-subtitle">CREATOR ENGINE</span>
+      </div>
+      <nav class="header-nav">
+        <!-- File Actions -->
+        <div class="menu-group">
+          <button id="btn-new" class="menu-btn" title="Create a new level (Ctrl+N)">New</button>
+          <button id="btn-load" class="menu-btn" title="Load a level JSON file (Ctrl+O)">Load</button>
+          <button id="btn-save" class="menu-btn" title="Save level draft (Ctrl+S)">Save</button>
+          <button id="btn-save-as" class="menu-btn" title="Save level draft as...">Save As...</button>
+        </div>
+        <!-- Tool/Screen Toggles -->
+        <div class="menu-group">
+          <button id="btn-materials-mgr" class="menu-btn btn-highlight" title="Open Materials & PBR Render Settings">Materials Manager</button>
+          <button id="btn-undo" class="menu-btn" title="Undo action (Ctrl+Z)" disabled>Undo</button>
+          <button id="btn-redo" class="menu-btn" title="Redo action (Ctrl+Y)" disabled>Redo</button>
+        </div>
+        <!-- View Toggles -->
+        <div class="menu-group">
+          <button id="btn-toggle-minimap" class="menu-btn toggle-btn-active" title="Toggle Floating Minimap View">Minimap</button>
+          <button id="btn-toggle-decals" class="menu-btn toggle-btn-active" title="Toggle Decals Visibility">Decals</button>
+          <button id="btn-toggle-grid" class="menu-btn toggle-btn-active" title="Toggle Grid Helpers Visibility">Grid</button>
+          <button id="btn-toggle-collision-view" class="menu-btn toggle-btn-inactive" title="Toggle Collision/Hitbox View (Wireframe)">Collision View</button>
+        </div>
+        <!-- Export & Play -->
+        <div class="menu-group group-right">
+          <button id="btn-play-cursor" class="menu-btn btn-action btn-play" title="Playtest from cursor in 3D viewport (F5)">Play From Cursor</button>
+          <button id="btn-cook-export" class="menu-btn btn-action btn-cook" title="Cook level: strip metadata and format for game">Cook/Export Level</button>
+        </div>
+      </nav>
+      <!-- Hidden file input for loading -->
+      <input type="file" id="file-loader" accept=".json" style="display: none;">
+    </header>
+
+    <!-- Main Workspace Layout -->
+    <div id="editor-workspace" class="editor-workspace">
+      
+      <!-- Left Toolbar -->
+      <aside class="editor-toolbar">
+        <div class="toolbar-section-title">Tools</div>
+        <div class="tool-buttons">
+          <button id="tool-pen" class="tool-btn active" title="Pen Tool (Draw individual blocks) [P]">
+            <span class="tool-icon">✎</span>
+            <span class="tool-label">Pen</span>
+          </button>
+          <button id="tool-line" class="tool-btn" title="Line Tool (Draw vector paths) [L]">
+            <span class="tool-icon">╱</span>
+            <span class="tool-label">Line</span>
+          </button>
+          <button id="tool-fill" class="tool-btn" title="Fill Tool (Flood fill matching cells) [F]">
+            <span class="tool-icon">🪣</span>
+            <span class="tool-label">Fill</span>
+          </button>
+          <button id="tool-marquee" class="tool-btn" title="Marquee Tool (Select bounding region) [M]">
+            <span class="tool-icon">⛶</span>
+            <span class="tool-label">Select</span>
+          </button>
+          <button id="tool-ramp-line" class="tool-btn" title="Ramp Line Tool (Click start and end points) [R]">
+            <span class="tool-icon">⊿</span>
+            <span class="tool-label">Ramp Plot</span>
+          </button>
+          <button id="tool-decal" class="tool-btn" title="Decal Brush Tool (Paint decals onto blocks) [D]">
+            <span class="tool-icon">🏷</span>
+            <span class="tool-label">Decal</span>
+          </button>
+        </div>
+        
+        <div class="toolbar-section-title spacer-top">History</div>
+        <div class="history-list-container">
+          <ul id="history-list" class="history-list">
+            <li class="history-placeholder">No actions recorded</li>
+          </ul>
+        </div>
+      </aside>
+
+      <!-- Sidebar Brush Palette -->
+      <aside class="editor-sidebar-left">
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Geometry Brushes</div>
+          <div class="brush-grid">
+            <button class="brush-btn active" data-brush-type="road" title="Paint normal flat road tile">
+              <span class="brush-color" style="background-color: #00aa33;"></span>
+              <span class="brush-name">Flat Road</span>
+            </button>
+            <button class="brush-btn" data-brush-type="obstacle-half" title="Paint half-height obstacle block">
+              <span class="brush-color" style="background-color: #88cc88;"></span>
+              <span class="brush-name">Half Block</span>
+            </button>
+            <button class="brush-btn" data-brush-type="obstacle-full" title="Paint full-height obstacle block">
+              <span class="brush-color" style="background-color: #44aa44;"></span>
+              <span class="brush-name">Full Block</span>
+            </button>
+            <button class="brush-btn" data-brush-type="tunnel" title="Paint tunnel archway segment">
+              <span class="brush-color" style="background-color: #5555bb;"></span>
+              <span class="brush-name">Tunnel</span>
+            </button>
+            <button class="brush-btn" data-brush-type="hole" title="Paint hole (delete block)">
+              <span class="brush-color color-empty"></span>
+              <span class="brush-name">Hole / Void</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Special Behaviors</div>
+          <div class="brush-grid">
+            <button class="brush-btn" data-brush-type="behavior-sticky" data-color-idx="3" title="Sticky: Reduces ship speed (VGA Color 3)">
+              <span class="brush-color" style="background-color: #00aa33; box-shadow: inset 0 0 8px #002500;"></span>
+              <span class="brush-name">Sticky</span>
+            </button>
+            <button class="brush-btn" data-brush-type="behavior-slippery" data-color-idx="9" title="Slippery: Reduces friction (VGA Color 9)">
+              <span class="brush-color" style="background-color: #3377aa;"></span>
+              <span class="brush-name">Slippery</span>
+            </button>
+            <button class="brush-btn" data-brush-type="behavior-refill" data-color-idx="10" title="Refill: Replenishes oxygen/fuel (VGA Color 10)">
+              <span class="brush-color" style="background-color: #0088ff;"></span>
+              <span class="brush-name">Refill</span>
+            </button>
+            <button class="brush-btn" data-brush-type="behavior-boost" data-color-idx="11" title="Boost: Accelerates ship forward (VGA Color 11)">
+              <span class="brush-color" style="background-color: #00ff00;"></span>
+              <span class="brush-name">Boost</span>
+            </button>
+            <button class="brush-btn" data-brush-type="behavior-super_boost" data-color-idx="12" title="Super Boost: Massive acceleration (VGA Color 12)">
+              <span class="brush-color" style="background-color: #00ffff;"></span>
+              <span class="brush-name">S. Boost</span>
+            </button>
+            <button class="brush-btn" data-brush-type="behavior-burning" data-color-idx="13" title="Explosive/Hazard: Explodes ship (VGA Color 13)">
+              <span class="brush-color" style="background-color: #ff0000;"></span>
+              <span class="brush-name">Burning</span>
+            </button>
+            <button class="brush-btn" data-brush-type="behavior-high_jump" data-color-idx="14" title="High Jump: Boosts ship jump vertical (VGA Color 14)">
+              <span class="brush-color" style="background-color: #ff00ff;"></span>
+              <span class="brush-name">High Jump</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Decal Palette</div>
+          <div class="decal-list">
+            <button class="decal-btn active" data-decal-id="arrow-up" title="Forward navigation arrow overlay">
+              <span class="decal-preview">▲</span>
+              <span class="decal-name">Arrow Up</span>
+            </button>
+            <button class="decal-btn" data-decal-id="hazard-stripes" title="Yellow/black hazard warning stripes overlay">
+              <span class="decal-preview">▰▰</span>
+              <span class="decal-name">Hazard Lines</span>
+            </button>
+            <button class="decal-btn" data-decal-id="logo" title="Space Paths corporate emblem overlay">
+              <span class="decal-preview">❖</span>
+              <span class="decal-name">SP Emblem</span>
+            </button>
+            <button class="decal-btn" data-decal-id="custom" title="User custom text or image decal">
+              <span class="decal-preview">🖹</span>
+              <span class="decal-name">Custom Text</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Viewports grid area -->
+      <main class="editor-viewports-container">
+        
+        <!-- Top Orthogonal Viewport (X-Z) -->
+        <div class="viewport-box" id="viewport-top" data-view-name="top">
+          <div class="viewport-header">
+            <span class="viewport-title">Top View (Grid X-Z)</span>
+            <button class="btn-maximize" title="Maximize viewport">⛶</button>
+          </div>
+          <div class="viewport-canvas-wrapper" id="canvas-top"></div>
+        </div>
+
+        <!-- Front Orthogonal Viewport (X-Y) -->
+        <div class="viewport-box" id="viewport-front" data-view-name="front">
+          <div class="viewport-header">
+            <span class="viewport-title">Front View (Grid X-Y)</span>
+            <button class="btn-maximize" title="Maximize viewport">⛶</button>
+          </div>
+          <div class="viewport-canvas-wrapper" id="canvas-front"></div>
+        </div>
+
+        <!-- Side Orthogonal Viewport (Z-Y) -->
+        <div class="viewport-box" id="viewport-side" data-view-name="side">
+          <div class="viewport-header">
+            <span class="viewport-title">Side View (Grid Z-Y)</span>
+            <button class="btn-maximize" title="Maximize viewport">⛶</button>
+          </div>
+          <div class="viewport-canvas-wrapper" id="canvas-side"></div>
+        </div>
+
+        <!-- 3D Perspective Viewport -->
+        <div class="viewport-box" id="viewport-3d" data-view-name="perspective">
+          <div class="viewport-header">
+            <span class="viewport-title">3D Preview (Perspective)</span>
+            <span id="test-indicator" class="playtest-indicator" style="display: none;">PLAYTESTING (Press ESC to exit)</span>
+            <button class="btn-maximize" title="Maximize viewport">⛶</button>
+          </div>
+          <div class="viewport-canvas-wrapper" id="canvas-3d">
+            <!-- Floating Minimap Overlay -->
+            <div id="viewport-minimap" class="viewport-minimap">
+              <div class="minimap-title">TRACK SCANNER</div>
+              <div class="minimap-canvas-container">
+                <canvas id="canvas-minimap" width="100" height="200"></canvas>
+              </div>
+            </div>
+
+            <!-- Playtest Telemetry HUD Overlay -->
+            <div id="playtest-telemetry" class="playtest-telemetry" style="display: none;">
+              <div class="telemetry-row">
+                <span class="telemetry-label">SPEED</span>
+                <span id="playtest-speed-val" class="telemetry-val">00.0</span>
+              </div>
+              <div class="telemetry-row">
+                <span class="telemetry-label">FUEL</span>
+                <span id="playtest-fuel-val" class="telemetry-val">100%</span>
+              </div>
+              <div class="telemetry-row">
+                <span class="telemetry-label">OXYGEN</span>
+                <span id="playtest-oxygen-val" class="telemetry-val">100%</span>
+              </div>
+            </div>
+
+            <!-- Playtest State Banner -->
+            <div id="playtest-banner" class="playtest-banner" style="display: none;">
+              <span id="playtest-banner-text">CRASHED!</span>
+            </div>
+          </div>
+        </div>
+
+      </main>
+
+      <!-- Right Properties Panel -->
+      <aside class="editor-sidebar-right">
+        
+        <!-- Level Settings section -->
+        <div class="properties-section">
+          <div class="sidebar-section-title">Track Properties</div>
+          <div class="property-group">
+            <label for="prop-name">Level Name</label>
+            <input type="text" id="prop-name" value="Custom Road">
+          </div>
+          <div class="property-group">
+            <label for="prop-author">Author</label>
+            <input type="text" id="prop-author" value="Designer">
+          </div>
+          <div class="property-group">
+            <label for="prop-par">Par Time (sec)</label>
+            <input type="number" id="prop-par" value="45" min="1" max="999">
+          </div>
+          <div class="property-group">
+            <label for="prop-rows">Track Length (Rows)</label>
+            <input type="number" id="prop-rows" value="30" min="10" max="1000">
+          </div>
+          <div class="property-group">
+            <label for="prop-biome">Visual Theme (Biome)</label>
+            <select id="prop-biome">
+              <option value="0">Core Theme</option>
+              <option value="1">Cyberpunk Theme</option>
+              <option value="2">Industrial Theme</option>
+              <option value="3">Organic Theme</option>
+              <option value="4">Alien Theme</option>
+              <option value="5">Furnace Theme</option>
+              <option value="6">Glitch Theme</option>
+              <option value="7">Pulse Theme</option>
+              <option value="8">Ridge Theme</option>
+              <option value="9">Shallows Theme</option>
+              <option value="10">Spire Theme</option>
+              <option value="11">Thrill Theme</option>
+              <option value="12">Tundra Theme</option>
+              <option value="13">Void Theme</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Physics Overrides -->
+        <div class="properties-section">
+          <div class="sidebar-section-title">Physics Overrides</div>
+          <div class="property-group">
+            <div class="slider-header">
+              <label for="override-gravity">Gravity Modifier</label>
+              <span id="gravity-val" class="slider-val">8</span>
+            </div>
+            <input type="range" id="override-gravity" min="1" max="25" step="1" value="8">
+          </div>
+          <div class="property-group">
+            <div class="slider-header">
+              <label for="override-oxygen">Oxygen Drain</label>
+              <span id="oxygen-val" class="slider-val">60</span>
+            </div>
+            <input type="range" id="override-oxygen" min="0" max="200" step="5" value="60">
+          </div>
+          <div class="property-group">
+            <div class="slider-header">
+              <label for="override-fuel">Starting Fuel</label>
+              <span id="fuel-val" class="slider-val">130</span>
+            </div>
+            <input type="range" id="override-fuel" min="20" max="300" step="5" value="130">
+          </div>
+        </div>
+
+        <!-- Selected Element Properties -->
+        <div class="properties-section">
+          <div class="sidebar-section-title">Selection Properties</div>
+          <div id="selection-details-empty" class="selection-empty-msg">
+            No active grid selection. Select a block to configure.
+          </div>
+          <div id="selection-details-active" class="selection-active-panel" style="display: none;">
+            <div class="selection-coords">Position: Lane <span id="sel-lane">-</span>, Row <span id="sel-row">-</span></div>
+            
+            <div class="property-group spacer-top">
+              <label for="sel-tile-type">Tile Type</label>
+              <select id="sel-tile-type">
+                <option value="hole">Void / Hole</option>
+                <option value="road">Flat Road</option>
+                <option value="obstacle-half">Half Obstacle</option>
+                <option value="obstacle-full">Full Obstacle</option>
+                <option value="tunnel">Tunnel</option>
+                <option value="ramp">Slope / Ramp</option>
+              </select>
+            </div>
+
+            <!-- Material & Decals Selection Properties -->
+            <div class="property-group">
+              <label for="sel-tile-material">Custom Material</label>
+              <select id="sel-tile-material">
+                <option value="default">Use Default Theme Material</option>
+                <option value="mat-1">Custom Material 1</option>
+                <option value="mat-2">Custom Material 2</option>
+                <option value="mat-3">Custom Material 3</option>
+              </select>
+            </div>
+
+            <!-- Decal settings on faces -->
+            <div class="property-group">
+              <label for="sel-decal-face">Decal Face</label>
+              <select id="sel-decal-face">
+                <option value="top">Top Face</option>
+                <option value="left">Left Face</option>
+                <option value="right">Right Face</option>
+                <option value="front">Front Face</option>
+                <option value="back">Back Face</option>
+              </select>
+            </div>
+
+            <div class="property-group">
+              <label for="sel-decal-type">Decal Texture</label>
+              <select id="sel-decal-type">
+                <option value="none">None</option>
+                <option value="arrow-up">Arrow Up</option>
+                <option value="hazard-stripes">Hazard Stripes</option>
+                <option value="logo">SP Emblem</option>
+                <option value="custom">Custom Text</option>
+              </select>
+            </div>
+
+            <div class="property-group" id="group-decal-text" style="display: none;">
+              <label for="sel-decal-text">Decal Text</label>
+              <input type="text" id="sel-decal-text" value="WARNING" placeholder="Enter decal text...">
+            </div>
+
+            <!-- Ramp specifics -->
+            <div id="sel-ramp-specifics" style="display: none;">
+              <hr class="panel-divider">
+              <div class="property-group">
+                <label for="sel-ramp-direction">Ramp Direction</label>
+                <select id="sel-ramp-direction">
+                  <option value="forward">Slopes Up Forward</option>
+                  <option value="backward">Slopes Up Backward</option>
+                  <option value="left">Slopes Up Left</option>
+                  <option value="right">Slopes Up Right</option>
+                </select>
+              </div>
+              <div class="property-group">
+                <label for="sel-ramp-start-y">Start Height</label>
+                <input type="number" id="sel-ramp-start-y" min="0" max="6" step="0.5" value="0">
+              </div>
+              <div class="property-group">
+                <label for="sel-ramp-end-y">End Height</label>
+                <input type="number" id="sel-ramp-end-y" min="0" max="6" step="0.5" value="1">
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </aside>
+
+    </div>
+
+    <!-- Bottom Status Bar -->
+    <footer class="editor-footer">
+      <div class="status-item">Cursor: <span id="status-cursor">Lane -, Row -</span></div>
+      <div class="status-item">Active Editing Slice: <span id="status-slice">Height Level 0</span></div>
+      <div class="status-item">Level Size: <span id="status-length">0 Rows</span></div>
+      <div id="status-autosave" class="status-item status-right">Autosave: Idle</div>
+    </footer>
+
+  </div>
+
+  <!-- Materials & Render Settings Manager Modal (Hidden by default) -->
+  <div id="materials-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h2 class="modal-title">Materials & Render Settings</h2>
+        <button id="modal-close" class="modal-close-btn" title="Close screen [Esc]">×</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Left: Material Slots Picker -->
+        <div class="modal-slots-column">
+          <div class="modal-column-title">Slot Selector</div>
+          <div class="material-slots-list">
+            <button class="slot-item active" data-slot-id="mat-1">
+              <span class="slot-color-preview" style="background-color: #00ffff;"></span>
+              <div class="slot-info">
+                <span class="slot-name">Custom Material 1</span>
+                <span class="slot-desc">Texture: Seamless Blue Abstract</span>
+              </div>
+            </button>
+            <button class="slot-item" data-slot-id="mat-2">
+              <span class="slot-color-preview" style="background-color: #ff5500;"></span>
+              <div class="slot-info">
+                <span class="slot-name">Custom Material 2</span>
+                <span class="slot-desc">Texture: Warning Stripes</span>
+              </div>
+            </button>
+            <button class="slot-item" data-slot-id="mat-3">
+              <span class="slot-color-preview" style="background-color: #888888;"></span>
+              <div class="slot-info">
+                <span class="slot-name">Custom Material 3</span>
+                <span class="slot-desc">Texture: Default Slat Metal</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Middle: Material Settings Customizer -->
+        <div class="modal-settings-column">
+          <div class="modal-column-title">Material Settings</div>
+          
+          <div class="property-group">
+            <label for="mat-input-name">Material Name</label>
+            <input type="text" id="mat-input-name" value="Custom Material 1">
+          </div>
+
+          <div class="property-group">
+            <label for="mat-texture-type">Base Texture Source</label>
+            <select id="mat-texture-type">
+              <option value="seamless-cyan">Seamless Abstract (Cyan/Teal)</option>
+              <option value="seamless-green">Seamless Abstract (Green)</option>
+              <option value="seamless-red">Seamless Abstract (Red)</option>
+              <option value="seamless-purple">Seamless Abstract (Purple)</option>
+              <option value="seamless-orange">Seamless Abstract (Orange)</option>
+              <option value="brushed-metal">Procedural Brushed Metal (Core)</option>
+              <option value="hazard-checks">Procedural Warning checks</option>
+              <option value="solid-color">Solid Matte Base Color</option>
+            </select>
+          </div>
+
+          <div class="property-group" id="group-mat-color">
+            <label for="mat-color-picker">Base Color</label>
+            <div class="color-picker-row">
+              <input type="color" id="mat-color-picker" value="#00ffff">
+              <input type="text" id="mat-color-hex" value="#00ffff" style="width: 100px;">
+            </div>
+          </div>
+
+          <hr class="panel-divider">
+          <div class="modal-column-subtitle">PBR Render Properties</div>
+
+          <div class="property-group">
+            <div class="slider-header">
+              <label for="mat-slider-roughness">Roughness (Specular spread)</label>
+              <span id="val-roughness" class="slider-val">0.40</span>
+            </div>
+            <input type="range" id="mat-slider-roughness" min="0" max="1" step="0.05" value="0.40">
+          </div>
+
+          <div class="property-group">
+            <div class="slider-header">
+              <label for="mat-slider-metalness">Metalness (Reflectivity)</label>
+              <span id="val-metalness" class="slider-val">0.60</span>
+            </div>
+            <input type="range" id="mat-slider-metalness" min="0" max="1" step="0.05" value="0.60">
+          </div>
+
+          <div class="property-group">
+            <div class="slider-header">
+              <label for="mat-slider-emissive">Emissive Glow Intensity</label>
+              <span id="val-emissive" class="slider-val">0.00</span>
+            </div>
+            <input type="range" id="mat-slider-emissive" min="0" max="2" step="0.1" value="0.00">
+          </div>
+
+          <div class="property-group">
+            <div class="slider-header">
+              <label for="mat-slider-repeat">Texture Mapping Repeat Scale</label>
+              <span id="val-repeat" class="slider-val">1.0</span>
+            </div>
+            <input type="range" id="mat-slider-repeat" min="0.1" max="10" step="0.1" value="1.0">
+          </div>
+
+        </div>
+
+        <!-- Right: 3D Live Material Preview Sphere -->
+        <div class="modal-preview-column">
+          <div class="modal-column-title">Material Preview</div>
+          <div id="material-preview-canvas-container" class="preview-sphere-container">
+            <!-- Canvas will be injected dynamically -->
+          </div>
+          <div class="preview-controls-row">
+            <span class="preview-tip">Drag to rotate the preview sphere. Set properties to see updates in real-time.</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button id="modal-cancel-btn" class="menu-btn">Cancel</button>
+        <button id="modal-save-btn" class="menu-btn btn-highlight">Apply to Level</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay" style="display: none;">
+    <div class="spinner-box">
+      <div class="spinner"></div>
+      <div id="loading-text" class="loading-text">Loading Assets...</div>
+    </div>
+  </div>
+
+  <!-- Main script bundle -->
+  <script type="module" src="./editor.js"></script>
+</body>
+</html>

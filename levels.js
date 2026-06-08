@@ -71,6 +71,15 @@ export function getCachedPack(packName) {
 }
 
 /**
+ * Dynamically register a custom pack in the pack cache.
+ *
+ * @param {Array} levels - Array of level data objects.
+ */
+export function registerCustomPack(levels) {
+  packCache['custom'] = levels;
+}
+
+/**
  * Legacy compatibility: LEVEL_PACKS object that will be populated as packs load.
  * Code that expects `LEVEL_PACKS[packName]` can still access it after loading.
  */
