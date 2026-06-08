@@ -123,12 +123,12 @@ describe('In-Game Level Editor Unit Tests', () => {
     expect(editor.levelDraft.rows[0][3]).toEqual({ type: 'obstacle-half', colorIdx: 4 });
   });
 
-  it('should handle saving level overrides to localStorage', () => {
+  it('should handle saving level overrides to localStorage', async () => {
     editor.activate();
     
     // Add custom tag
     editor.paintCell(4, 0, { type: 'road', colorIdx: 10 });
-    editor.saveLevelOverrides();
+    await editor.saveLevelOverrides();
 
     const storageKey = `skyroads_override_standard_0`;
     const savedString = localStorage.getItem(storageKey);
@@ -186,5 +186,33 @@ describe('In-Game Level Editor Unit Tests', () => {
     const historyCount = editor.history.length;
     editor.triggerPaintAtHover();
     expect(editor.history.length).toBe(historyCount);
+  });
+
+  it('should default ramp start/end Y to 0.0 and 1.0 when shift is not held, and lock to activePlaneHeight when shift is held', () => {
+    editor.activate();
+    editor.mouseState.left = true;
+
+    // 1. Paint ramp with shift NOT held, hover coord height is 3 (e.g. clicked top face of high block)
+    editor.keyboardState.shift = false;
+    editor.activeBrush = 'ramp';
+    editor.hoverCoord = { lane: 3, row: 0, height: 3 };
+    editor.triggerPaintAtHover();
+
+    // The painted ramp should start at Y=0.0, end at Y=1.0 (defaults when shift is not held)
+    expect(editor.levelDraft.rows[0][3].type).toBe('ramp');
+    expect(editor.levelDraft.rows[0][3].ramp.startY).toBe(0.0);
+    expect(editor.levelDraft.rows[0][3].ramp.endY).toBe(1.0);
+
+    // 2. Paint ramp with shift held, locked to activePlaneHeight = 2
+    editor.activePlaneHeight = 2;
+    editor.keyboardState.shift = true;
+    editor.hoverCoord = { lane: 4, row: 0, height: 2 };
+    editor.lastPaintedCoord = null; // reset drag tracking
+    editor.triggerPaintAtHover();
+
+    // The painted ramp should start at Y=2.0, end at Y=3.0 (aligned with activePlaneHeight)
+    expect(editor.levelDraft.rows[0][4].type).toBe('ramp');
+    expect(editor.levelDraft.rows[0][4].ramp.startY).toBe(2.0);
+    expect(editor.levelDraft.rows[0][4].ramp.endY).toBe(3.0);
   });
 });

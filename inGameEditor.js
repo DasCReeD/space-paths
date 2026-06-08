@@ -150,7 +150,7 @@ export class InGameEditor {
   /**
    * Deactivate and return to standard gameplay, saving changes dynamically.
    */
-  deactivate(saveChanges = true) {
+  async deactivate(saveChanges = true) {
     if (!this.active) return;
     this.active = false;
     
@@ -181,7 +181,7 @@ export class InGameEditor {
 
     // 4. Save browser overrides if requested
     if (saveChanges && this.levelDraft) {
-      this.saveLevelOverrides();
+      await this.saveLevelOverrides();
     }
 
     // 5. Restore standard game loop state
@@ -275,7 +275,7 @@ export class InGameEditor {
   /**
    * Save the current state draft back to LocalStorage overrides.
    */
-  saveLevelOverrides() {
+  async saveLevelOverrides() {
     const cooked = this.cookLevel();
     
     // Save to cache
@@ -291,7 +291,7 @@ export class InGameEditor {
     localStorage.setItem(storageKey, JSON.stringify(cooked));
 
     // Async rebuild track visual meshes in scene
-    this.rebuildTrackMeshes();
+    await this.rebuildTrackMeshes();
   }
 
   /**
@@ -398,7 +398,7 @@ export class InGameEditor {
   /**
    * Playtest the current level state in-memory.
    */
-  startPlaytest() {
+  async startPlaytest() {
     // 1. Release pointer lock
     if (document.pointerLockElement) {
       document.exitPointerLock();
@@ -412,7 +412,7 @@ export class InGameEditor {
     });
 
     // 3. Rebuild active road meshes to match edits
-    this.saveLevelOverrides();
+    await this.saveLevelOverrides();
 
     // 4. Temporarily flip game state back to playing
     this.app.gameState = 'playing';
@@ -781,8 +781,8 @@ export class InGameEditor {
       if (this.activeBrush === 'ramp') {
         cellProps.ramp = {
           direction: 'forward',
-          startY: height * 1.0,
-          endY: (height + 1) * 1.0
+          startY: this.keyboardState.shift ? this.activePlaneHeight * 1.0 : 0.0,
+          endY: this.keyboardState.shift ? (this.activePlaneHeight + 1) * 1.0 : 1.0
         };
       }
 
