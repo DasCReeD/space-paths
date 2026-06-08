@@ -929,6 +929,13 @@ class GameManager {
       });
     }
 
+    const btnOpenEditor = document.getElementById('btn-open-editor');
+    if (btnOpenEditor) {
+      btnOpenEditor.addEventListener('click', () => {
+        gameAudio.playClick();
+        window.open('editor.html', '_blank');
+      });
+    }
 
     const btnToggleMouse = document.getElementById('btn-toggle-mouse');
     if (btnToggleMouse) {
