@@ -3430,32 +3430,73 @@ body, html {
 .icon-blue { background-color: #3333aa; }
 .icon-cyan { background-color: #00aa88; }
 
-/* Color Tags Grid */
-.color-grid {
+.color-list-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
 }
 
-.color-btn {
-  width: 100%;
-  aspect-ratio: 1;
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
   cursor: pointer;
-  transition: all 0.2s ease;
-  outline: none;
+  transition: all 0.25s ease;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
-.color-btn:hover {
-  transform: scale(1.1);
-  border-color: #ffffff;
+.color-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
-.color-btn.active {
-  transform: scale(1.1);
-  border-color: #ffffff;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+.color-row.active {
+  background: rgba(0, 255, 204, 0.1);
+  border-color: var(--color-secondary);
+  color: var(--color-secondary);
+  box-shadow: 0 0 8px rgba(0, 255, 204, 0.15);
+}
+
+.color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+/* Tool selector row styling */
+.tool-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.tool-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.tool-row.active {
+  background: rgba(0, 255, 204, 0.1);
+  border-color: var(--color-secondary);
+  color: var(--color-secondary);
+  box-shadow: 0 0 10px rgba(0, 255, 204, 0.15);
 }
 
 /* Details form layout */

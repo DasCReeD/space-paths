@@ -215,4 +215,50 @@ describe('In-Game Level Editor Unit Tests', () => {
     expect(editor.levelDraft.rows[0][4].ramp.startY).toBe(2.0);
     expect(editor.levelDraft.rows[0][4].ramp.endY).toBe(3.0);
   });
+
+  it('should support Select & Edit tool to select a block and update its properties through form inputs', () => {
+    editor.activate();
+
+    // 1. Paint a standard road block at Lane 3, Row 0, Height 0
+    editor.activeTool = 'paint';
+    editor.activeBrush = 'road';
+    editor.activeColorIdx = 1;
+    editor.hoverCoord = { lane: 3, row: 0, height: 0 };
+    editor.mouseState.left = true;
+    editor.triggerPaintAtHover();
+    expect(editor.levelDraft.rows[0][3]).toEqual({ type: 'road', colorIdx: 1 });
+
+    // 2. Select the block using selectBlock
+    editor.selectBlock(3, 0, 0);
+    expect(editor.selectedCoord).toEqual({ lane: 3, row: 0, height: 0 });
+
+    // Verify DOM inputs were populated
+    const typeSel = document.getElementById('edit-block-type');
+    const colorSel = document.getElementById('edit-block-color');
+    expect(typeSel.value).toBe('road');
+    expect(colorSel.value).toBe('1');
+
+    // 3. Switch tool to select
+    editor.activeTool = 'select';
+
+    // 4. Change inputs and trigger updateSelectedBlockFromInputs
+    typeSel.value = 'ramp';
+    colorSel.value = '11';
+    
+    // Set ramp fields values
+    const startY = document.getElementById('edit-block-starty');
+    const endY = document.getElementById('edit-block-endy');
+    const direction = document.getElementById('edit-block-direction');
+    startY.value = '0';
+    endY.value = '2';
+    direction.value = 'forward';
+
+    editor.updateSelectedBlockFromInputs();
+
+    // Assert that the block has been modified in levelDraft
+    expect(editor.levelDraft.rows[0][3].type).toBe('ramp');
+    expect(editor.levelDraft.rows[0][3].colorIdx).toBe(11);
+    expect(editor.levelDraft.rows[0][3].ramp.startY).toBe(0);
+    expect(editor.levelDraft.rows[0][3].ramp.endY).toBe(2);
+  });
 });

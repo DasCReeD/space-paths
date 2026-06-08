@@ -73,6 +73,10 @@ export class InGameEditor {
     this.activeBrush = 'road'; // 'road', 'obstacle-half', 'obstacle-full', 'tunnel', 'ramp'
     this.activeColorIdx = 11; // cyan / boost tag default
     this.activePlaneHeight = 0; // locked height when holding shift
+    this.activeTool = 'paint'; // 'paint', 'select', 'erase'
+    this.selectedCoord = null; // { lane, row, height }
+    this.selectedBox = null;
+    this.isSyncingForm = false;
     
     // Undo/Redo queues
     this.history = [];
@@ -135,6 +139,7 @@ export class InGameEditor {
 
     // 5. Create hover guides and 3D wireframe grid outlines
     this.createHoverGuides();
+    this.createSelectionGuides();
     this.rebuildHelperGrid();
 
     // 6. Set up event listeners
@@ -167,6 +172,13 @@ export class InGameEditor {
       if (this.hoverBox.material) this.hoverBox.material.dispose();
       this.hoverBox = null;
     }
+    if (this.selectedBox) {
+      this.graphics.scene.remove(this.selectedBox);
+      if (this.selectedBox.geometry) this.selectedBox.geometry.dispose();
+      if (this.selectedBox.material) this.selectedBox.material.dispose();
+      this.selectedBox = null;
+    }
+    this.selectedCoord = null;
     if (this.gridLines) {
       this.graphics.scene.remove(this.gridLines);
       this.gridLines = null;
@@ -762,6 +774,20 @@ export class InGameEditor {
     if (!this.hoverCoord) return;
     const { lane, row, height } = this.hoverCoord;
 
+    if (this.activeTool === 'select') {
+      if (this.mouseState.left) {
+        if (this.lastPaintedCoord &&
+            this.lastPaintedCoord.lane === lane &&
+            this.lastPaintedCoord.row === row &&
+            this.lastPaintedCoord.height === height) {
+          return;
+        }
+        this.lastPaintedCoord = { lane, row, height };
+        this.selectBlock(lane, row, height);
+      }
+      return;
+    }
+
     // Check if we already painted this cell in this drag gesture
     if (this.lastPaintedCoord &&
         this.lastPaintedCoord.lane === lane &&
@@ -773,20 +799,24 @@ export class InGameEditor {
     this.lastPaintedCoord = { lane, row, height };
 
     if (this.mouseState.left) {
-      const cellProps = {
-        type: this.activeBrush,
-        colorIdx: this.activeColorIdx
-      };
-
-      if (this.activeBrush === 'ramp') {
-        cellProps.ramp = {
-          direction: 'forward',
-          startY: this.keyboardState.shift ? this.activePlaneHeight * 1.0 : 0.0,
-          endY: this.keyboardState.shift ? (this.activePlaneHeight + 1) * 1.0 : 1.0
+      if (this.activeTool === 'erase') {
+        this.paintCell(lane, row, null);
+      } else {
+        const cellProps = {
+          type: this.activeBrush,
+          colorIdx: this.activeColorIdx
         };
-      }
 
-      this.paintCell(lane, row, cellProps);
+        if (this.activeBrush === 'ramp') {
+          cellProps.ramp = {
+            direction: 'forward',
+            startY: this.keyboardState.shift ? this.activePlaneHeight * 1.0 : 0.0,
+            endY: this.keyboardState.shift ? (this.activePlaneHeight + 1) * 1.0 : 1.0
+          };
+        }
+
+        this.paintCell(lane, row, cellProps);
+      }
     } else if (this.mouseState.right) {
       this.paintCell(lane, row, null);
     }
@@ -803,6 +833,16 @@ export class InGameEditor {
     this.hoverBox = new THREE.LineSegments(edge, lineMat);
     this.hoverBox.visible = false;
     this.graphics.scene.add(this.hoverBox);
+  }
+
+  createSelectionGuides() {
+    const boxGeom = new THREE.BoxGeometry(TILE_WIDTH + 0.08, 0.48, TILE_LENGTH + 0.08);
+    const edge = new THREE.EdgesGeometry(boxGeom);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 3.5 });
+    
+    this.selectedBox = new THREE.LineSegments(edge, lineMat);
+    this.selectedBox.visible = false;
+    this.graphics.scene.add(this.selectedBox);
   }
 
   /**
@@ -1004,9 +1044,7 @@ export class InGameEditor {
     }
   }
 
-  /**
-   * Injects the glassmorphism HTML layout for the editor directly on top of the canvas.
-   */
+
   injectEditorUI() {
     // 1. Top bar Actions menu
     const topBar = document.createElement('div');
@@ -1032,6 +1070,22 @@ export class InGameEditor {
     leftPalette.className = 'editor-overlay-sidebar left-bar';
     leftPalette.innerHTML = `
       <div class="panel-section">
+        <div class="panel-header">EDITOR TOOLS</div>
+        <div class="tool-row active" data-tool="paint">
+          <span class="tool-icon icon-brush" style="background-color: #00ffcc; width: 14px; height: 14px; border-radius: 3px; display: inline-block;"></span>
+          <span>Paint Brush</span>
+        </div>
+        <div class="tool-row" data-tool="erase">
+          <span class="tool-icon icon-eraser" style="background-color: #ff5555; width: 14px; height: 14px; border-radius: 3px; display: inline-block;"></span>
+          <span>Eraser</span>
+        </div>
+        <div class="tool-row" data-tool="select">
+          <span class="tool-icon icon-select" style="background-color: #ff00ff; width: 14px; height: 14px; border-radius: 3px; display: inline-block;"></span>
+          <span>Select & Edit</span>
+        </div>
+      </div>
+
+      <div class="panel-section" style="margin-top: 15px;">
         <div class="panel-header">GEOMETRY BRUSHES</div>
         <div class="brush-row" data-brush="road">
           <span class="brush-icon icon-green"></span>
@@ -1057,17 +1111,47 @@ export class InGameEditor {
       
       <div class="panel-section" style="margin-top: 15px;">
         <div class="panel-header">BEHAVIOR COLOR TAGS</div>
-        <div class="color-grid">
-          <button class="color-btn" data-color="1" style="background-color: #0000aa;" title="Color 1 - Dark Blue"></button>
-          <button class="color-btn" data-color="2" style="background-color: #00aa00;" title="Color 2 - Green"></button>
-          <button class="color-btn" data-color="3" style="background-color: #00aaaa;" title="Color 3 - Sticky (Green)"></button>
-          <button class="color-btn" data-color="6" style="background-color: #aa5500;" title="Color 6 - Brown"></button>
-          <button class="color-btn" data-color="9" style="background-color: #5555ff;" title="Color 9 - Slippery (Blue)"></button>
-          <button class="color-btn" data-color="10" style="background-color: #55ff55;" title="Color 10 - Refill Oxygen/Fuel"></button>
-          <button class="color-btn" data-color="11" style="background-color: #55ffff;" title="Color 11 - Boost speed"></button>
-          <button class="color-btn" data-color="12" style="background-color: #ff5555;" title="Color 12 - Super Boost speed"></button>
-          <button class="color-btn" data-color="13" style="background-color: #ff55ff;" title="Color 13 - Burning / Hazard"></button>
-          <button class="color-btn" data-color="14" style="background-color: #ffff55;" title="Color 14 - High Jump"></button>
+        <div class="color-list-grid">
+          <div class="color-row" data-color="1" title="Color 1 - Dark Blue">
+            <span class="color-dot" style="background-color: #0000aa;"></span>
+            <span>Normal (Blue)</span>
+          </div>
+          <div class="color-row" data-color="2" title="Color 2 - Green">
+            <span class="color-dot" style="background-color: #00aa00;"></span>
+            <span>Solid (Green)</span>
+          </div>
+          <div class="color-row" data-color="3" title="Color 3 - Sticky (Green)">
+            <span class="color-dot" style="background-color: #00aaaa;"></span>
+            <span>Sticky (Teal)</span>
+          </div>
+          <div class="color-row" data-color="6" title="Color 6 - Brown">
+            <span class="color-dot" style="background-color: #aa5500;"></span>
+            <span>Solid (Brown)</span>
+          </div>
+          <div class="color-row" data-color="9" title="Color 9 - Slippery (Blue)">
+            <span class="color-dot" style="background-color: #5555ff;"></span>
+            <span>Slippery (Ice)</span>
+          </div>
+          <div class="color-row" data-color="10" title="Color 10 - Refill Oxygen/Fuel">
+            <span class="color-dot" style="background-color: #55ff55;"></span>
+            <span>Refill (O2/Fuel)</span>
+          </div>
+          <div class="color-row" data-color="11" title="Color 11 - Boost speed">
+            <span class="color-dot" style="background-color: #55ffff;"></span>
+            <span>Boost (Speed)</span>
+          </div>
+          <div class="color-row" data-color="12" title="Color 12 - Super Boost speed">
+            <span class="color-dot" style="background-color: #ff5555;"></span>
+            <span>S-Boost (Fast)</span>
+          </div>
+          <div class="color-row" data-color="13" title="Color 13 - Burning / Hazard">
+            <span class="color-dot" style="background-color: #ff55ff;"></span>
+            <span>Hazard (Death)</span>
+          </div>
+          <div class="color-row" data-color="14" title="Color 14 - High Jump">
+            <span class="color-dot" style="background-color: #ffff55;"></span>
+            <span>High Jump</span>
+          </div>
         </div>
       </div>
     `;
@@ -1121,16 +1205,57 @@ export class InGameEditor {
       <div class="panel-section" style="margin-top: 15px;">
         <div class="panel-header">BLOCK DETAILS</div>
         <div id="block-info-empty" class="info-empty">
-          Click a block with middle-mouse to load details.
+          Use the Select tool to click a block and edit its properties.
         </div>
         <div id="block-info-active" style="display: none;">
-          <div class="form-row">
-            <label>Type</label>
-            <span id="lbl-block-type" style="color: #ff00ff; font-weight: bold;">road</span>
+          <div class="form-row" style="margin-bottom: 8px;">
+            <label>Position</label>
+            <span id="lbl-block-pos" style="color: #fff; font-weight: bold;">Lane 3, Row 10 (Y=0)</span>
           </div>
-          <div class="form-row">
-            <label>Color Index</label>
-            <span id="lbl-block-color">11</span>
+          <div class="form-row" style="margin-bottom: 8px;">
+            <label>Type</label>
+            <select id="edit-block-type">
+              <option value="empty">Empty / Hole</option>
+              <option value="road">Flat Road</option>
+              <option value="obstacle-half">Half Obstacle</option>
+              <option value="obstacle-full">Full Obstacle</option>
+              <option value="tunnel">Tunnel Arch</option>
+              <option value="ramp">Ramp / Slope</option>
+            </select>
+          </div>
+          <div class="form-row" style="margin-bottom: 8px;">
+            <label>Behavior Color</label>
+            <select id="edit-block-color">
+              <option value="1">Color 1 - Dark Blue (Normal)</option>
+              <option value="2">Color 2 - Green (Normal)</option>
+              <option value="3">Color 3 - Sticky (Teal)</option>
+              <option value="6">Color 6 - Brown (Normal)</option>
+              <option value="9">Color 9 - Slippery (Ice)</option>
+              <option value="10">Color 10 - Refill Oxygen/Fuel</option>
+              <option value="11">Color 11 - Boost speed</option>
+              <option value="12">Color 12 - Super Boost speed</option>
+              <option value="13">Color 13 - Burning / Hazard</option>
+              <option value="14">Color 14 - High Jump</option>
+            </select>
+          </div>
+          <div id="edit-block-ramp-fields" style="display: none; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px; margin-top: 8px;">
+            <div class="form-row" style="margin-bottom: 8px;">
+              <label>Ramp Start Y</label>
+              <input type="number" id="edit-block-starty" step="0.5" min="-5" max="10" value="0">
+            </div>
+            <div class="form-row" style="margin-bottom: 8px;">
+              <label>Ramp End Y</label>
+              <input type="number" id="edit-block-endy" step="0.5" min="-5" max="10" value="1">
+            </div>
+            <div class="form-row">
+              <label>Ramp Direction</label>
+              <select id="edit-block-direction">
+                <option value="forward">Forward (Climb Up)</option>
+                <option value="backward">Backward (Climb Down)</option>
+                <option value="left">Left Slope</option>
+                <option value="right">Right Slope</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -1156,24 +1281,62 @@ export class InGameEditor {
       rightPanel.classList.toggle('collapsed', this.uiCollapsed);
     });
 
+    // Tool selectors
+    const toolRows = leftPalette.querySelectorAll('.tool-row');
+    toolRows.forEach(row => {
+      row.addEventListener('click', () => {
+        this.activeTool = row.getAttribute('data-tool');
+        if (this.activeTool !== 'select' && this.selectedBox) {
+          this.selectedBox.visible = false;
+          this.selectedCoord = null;
+          const blockEmpty = document.getElementById('block-info-empty');
+          const blockActive = document.getElementById('block-info-active');
+          if (blockEmpty && blockActive) {
+            blockEmpty.style.display = 'block';
+            blockActive.style.display = 'none';
+          }
+        }
+        this.updateActiveBrushUI();
+      });
+    });
+
     // Brush selectors
     const brushRows = leftPalette.querySelectorAll('.brush-row');
     brushRows.forEach(row => {
       row.addEventListener('click', () => {
         this.activeBrush = row.getAttribute('data-brush');
+        // Automatically switch tool back to paint when selecting a brush
+        this.activeTool = 'paint';
         this.updateActiveBrushUI();
       });
     });
 
-    // Color buttons
-    const colorBtns = leftPalette.querySelectorAll('.color-btn');
-    colorBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.activeColorIdx = parseInt(btn.getAttribute('data-color'));
-        colorBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+    // Color rows
+    const colorRows = leftPalette.querySelectorAll('.color-row');
+    colorRows.forEach(row => {
+      row.addEventListener('click', () => {
+        this.activeColorIdx = parseInt(row.getAttribute('data-color'));
+        // Automatically switch tool back to paint when selecting a color behavior tag
+        this.activeTool = 'paint';
+        this.updateActiveBrushUI();
       });
     });
+
+    // Block Details Inputs
+    const blockTypeSel = document.getElementById('edit-block-type');
+    blockTypeSel.addEventListener('change', () => this.updateSelectedBlockFromInputs());
+
+    const blockColorSel = document.getElementById('edit-block-color');
+    blockColorSel.addEventListener('change', () => this.updateSelectedBlockFromInputs());
+
+    const blockStartY = document.getElementById('edit-block-starty');
+    blockStartY.addEventListener('change', () => this.updateSelectedBlockFromInputs());
+
+    const blockEndY = document.getElementById('edit-block-endy');
+    blockEndY.addEventListener('change', () => this.updateSelectedBlockFromInputs());
+
+    const blockDirection = document.getElementById('edit-block-direction');
+    blockDirection.addEventListener('change', () => this.updateSelectedBlockFromInputs());
 
     // Form settings changes
     const editName = document.getElementById('edit-level-name');
@@ -1214,12 +1377,19 @@ export class InGameEditor {
     this.updateActiveBrushUI();
   }
 
-  /**
-   * Updates visual active highlights on the brush toolbar buttons.
-   */
   updateActiveBrushUI() {
     const leftPalette = document.getElementById('editor-left-toolbar');
     if (!leftPalette) return;
+
+    // Match active tool state
+    const toolRows = leftPalette.querySelectorAll('.tool-row');
+    toolRows.forEach(row => {
+      if (row.getAttribute('data-tool') === this.activeTool) {
+        row.classList.add('active');
+      } else {
+        row.classList.remove('active');
+      }
+    });
 
     const brushRows = leftPalette.querySelectorAll('.brush-row');
     brushRows.forEach(row => {
@@ -1230,24 +1400,145 @@ export class InGameEditor {
       }
     });
 
-    // Match behavior color active border
-    const colorBtns = leftPalette.querySelectorAll('.color-btn');
-    colorBtns.forEach(btn => {
-      if (parseInt(btn.getAttribute('data-color')) === this.activeColorIdx) {
-        btn.classList.add('active');
+    // Match behavior color active state
+    const colorRows = leftPalette.querySelectorAll('.color-row');
+    colorRows.forEach(row => {
+      if (parseInt(row.getAttribute('data-color')) === this.activeColorIdx) {
+        row.classList.add('active');
       } else {
-        btn.classList.remove('active');
+        row.classList.remove('active');
       }
     });
 
     // Sync Details
+    if (this.activeTool !== 'select') {
+      const blockEmpty = document.getElementById('block-info-empty');
+      const blockActive = document.getElementById('block-info-active');
+      if (blockEmpty && blockActive) {
+        blockEmpty.style.display = 'none';
+        blockActive.style.display = 'block';
+        
+        // Show active brush info
+        const posEl = document.getElementById('lbl-block-pos');
+        if (posEl) posEl.innerText = `Painting Mode (Active)`;
+        
+        const typeEl = document.getElementById('edit-block-type');
+        if (typeEl) typeEl.value = this.activeBrush;
+        
+        const colorEl = document.getElementById('edit-block-color');
+        if (colorEl) colorEl.value = this.activeColorIdx.toString();
+        
+        const rampSection = document.getElementById('edit-block-ramp-fields');
+        if (rampSection) {
+          rampSection.style.display = (this.activeBrush === 'ramp') ? 'block' : 'none';
+          if (this.activeBrush === 'ramp') {
+            document.getElementById('edit-block-starty').value = 0.0;
+            document.getElementById('edit-block-endy').value = 1.0;
+            document.getElementById('edit-block-direction').value = 'forward';
+          }
+        }
+      }
+    }
+  }
+
+  selectBlock(lane, row, height) {
+    this.selectedCoord = { lane, row, height };
+
+    // Update selected Box outline position
+    if (this.selectedBox) {
+      this.selectedBox.position.set(
+        (lane - 3) * TILE_WIDTH,
+        height,
+        -row * TILE_LENGTH - TILE_LENGTH / 2
+      );
+      this.selectedBox.visible = true;
+    }
+
+    const cell = this.levelDraft.rows[row][lane];
+
     const blockEmpty = document.getElementById('block-info-empty');
     const blockActive = document.getElementById('block-info-active');
+    
     if (blockEmpty && blockActive) {
       blockEmpty.style.display = 'none';
       blockActive.style.display = 'block';
-      document.getElementById('lbl-block-type').innerText = this.activeBrush.toUpperCase();
-      document.getElementById('lbl-block-color').innerText = this.activeColorIdx;
+
+      const posEl = document.getElementById('lbl-block-pos');
+      if (posEl) posEl.innerText = `Lane ${lane - 3}, Row ${row} (Y=${height})`;
+
+      this.isSyncingForm = true;
+
+      const typeEl = document.getElementById('edit-block-type');
+      const colorEl = document.getElementById('edit-block-color');
+      const rampSection = document.getElementById('edit-block-ramp-fields');
+
+      if (!cell) {
+        if (typeEl) typeEl.value = 'empty';
+        if (colorEl) colorEl.value = '1';
+        if (rampSection) rampSection.style.display = 'none';
+      } else {
+        if (typeEl) typeEl.value = cell.type;
+        if (colorEl) colorEl.value = cell.colorIdx !== undefined ? cell.colorIdx.toString() : '1';
+        
+        if (cell.type === 'ramp') {
+          if (rampSection) rampSection.style.display = 'block';
+          const startYEl = document.getElementById('edit-block-starty');
+          const endYEl = document.getElementById('edit-block-endy');
+          const dirEl = document.getElementById('edit-block-direction');
+          
+          if (startYEl) startYEl.value = cell.ramp?.startY !== undefined ? cell.ramp.startY : 0.0;
+          if (endYEl) endYEl.value = cell.ramp?.endY !== undefined ? cell.ramp.endY : 1.0;
+          if (dirEl) dirEl.value = cell.ramp?.direction || 'forward';
+        } else {
+          if (rampSection) rampSection.style.display = 'none';
+        }
+      }
+
+      this.isSyncingForm = false;
+    }
+  }
+
+  updateSelectedBlockFromInputs() {
+    if (this.isSyncingForm) return;
+
+    const newType = document.getElementById('edit-block-type').value;
+    const newColor = parseInt(document.getElementById('edit-block-color').value) || 1;
+
+    if (this.activeTool !== 'select') {
+      // Paint Mode: update active brush & active color based on form inputs
+      if (newType !== 'empty') {
+        this.activeBrush = newType;
+      }
+      this.activeColorIdx = newColor;
+      this.updateActiveBrushUI();
+      return;
+    }
+
+    // Select Mode: update the selected block
+    if (!this.selectedCoord) return;
+    const { lane, row } = this.selectedCoord;
+
+    let newCellProps = null;
+    if (newType !== 'empty') {
+      newCellProps = {
+        type: newType,
+        colorIdx: newColor
+      };
+      if (newType === 'ramp') {
+        newCellProps.ramp = {
+          direction: document.getElementById('edit-block-direction').value || 'forward',
+          startY: parseFloat(document.getElementById('edit-block-starty').value) || 0.0,
+          endY: parseFloat(document.getElementById('edit-block-endy').value) || 1.0
+        };
+      }
+    }
+
+    this.paintCell(lane, row, newCellProps);
+
+    // Update form visibility for ramp section
+    const rampSection = document.getElementById('edit-block-ramp-fields');
+    if (rampSection) {
+      rampSection.style.display = (newType === 'ramp') ? 'block' : 'none';
     }
   }
 
