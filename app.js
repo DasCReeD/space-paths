@@ -1691,6 +1691,16 @@ class GameManager {
       this.togglePhysicsCalibrator(false);
     }
 
+    // Manage btn-edit-level visibility
+    const btnEditLevel = document.getElementById('btn-edit-level');
+    if (btnEditLevel) {
+      if (!screenId && this.gameState === 'playing') {
+        btnEditLevel.classList.remove('hidden');
+      } else {
+        btnEditLevel.classList.add('hidden');
+      }
+    }
+
     // If no target specified, just hide everything (return to gameplay)
     if (!screenId) {
       // Restore touch controls when returning to active gameplay
@@ -1705,16 +1715,6 @@ class GameManager {
 
     // Show target screen
     const target = document.getElementById(screenId);
-    
-    // Manage btn-edit-level visibility
-    const btnEditLevel = document.getElementById('btn-edit-level');
-    if (btnEditLevel) {
-      if (!screenId && this.gameState === 'playing') {
-        btnEditLevel.classList.remove('hidden');
-      } else {
-        btnEditLevel.classList.add('hidden');
-      }
-    }
 
     if (!target) return;
 
