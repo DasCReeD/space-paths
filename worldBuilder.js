@@ -884,18 +884,25 @@ function solveLevel(levelData) {
           }
         }
 
-        const activeJumpImpulse = (currentTile && currentTile.top_color === 14) ? (JUMP_IMPULSE * 1.7) : JUMP_IMPULSE;
+        const jumpFactor = 1.25;
+        const gravityFactor = 1.45;
+        const fallGravityMultiplier = 1.45;
+
+        const baseJumpImpulse = JUMP_IMPULSE * jumpFactor;
+        const activeJumpImpulse = (currentTile && currentTile.top_color === 14) ? (baseJumpImpulse * 1.7) : baseJumpImpulse;
         const h_start = h;
-        const gPhys = gravity * 3.0;
+        const gPhys = gravity * 3.0 * gravityFactor;
         const tUp = activeJumpImpulse / gPhys;
         const hMax = h_start + (activeJumpImpulse * activeJumpImpulse) / (2.0 * gPhys);
-        const gFall = gPhys * 1.45;
+        const gFall = gPhys * fallGravityMultiplier;
 
         let landed = false;
         let crashed = false;
         let jumpTime = 0.0;
         let step = 1;
         let obsHeight = 0.0;
+        let landingTileHeight = 0.0;
+        let yPrev = h_start;
 
         while (r + step < numRows) {
           const checkRow = r + step;
@@ -919,28 +926,35 @@ function solveLevel(levelData) {
             }
           }
 
-          obsHeight = getTileObstacleHeight(checkTile);
+          const checkTileHeight = (checkTile && checkTile.ramp) ? checkTile.endY : getTileObstacleHeight(checkTile);
+          obsHeight = checkTileHeight;
+
           if (checkTile) {
             const isObs = !!(checkTile.full || checkTile.half);
-            if (isObs) {
-              // Obstacles are walls — crash if flight arc touches them
-              if (yFlight < obsHeight + 0.4) {
-                crashed = true;
-                break;
-              }
-              // Arc still above obstacle — continue flight over it
-            } else if (t >= tUp && yFlight <= obsHeight + 0.5) {
-              // Landing on a flat road tile (no obstacle)
+
+            // Landing check: falling, entered Z-range above surface, and reached landing window
+            if (t >= tUp && yPrev >= checkTileHeight - 0.5 && yFlight <= checkTileHeight + 0.5) {
               if (checkTile.top_color === 13) {
                 crashed = true;
               } else {
                 landed = true;
                 jumpTime = t;
+                landingTileHeight = checkTileHeight;
               }
               break;
-            } else if (yFlight < obsHeight + 0.4) {
-              crashed = true;
-              break;
+            }
+
+            // Crash check
+            if (isObs) {
+              if (yFlight < checkTileHeight + 0.4) {
+                crashed = true;
+                break;
+              }
+            } else {
+              if (yFlight < checkTileHeight - 0.1) {
+                crashed = true;
+                break;
+              }
             }
           } else {
             if (yFlight < -4.0) {
@@ -948,6 +962,7 @@ function solveLevel(levelData) {
               break;
             }
           }
+          yPrev = yFlight;
           step++;
         }
 
@@ -973,7 +988,7 @@ function solveLevel(levelData) {
             oAfter = startingOxygen;
           }
 
-          if (dfs(landingRow, nextLane, vNext, fAfter, oAfter, obsHeight)) return true;
+          if (dfs(landingRow, nextLane, vNext, fAfter, oAfter, landingTileHeight)) return true;
         }
       }
 
@@ -1241,7 +1256,7 @@ function generateVoidLevel(levelIndex, difficulty, seed) {
       for (let l = left; l <= right; l++) {
         row[l] = {
           val: 0, ramp: true, startY: -2.0, endY: -2.0,
-          top_color: 13, bottom_color: 13, low3: 13
+          top_color: 14, bottom_color: 14, low3: 14
         };
       }
       state.rows.push(row);
