@@ -1,6 +1,6 @@
 # SkyRoads WebGL — Progress Log
 
-> **Last updated:** 2026-06-06
+> **Last updated:** 2026-06-10
 
 ---
 
@@ -8,87 +8,36 @@
 
 | Branch | Commits | Status |
 |--------|---------|--------|
-| `main` | 33 | ✅ Stable, deploys to GitHub Pages |
+| `main` | 51 | ✅ Stable, deploys to GitHub Pages |
 | `feature/visual-ui-overhaul` | 27 | 🔄 Merged into main |
 
 ---
 
-## Commit History (main branch — 33 commits)
+## Commit History (main branch — 51 commits)
 
 | # | Commit | Feature |
 |---|--------|---------|
 | 1 | `38e79c9` | ✅ Initial commit: SkyRoads WebGL recreation with Vitest unit tests |
-| 2 | `aed7ab8` | ✅ Tests verification: All 19 unit tests passing |
-| 3 | `685bc0e` | ✅ Comprehensive codemaps, architectural review, codebase review report |
-| 4 | `8e21f54` | ✅ Default camera view: all the way out and up |
-| 5 | `53a04a8` | ✅ Physical sloped dipped-wing cockpit, corner minimap, themed level skinning, skybox, playtest pipeline |
-| 6 | `59865ac` | ✅ Fix landing rebound bounce loop, correct cockpit flight pitch, camera motion smoothing |
-| 7 | `e833003` | ✅ Starfire Fighter starting ship, 3-column no-scroll garage, halved flight pitch |
-| 8 | `0a82e91` | ✅ Fix garage sidebar columns, enable text-wrap for button/color picker cutoffs |
-| 9 | `24026b0` | ✅ Spaceship Garage overhaul: high-fidelity texture selector, anisotropic rendering, cockpit bezel |
-| 10 | `f0629bf` | ✅ Update module-map.md with preview.js module and revised signatures |
-| 11 | `956cdf2` | ✅ PS2-style virtual analog stick, physics lane-snapping magnetism |
-| 12 | `e42bc0e` | ✅ GitHub Pages automated deployment workflow, relative path support |
-| 13 | `ec140a4` | ✅ Mobile dedicated views, movable touch controls customizer, D-pad option, cockpit HUD |
-| 14 | `50940de` | ✅ Glowing GitHub repository back-link on main menu |
-| 15 | `ce9939f` | ✅ Fix AudioContext state sync in RetroMusicSequencer, music gain boost |
-| 16 | `837f9b7` | ✅ Music/SFX volume sliders, retro classic 8-bit sound mode |
-| 17 | `593c0db` | ✅ OPL2 FM synthesizer integration with original 1993 SkyRoads sound assets |
-| 18 | `e59bfe6` | ✅ Fix audio state-loading race by passing explicit gameplay flag to startMusic |
-| 19 | `54af90f` | ✅ Sloped ramps, physics snapping, smooth tunnel transitions |
-| 20 | `635b542` | ✅ Fix ramp landing collision by re-generating shipBox bounding box after snaps |
-| 21 | `ce601f4` | ✅ Xbox gamepad support with menu navigation, button remapping UI, ramp collision fix |
-| 22 | `ad64e20` | ✅ Fix level pack loading stall by importing JSON files as static asset URLs |
-| 23 | `6e3cf67` | ✅ Bottom HUD toggle option, touch joystick vertical axis throttle/brake control |
-| 24 | `adae570` | ✅ Top-right fullscreen toggle button for mobile/desktop |
-| 25 | `bbc3432` | ✅ Autolane snap toggle and snap strength adjuster |
-| 26 | `6dcbc0a` | ✅ Complete visual UI overhaul, responsive touch controls, and asset pipelines |
-| 27 | `032b3f0` | ✅ Fix continuous ramp frontal collision and add slalom super boosts |
-| 28 | `f3ca269` | ✅ Add level format and editor guide for external LLMs |
-| 29 | `3e674f9` | ✅ Spawn ship centered on first valid road tile in middle of tile and calculate Y elevation |
-| 30 | `b8e9258` | ✅ Update progress log with latest main commit history |
-| 31 | `6d3facc` | ✅ Manual rewind key R/X with loop-break and 4s self-destruct |
-| 32 | `d2245c0` | ✅ Gitignore Blender files and untrack existing .blend files |
-| 33 | `pending` | ✅ Overhaul touch controls v2, auto-detect touch, cumulative boost, segmenting, camera tilt, clean dead code |
+| ... | ... | ... |
+| 50 | `24f4763` | ✅ feat: add editor select/edit tools and behavior color tag labels |
+| 51 | `pending` | ✅ feat: batch generate and apply ComfyUI illustrated textures and decals to levels 61-90 |
 
 ### Changes in this integration:
-- **touchControls.js** — Extracted into a dedicated, robust module featuring customizer isolation, layout validation, auto-scaling, and localStorage persistence.
-- **index.html & index.css** — Cleaned up flat touch control HUD DOM nodes, overhauled modern glassmorphic styling, and added camera tilt slider.
-- **app.js** — Cleaned up old dead touch code (~600 lines), wired central showScreen() visibility toggle to prevent overlay touch interference, resolved settings timing, and clamped spawn position search bounds to prevent crashes on short levels.
-- **physics.js** — Added cumulative boost mechanics and integrated camera tilt speed factor.
-- **graphics.js** — Refined segment subdivision on curves to prevent ship clipping and added camera tilt visual slider.
-- **playtests/run_playtest.js** — Fixed Puppeteer selectors (`#touch-btn-edit` and `#touch-customizer-overlay`) to match the new HTML structure.
-- **tests/app.test.js & tests/physics.test.js** — Added touch HUD elements to jsdom mockup body, updated speed cap assertions to align with cumulative boost mechanics, and updated rewind tests to align with the interactive manual visual rewind design.
+- **scratch/generate_assets_50_per_level.py** — Modified to dynamically lookup generated ComfyUI illustrated textures in `assets/custom/` and copy them into level folders instead of writing stubs. Added Sobel-based normal map fallback generation and dynamic custom decals copy support.
+- **playtests/run_playtest.js** — Executed E2E screenshots verification.
+- **scratch/run_generated_playtest.js** — Added a custom playtest runner targeting Level 61 to visually capture active gameplay on the new generated biome themes.
 
 ---
 
-## Untracked New Assets (not yet committed)
+## Committed Assets
 
-### 10 New Themes
+### 10 New Biome Themes
 core, furnace, glitch, pulse, ridge, shallows, spire, thrill, tundra, void
 - Each with road/obstacle/tunnel diffuse+normal textures
 - Each with 6 decal variants
 
 ### 30 Per-Level Asset Directories
-`assets/custom/level_61/` through `assets/custom/level_90/`
-
-### 5 GLB Ship Models
-fighter.glb, hauler.glb, scout.glb, dreadnought.glb, racer.glb + tunnel_archway.glb
-
-### 2 New Data Files
-- `data/generated_levels.json` — 30 procedurally generated levels
-- `data/level_patterns.json` — extracted statistical patterns from original levels
-
-### 3 Additional Test Files
-- `tests/analyze.test.js` — level analysis validation
-- `tests/assets.test.js` — asset existence verification
-- `tests/worldBuilder.test.js` — generated level data integrity
-
-### Additional Untracked Files
-- `worldBuilder.js` — procedural level generator (1,695 lines)
-- `debug_coords.js` — Puppeteer debug automation
-- `progress.md` — this file
-- Various Blender files, reference images, and plan documents
+`assets/custom/level_61/` through `assets/custom/level_90/` containing the illustrated textures
 
 ---
 
@@ -125,9 +74,9 @@ fighter.glb, hauler.glb, scout.glb, dreadnought.glb, racer.glb + tunnel_archway.
 |------|----------|--------|
 | VRAM garbage collection & memory optimization | P1 | ⏳ Planned |
 | E2E browser testing with Playwright | P1 | ⏳ Planned |
-| Merge `feature/visual-ui-overhaul` into `main` | P0 | ⏳ Pending |
-| Commit untracked new theme assets (10 themes) | P0 | ⏳ Pending |
-| Commit untracked data files and test files | P0 | ⏳ Pending |
+| Merge `feature/visual-ui-overhaul` into `main` | P0 | ✅ Completed |
+| Commit untracked new theme assets (10 themes) | P0 | ✅ Completed |
+| Commit untracked data files and test files | P0 | ✅ Completed |
 | World Builder UI (in-game level editor) | P2 | ⏳ Planned |
 | Extract shared `shipCatalog.js` module | P2 | ⏳ Planned |
 | Module splitting (app.js, graphics.js, levelLoader.js) | P2 | ⏳ Planned |

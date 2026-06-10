@@ -1,0 +1,242 @@
+{
+  "void_road": {
+    "status": "completed",
+    "timestamp": "2026-06-08T21:59:59.368Z",
+    "promptId": "fcf72887-8394-48eb-8478-53c098320c9f",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\void_road_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\void_road_normal.png",
+    "finishedAt": "2026-06-08T22:02:36.787Z"
+  },
+  "void_obstacle": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:02:43.722Z",
+    "promptId": "c67b324b-e4bc-4e70-b309-7e03d27dfc05",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\void_obstacle_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\void_obstacle_normal.png",
+    "finishedAt": "2026-06-08T22:02:54.189Z"
+  },
+  "void_tunnel": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:02:54.190Z",
+    "promptId": "93c3f22e-3476-41ce-b5a8-b80ebcba36fb",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\void_tunnel_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\void_tunnel_normal.png",
+    "finishedAt": "2026-06-08T22:03:04.643Z"
+  },
+  "ridge_road": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:03:04.644Z",
+    "promptId": "83d37b7e-c2e0-49fd-95a8-1f1b47560a12",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\ridge_road_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\ridge_road_normal.png",
+    "finishedAt": "2026-06-08T22:03:15.121Z"
+  },
+  "ridge_obstacle": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:03:15.122Z",
+    "promptId": "e7b90ce1-1738-4050-9f46-b936f924d1ab",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\ridge_obstacle_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\ridge_obstacle_normal.png",
+    "finishedAt": "2026-06-08T22:03:27.639Z"
+  },
+  "ridge_tunnel": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:03:27.639Z",
+    "promptId": "30993320-311f-4f70-a554-9aa12e5edcbf",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\ridge_tunnel_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\ridge_tunnel_normal.png",
+    "finishedAt": "2026-06-08T22:03:38.384Z"
+  },
+  "thrill_road": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:03:38.385Z",
+    "promptId": "c42e63fe-a48e-467a-885d-2a3b9adca9a6",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\thrill_road_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\thrill_road_normal.png",
+    "finishedAt": "2026-06-08T22:03:50.880Z"
+  },
+  "thrill_obstacle": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:03:50.880Z",
+    "promptId": "5aa11a0e-3fd0-43b0-b0e4-c8d337db9682",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\thrill_obstacle_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\thrill_obstacle_normal.png",
+    "finishedAt": "2026-06-08T22:04:03.403Z"
+  },
+  "thrill_tunnel": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:04:03.404Z",
+    "promptId": "513badbe-aab5-4e07-b3dc-be5078a0717c",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\thrill_tunnel_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\thrill_tunnel_normal.png",
+    "finishedAt": "2026-06-08T22:04:15.903Z"
+  },
+  "core_road": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:04:15.903Z",
+    "promptId": "fa0d455f-38d5-482c-937b-e88dad6a3774",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\core_road_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\core_road_normal.png",
+    "finishedAt": "2026-06-08T22:04:28.372Z"
+  },
+  "core_obstacle": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:04:28.373Z",
+    "promptId": "2d8462c5-0dc8-4994-ad99-bd9877beec0f",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\core_obstacle_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\core_obstacle_normal.png",
+    "finishedAt": "2026-06-08T22:04:40.871Z"
+  },
+  "core_tunnel": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:04:40.872Z",
+    "promptId": "fbae77e2-8284-4b4b-ac0b-8c205f0d3cdd",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\core_tunnel_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\core_tunnel_normal.png",
+    "finishedAt": "2026-06-08T22:04:53.360Z"
+  },
+  "glitch_road": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:04:53.361Z",
+    "promptId": "0742a8a7-1c42-49ff-a12e-2cf6538ff035",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\glitch_road_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\glitch_road_normal.png",
+    "finishedAt": "2026-06-08T22:05:05.900Z"
+  },
+  "glitch_obstacle": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:05:05.901Z",
+    "promptId": "7aff38d2-1d4b-4971-82c2-0d27413a3fc0",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\glitch_obstacle_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\glitch_obstacle_normal.png",
+    "finishedAt": "2026-06-08T22:05:18.399Z"
+  },
+  "glitch_tunnel": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:05:18.399Z",
+    "promptId": "be39fa96-0d93-40c2-98a4-8b2d4faf4657",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\glitch_tunnel_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\glitch_tunnel_normal.png",
+    "finishedAt": "2026-06-08T22:05:30.892Z"
+  },
+  "tundra_road": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:05:30.893Z",
+    "promptId": "d982e527-005a-4f09-8acc-c4df74fb5684",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\tundra_road_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\tundra_road_normal.png",
+    "finishedAt": "2026-06-08T22:05:43.330Z"
+  },
+  "tundra_obstacle": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:05:43.331Z",
+    "promptId": "6725794e-5247-4f11-b693-2311607e090c",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\tundra_obstacle_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\tundra_obstacle_normal.png",
+    "finishedAt": "2026-06-08T22:05:53.758Z"
+  },
+  "tundra_tunnel": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:05:53.758Z",
+    "promptId": "9b478c24-df02-4518-a2d2-0fd7ea227072",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\tundra_tunnel_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\tundra_tunnel_normal.png",
+    "finishedAt": "2026-06-08T22:06:04.193Z"
+  },
+  "furnace_road": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:06:04.193Z",
+    "promptId": "1bb1505d-2063-457f-9618-54dab7330815",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\furnace_road_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\furnace_road_normal.png",
+    "finishedAt": "2026-06-08T22:06:14.657Z"
+  },
+  "furnace_obstacle": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:06:14.658Z",
+    "promptId": "17c4e899-9de6-41c1-b623-fe5ade0fa4ee",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\furnace_obstacle_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\furnace_obstacle_normal.png",
+    "finishedAt": "2026-06-08T22:06:25.088Z"
+  },
+  "furnace_tunnel": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:06:25.089Z",
+    "promptId": "227b7780-0744-4609-a436-dd3d622b0773",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\furnace_tunnel_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\furnace_tunnel_normal.png",
+    "finishedAt": "2026-06-08T22:06:35.540Z"
+  },
+  "shallows_road": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:06:35.541Z",
+    "promptId": "9373c766-d40d-48bd-b1e4-c411720d74c9",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\shallows_road_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\shallows_road_normal.png",
+    "finishedAt": "2026-06-08T22:06:46.004Z"
+  },
+  "shallows_obstacle": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:06:46.005Z",
+    "promptId": "257fb6ab-2300-473f-8ef2-5f59ec76c281",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\shallows_obstacle_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\shallows_obstacle_normal.png",
+    "finishedAt": "2026-06-08T22:06:56.444Z"
+  },
+  "shallows_tunnel": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:06:56.445Z",
+    "promptId": "a1dfb4e6-28b1-4cea-ab1b-d937400a4146",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\shallows_tunnel_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\shallows_tunnel_normal.png",
+    "finishedAt": "2026-06-08T22:07:06.881Z"
+  },
+  "spire_road": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:07:06.881Z",
+    "promptId": "1be13771-5eaf-4ea3-8851-8e16173f9964",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\spire_road_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\spire_road_normal.png",
+    "finishedAt": "2026-06-08T22:07:17.312Z"
+  },
+  "spire_obstacle": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:07:17.313Z",
+    "promptId": "f1b38bb6-efae-4370-a30d-4a7f861d73d3",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\spire_obstacle_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\spire_obstacle_normal.png",
+    "finishedAt": "2026-06-08T22:07:27.801Z"
+  },
+  "spire_tunnel": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:07:27.802Z",
+    "promptId": "a14d9c68-8277-4d0e-87cd-4e37cb4f58e9",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\spire_tunnel_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\spire_tunnel_normal.png",
+    "finishedAt": "2026-06-08T22:07:38.280Z"
+  },
+  "pulse_road": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:07:38.280Z",
+    "promptId": "0d5d0fb3-bc04-47e6-931b-a06183539181",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\pulse_road_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\pulse_road_normal.png",
+    "finishedAt": "2026-06-08T22:07:48.798Z"
+  },
+  "pulse_obstacle": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:07:48.798Z",
+    "promptId": "26ad8538-0996-4f38-b880-be90fa47e81e",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\pulse_obstacle_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\pulse_obstacle_normal.png",
+    "finishedAt": "2026-06-08T22:07:59.227Z"
+  },
+  "pulse_tunnel": {
+    "status": "completed",
+    "timestamp": "2026-06-08T22:07:59.228Z",
+    "promptId": "4f87b46d-d947-49ea-9b12-f6c1aa4acc30",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\pulse_tunnel_diffuse.png",
+    "normal": "c:\\dev\\Sky roads\\assets\\custom\\pulse_tunnel_normal.png",
+    "finishedAt": "2026-06-08T22:08:09.669Z"
+  }
+}

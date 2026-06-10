@@ -97,7 +97,12 @@ export class InGameEditor {
    * Activate the in-game editor: freeze physics, hide ship, set up fly cam.
    */
   activate() {
-    if (this.active) return;
+    if (this.active) {
+      if (this.app.gameState !== 'editor') {
+        this.exitPlaytest();
+      }
+      return;
+    }
     this.active = true;
     
     // 1. Save original game state & pause active physics
@@ -411,6 +416,11 @@ export class InGameEditor {
    * Playtest the current level state in-memory.
    */
   async startPlaytest() {
+    if (this.app.gameState !== 'editor') {
+      this.exitPlaytest();
+      return;
+    }
+
     // 1. Release pointer lock
     if (document.pointerLockElement) {
       document.exitPointerLock();
@@ -456,6 +466,11 @@ export class InGameEditor {
     this.app.physics.position.set(0, 0.3, -(spawnRow + 0.5) * TILE_LENGTH);
     this.app.physics.onGround = false;
 
+    // Reset rewind/history state
+    this.app.isRewinding = false;
+    this.app.rewindHistoryIndex = -1;
+    this.app.stateHistory = [];
+
     // Show cockpit HUD
     if (this.app.bottomHudEnabled) {
       const hud = document.getElementById('hud');
@@ -498,6 +513,37 @@ export class InGameEditor {
     const hud = document.getElementById('hud');
     if (hud) hud.classList.add('hidden');
     if (this.app.touchManager) this.app.touchManager.hide();
+
+    // Hide any gameplay active screens (like death-screen, success-screen, pause-screen, settings-screen)
+    this.app.showScreen('');
+
+    // Cancel any active timeouts in app.js
+    if (this.app.rewindTimeoutId !== null) {
+      clearTimeout(this.app.rewindTimeoutId);
+      this.app.rewindTimeoutId = null;
+    }
+
+    // Clean up playtest esc listener
+    if (this.app.playtestEscHandler) {
+      window.removeEventListener('keydown', this.app.playtestEscHandler);
+      this.app.playtestEscHandler = null;
+    }
+
+    // Reset physics states to prevent immediate death/stuck on next playtest
+    if (this.app.physics) {
+      this.app.physics.isDead = false;
+      this.app.physics.deathReason = '';
+      this.app.physics.isTransitioning = false;
+      this.app.physics.isRebounding = false;
+      this.app.physics.reboundTimer = 0.0;
+      this.app.physics.justRebounded = false;
+      this.app.physics.velocity.set(0, 0, 0);
+    }
+    
+    // Clear rewind/history variables
+    this.app.isRewinding = false;
+    this.app.rewindHistoryIndex = -1;
+    this.app.stateHistory = [];
 
     // Show editor overlays
     const overlays = ['editor-top-bar', 'editor-left-toolbar', 'editor-right-properties', 'editor-crosshair'];

@@ -43,9 +43,22 @@ describe('In-Game Level Editor Unit Tests', () => {
       },
       physics: {
         position: new THREE.Vector3(0, 0, 0),
+        velocity: new THREE.Vector3(0, 0, 0),
         reset: vi.fn(),
-        onGround: false
+        onGround: false,
+        isDead: false,
+        deathReason: '',
+        isTransitioning: false,
+        isRebounding: false,
+        reboundTimer: 0.0,
+        justRebounded: false
       },
+      showScreen: vi.fn(),
+      rewindTimeoutId: null,
+      playtestEscHandler: null,
+      isRewinding: false,
+      rewindHistoryIndex: -1,
+      stateHistory: [],
       graphics: {
         camera: new THREE.PerspectiveCamera(),
         scene: new THREE.Scene(),
@@ -260,5 +273,44 @@ describe('In-Game Level Editor Unit Tests', () => {
     expect(editor.levelDraft.rows[0][3].colorIdx).toBe(11);
     expect(editor.levelDraft.rows[0][3].ramp.startY).toBe(0);
     expect(editor.levelDraft.rows[0][3].ramp.endY).toBe(2);
+  });
+
+  it('should toggle playtest mode and cleanup states when startPlaytest is called while already playtesting', async () => {
+    editor.activate();
+    
+    // Simulate we are in playtest mode
+    app.gameState = 'playing';
+    
+    // Set some dirty states
+    app.physics.isDead = true;
+    app.physics.isTransitioning = true;
+    app.stateHistory = [{ pos: 1 }];
+    app.playtestEscHandler = vi.fn();
+    
+    // Call startPlaytest() while already playtesting
+    await editor.startPlaytest();
+    
+    // It should have called exitPlaytest() internally, returning to editor
+    expect(app.gameState).toBe('editor');
+    expect(app.physics.isDead).toBe(false);
+    expect(app.physics.isTransitioning).toBe(false);
+    expect(app.stateHistory.length).toBe(0);
+    expect(app.showScreen).toHaveBeenCalledWith('');
+    expect(app.playtestEscHandler).toBeNull();
+  });
+
+  it('should toggle playtest mode and cleanup states when activate is called while playtesting', () => {
+    editor.activate();
+    
+    // Simulate we are playtesting
+    app.gameState = 'playing';
+    
+    // Call activate() again
+    editor.activate();
+    
+    // It should call exitPlaytest() internally
+    expect(app.gameState).toBe('editor');
+    expect(app.physics.isDead).toBe(false);
+    expect(app.showScreen).toHaveBeenCalledWith('');
   });
 });
