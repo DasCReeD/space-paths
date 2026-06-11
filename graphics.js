@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { SHIP_WIDTH, SHIP_HEIGHT, SHIP_LENGTH } from './physics.js';
 import { CockpitConsole3D } from './cockpitConsole.js';
-import { getLevelObjUrl, getLevelAssetUrl, getActiveThemeIndex, THEMES, curvatureUniforms } from './levelLoader.js';
+import { getLevelObjUrl, getLevelAssetUrl, getActiveThemeIndex, THEMES, curvatureUniforms, applyCurvatureShader } from './levelLoader.js';
 import spaceshipHullPlatingUrl from './spaceship_hull_plating.png';
 import roadMetallicUrl from './road_metallic_plate.png';
 import hudOverlayUrl from './hud_overlay.jfif';
@@ -381,11 +381,11 @@ export class GraphicsEngine {
         fbx.traverse((child) => {
           if (child.isMesh) {
             // Apply a sleek, futuristic dark metallic texture to buildings
-            child.material = new THREE.MeshStandardMaterial({
+            child.material = applyCurvatureShader(new THREE.MeshStandardMaterial({
               color: child.material.color || 0x221c38,
               roughness: 0.35,
               metalness: 0.75,
-            });
+            }));
             child.castShadow = true;
             child.receiveShadow = true;
             this.buildingTemplates.push(child);
@@ -2448,11 +2448,11 @@ export class GraphicsEngine {
           
           obj.traverse((child) => {
             if (child.isMesh) {
-              child.material = new THREE.MeshStandardMaterial({
+              child.material = applyCurvatureShader(new THREE.MeshStandardMaterial({
                 color: themeColor,
                 roughness: 0.35,
                 metalness: 0.75,
-              });
+              }));
               child.castShadow = true;
               child.receiveShadow = true;
             }
@@ -2488,7 +2488,7 @@ export class GraphicsEngine {
 
     for (let z = -20 + zOffset; z > -trackLength + zOffset; z -= interval) {
       // Left side building
-      const tLeft = this.buildingTemplates[Math.floor(Math.random() * this.buildingTemplates.length)];
+      const tLeft = templates[Math.floor(Math.random() * templates.length)];
       if (tLeft) {
         const bLeft = tLeft.clone();
         // Shift slightly back, vary Y to settle on ground plane, add minor Z jitter
@@ -2499,7 +2499,7 @@ export class GraphicsEngine {
       }
 
       // Right side building
-      const tRight = this.buildingTemplates[Math.floor(Math.random() * this.buildingTemplates.length)];
+      const tRight = templates[Math.floor(Math.random() * templates.length)];
       if (tRight) {
         const bRight = tRight.clone();
         bRight.position.set(rightX + Math.random() * 8.0, -1.0, z + (Math.random() * 10.0 - 5.0));

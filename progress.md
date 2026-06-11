@@ -1,6 +1,6 @@
 # SkyRoads WebGL — Progress Log
 
-> **Last updated:** 2026-06-10
+> **Last updated:** 2026-06-11
 
 ---
 
@@ -20,12 +20,13 @@
 | 1 | `38e79c9` | ✅ Initial commit: SkyRoads WebGL recreation with Vitest unit tests |
 | ... | ... | ... |
 | 50 | `24f4763` | ✅ feat: add editor select/edit tools and behavior color tag labels |
-| 51 | `pending` | ✅ feat: batch generate and apply ComfyUI illustrated textures and decals to levels 61-90 |
+| 51 | `ccd6dd7` | ✅ feat: batch generate and apply ComfyUI illustrated textures and decals to levels 61-90 |
+| 52 | `ac8ad50` | ✅ fix: resolve curvature bending on decal overlays and scenery blocks |
 
 ### Changes in this integration:
-- **scratch/generate_assets_50_per_level.py** — Modified to dynamically lookup generated ComfyUI illustrated textures in `assets/custom/` and copy them into level folders instead of writing stubs. Added Sobel-based normal map fallback generation and dynamic custom decals copy support.
-- **playtests/run_playtest.js** — Executed E2E screenshots verification.
-- **scratch/run_generated_playtest.js** — Added a custom playtest runner targeting Level 61 to visually capture active gameplay on the new generated biome themes.
+- **graphics.js** — Applied curvature vertex shader compilation to FBX city scenery and custom level-specific building templates. Fixed a bug in template selection during building spawn.
+- **levelLoader.js** — Subdivided plane geometry for ramps (heightSegments = 4) and road block overlays (heightSegments = depthSegments) so that they bend along with curved track segments.
+- **playtests/** — Regenerated playtest screenshot files for verification.
 
 ---
 

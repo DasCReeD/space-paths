@@ -1,6 +1,6 @@
 # SkyRoads WebGL — Project Overview
 
-> **Last updated:** 2026-06-10
+> **Last updated:** 2026-06-11
 
 ---
 
@@ -49,6 +49,7 @@
 | 16 | 20-file test suite with Vitest + jsdom | ✅ DONE |
 | 17 | ComfyUI/Trellis2 asset generation pipeline | ✅ DONE |
 | 18 | Apply biome textures and custom decals to levels 61–90 | ✅ DONE |
+| 19 | Resolve curvature bending on decal overlays and scenery blocks | ✅ DONE |
 
 ---
 
@@ -56,11 +57,11 @@
 
 | # | Milestone | Status | Priority |
 |---|-----------|--------|----------|
-| 19 | VRAM garbage collection & memory optimization | ⏳ Planned | P1 |
-| 20 | E2E browser testing with Playwright | ⏳ Planned | P1 |
-| 21 | World Builder UI (in-game level editor) | ⏳ Planned | P2 |
-| 22 | Extract shared `shipCatalog.js` from graphics.js/preview.js | ⏳ Planned | P2 |
-| 23 | Module splitting (app.js, graphics.js, levelLoader.js) | ⏳ Planned | P2 |
+| 20 | VRAM garbage collection & memory optimization | ⏳ Planned | P1 |
+| 21 | E2E browser testing with Playwright | ⏳ Planned | P1 |
+| 22 | World Builder UI (in-game level editor) | ⏳ Planned | P2 |
+| 23 | Extract shared `shipCatalog.js` from graphics.js/preview.js | ⏳ Planned | P2 |
+| 24 | Module splitting (app.js, graphics.js, levelLoader.js) | ⏳ Planned | P2 |
 
 ---
 

@@ -1249,7 +1249,7 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
           decalTex.wrapT = THREE.RepeatWrapping;
           decalTex.repeat.set(1, 1);
 
-          const decalGeom = new THREE.PlaneGeometry(TILE_WIDTH, TILE_LENGTH);
+          const decalGeom = new THREE.PlaneGeometry(TILE_WIDTH, TILE_LENGTH, 1, 4);
           
           // Rotate decal to align with the slope of the ramp
           const slopeAngle = Math.atan2(endY - startY, TILE_LENGTH);
@@ -1956,7 +1956,7 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
             decalTex.wrapT = THREE.RepeatWrapping;
             decalTex.repeat.set(spanX, spanZ);
 
-            const decalGeom = new THREE.PlaneGeometry(width, length);
+            const decalGeom = new THREE.PlaneGeometry(width, length, 1, depthSegments);
             decalGeom.rotateX(-Math.PI / 2);
 
             const decalMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
@@ -2156,7 +2156,7 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
             decalTex.wrapT = THREE.RepeatWrapping;
             decalTex.repeat.set(spanX, spanZ);
 
-            const decalGeom = new THREE.PlaneGeometry(width, length);
+            const decalGeom = new THREE.PlaneGeometry(width, length, 1, depthSegments);
             decalGeom.rotateX(-Math.PI / 2);
 
             const decalMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
