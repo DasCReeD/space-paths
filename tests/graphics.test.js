@@ -157,7 +157,7 @@ describe('GraphicsEngine', () => {
     it('should create a PerspectiveCamera with correct aspect ratio', () => {
       engine.init(container);
       expect(engine.camera).toBeInstanceOf(THREE.PerspectiveCamera);
-      expect(engine.camera.fov).toBe(65);
+      expect(engine.camera.fov).toBe(95);
       // Aspect should match container dimensions
       const expectedAspect = 800 / 600;
       expect(engine.camera.aspect).toBeCloseTo(expectedAspect, 2);
@@ -408,13 +408,13 @@ describe('GraphicsEngine', () => {
     });
 
     it('should adjust cameraHeightAdjust and apply it to the camera position in update()', () => {
-      // 1. Initial height adjust should be 0.0
+      // 1. Initial height adjust is 0.0 in test env
       expect(engine.cameraHeightAdjust).toBe(0.0);
 
-      // 2. Adjust camera height upwards by 2 steps (+0.4)
+      // 2. Adjust camera height upwards by 2 steps (+0.5 total: 0.0 + 0.25 + 0.25 = 0.5)
       engine.adjustCameraHeight(1);
       engine.adjustCameraHeight(1);
-      expect(engine.cameraHeightAdjust).toBeCloseTo(0.4, 2);
+      expect(engine.cameraHeightAdjust).toBeCloseTo(0.5, 2);
 
       // 3. Update graphics and verify camera positioning shifts upwards
       const physics = createMockPhysics({
@@ -432,18 +432,18 @@ describe('GraphicsEngine', () => {
       expect(engine.camera.position.y).toBeGreaterThan(baselineY);
     });
 
-    it('should cap cameraHeightAdjust between -1.0 and 3.0', () => {
-      // Try to decrease past minimum limit of -1.0
-      for (let i = 0; i < 10; i++) {
+    it('should cap cameraHeightAdjust between -3.0 and 8.0', () => {
+      // Try to decrease past minimum limit of -3.0
+      for (let i = 0; i < 20; i++) {
         engine.adjustCameraHeight(-1);
       }
-      expect(engine.cameraHeightAdjust).toBe(-1.0);
+      expect(engine.cameraHeightAdjust).toBe(-3.0);
 
-      // Try to increase past maximum limit of 3.0
-      for (let i = 0; i < 30; i++) {
+      // Try to increase past maximum limit of 8.0
+      for (let i = 0; i < 50; i++) {
         engine.adjustCameraHeight(1);
       }
-      expect(engine.cameraHeightAdjust).toBe(3.0);
+      expect(engine.cameraHeightAdjust).toBe(8.0);
     });
 
     it('should apply custom cockpit camera offsets from physics settings in cockpit mode', () => {
@@ -1079,10 +1079,10 @@ describe('GraphicsEngine', () => {
       expect(engine.gltfLoaded).toBe(false);
     });
 
-    it('should set scene background fallback color to 0x0a0210', () => {
+    it('should set scene background to deep-space black for the starfield backdrop', () => {
       engine.init(container);
       expect(engine.scene.background).toBeInstanceOf(THREE.Color);
-      expect(engine.scene.background.getHex()).toBe(0x0a0210);
+      expect(engine.scene.background.getHex()).toBe(0x01000a);
     });
 
     it('should update GLTF skybox position and rotation in update() when loaded', () => {
@@ -1113,9 +1113,9 @@ describe('GraphicsEngine', () => {
       
       // Since it's test env, gltf is not loaded
       expect(engine.gltfLoaded).toBe(false);
-      
-      // Procedural objects should be visible
-      expect(engine.nebulaSphere.visible).not.toBe(false);
+
+      // Flying starfield is the backdrop now; the purple nebula sphere is off by default
+      expect(engine.nebulaSphere.visible).toBe(false);
       expect(engine.starField.visible).not.toBe(false);
       expect(engine.sunMesh.visible).not.toBe(false);
     });

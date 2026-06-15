@@ -39,7 +39,13 @@ const mockGraphicsInstance = {
   starField: { rotation: { y: 0 } },
   render: vi.fn(),
   update: vi.fn(),
-  triggerExplosion: vi.fn()
+  triggerExplosion: vi.fn(),
+  updateCameraHUD: vi.fn(),
+  setCameraFOV: vi.fn(),
+  setThemeSkybox: vi.fn(),
+  setAudioData: vi.fn(),
+  cameraHeightAdjust: -0.5,
+  cameraPitchAdjust: 0.087,
 };
 
 vi.mock('../graphics.js', () => ({
@@ -96,7 +102,9 @@ vi.mock('../levelLoader.js', () => ({
     return { ...mockBuildLevelResult };
   }),
   disposeUnusedThemes: vi.fn(),
-  getActiveThemeIndex: vi.fn(() => 0)
+  getActiveThemeIndex: vi.fn(() => 0),
+  THEMES: [{ name: 'Test Theme', key: 'test' }],
+  curvatureUniforms: {},
 }));
 
 vi.mock('../audio.js', () => ({
@@ -117,6 +125,7 @@ vi.mock('../audio.js', () => ({
     setMusicVolume: vi.fn(),
     setSfxVolume: vi.fn(),
     setSoundMode: vi.fn(),
+    getAnalyserData: vi.fn().mockReturnValue(null),
     musicSequencer: { musicEnabled: true }
   }
 }));

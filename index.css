@@ -224,6 +224,17 @@ body, html {
   transform: translateY(-2px);
 }
 
+.btn-synthwave {
+  background: linear-gradient(135deg, #6b00cc 0%, #cc00aa 100%);
+  box-shadow: 0 5px 15px rgba(180, 0, 200, 0.4);
+  border: 1px solid rgba(200, 0, 255, 0.5);
+}
+
+.btn-synthwave:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(180, 0, 200, 0.65), 0 0 22px rgba(200, 0, 255, 0.4);
+}
+
 /* Level Grid Styling */
 #level-screen {
   max-width: 680px !important;
@@ -1642,6 +1653,25 @@ body, html {
 
 .btn-fullscreen-trigger:active {
   transform: scale(0.92);
+}
+
+/* FPS performance counter — top-right corner below fullscreen button */
+.fps-counter {
+  position: fixed;
+  top: 60px;
+  right: 8px;
+  color: #00ffcc;
+  font-family: 'Orbitron', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 3px 9px;
+  border: 1px solid rgba(0, 255, 204, 0.3);
+  border-radius: 4px;
+  z-index: 9999;
+  pointer-events: none;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 6px rgba(0, 255, 204, 0.6);
 }
 
 /* ══════════════════════════════════════════════════════════════

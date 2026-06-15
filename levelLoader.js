@@ -86,6 +86,9 @@ try {
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
       texture.repeat.set(1, 1);
+      if (THREE.SRGBColorSpace !== undefined) {
+        texture.colorSpace = THREE.SRGBColorSpace;
+      }
     }
   });
 } catch (e) {
@@ -445,6 +448,9 @@ function getSeamlessTexture(colorIndex) {
         // Set repeat to 1.0, 1.0 as physical scaling is now done dynamically in UV coordinates
         tex.repeat.set(1.0, 1.0);
         tex.anisotropy = 16;
+        if (THREE.SRGBColorSpace !== undefined) {
+          tex.colorSpace = THREE.SRGBColorSpace;
+        }
       }
     });
     textureCache.set(cacheKey, texture);
@@ -819,10 +825,17 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
 const customAssets = import.meta.glob('./assets/custom/*.png', { eager: true });
 const levelAssets = import.meta.glob('./assets/custom/level_*/*.png', { eager: true });
 const levelObjAssets = import.meta.glob('./assets/custom/level_*/*.obj', { query: '?url', eager: true });
+const skyboxAssets = import.meta.glob('./assets/custom/skybox/*.png', { eager: true });
 
 export function getCustomAssetUrl(filename) {
   const key = `./assets/custom/${filename}`;
   const module = customAssets[key];
+  return module ? module.default : null;
+}
+
+export function getSkyboxAssetUrl(themeKey) {
+  const key = `./assets/custom/skybox/${themeKey}_sky.png`;
+  const module = skyboxAssets[key];
   return module ? module.default : null;
 }
 
@@ -857,18 +870,31 @@ const generatedThemes = biomeConfigs.map(([name, key, defaultColorVal, defaultMa
 
   const roadDiff = getAsset('road', 'diffuse');
   const roadNorm = getAsset('road', 'normal');
+  const roadRough = getAsset('road', 'roughness');
+  const roadMetal = getAsset('road', 'metalness');
+  const roadEmit = getAsset('road', 'emissive');
+  const roadEdgeDiff = getAsset('road_edge', 'diffuse');
+  const roadEdgeNorm = getAsset('road_edge', 'normal');
+  const roadEdgeRough = getAsset('road_edge', 'roughness');
+  const roadEdgeMetal = getAsset('road_edge', 'metalness');
+  const roadEdgeEmit = getAsset('road_edge', 'emissive');
   const obsDiff = getAsset('obstacle', 'diffuse');
   const obsNorm = getAsset('obstacle', 'normal');
+  const obsRough = getAsset('obstacle', 'roughness');
+  const obsMetal = getAsset('obstacle', 'metalness');
   const tunDiff = getAsset('tunnel', 'diffuse');
   const tunNorm = getAsset('tunnel', 'normal');
+  const tunRough = getAsset('tunnel', 'roughness');
+  const tunMetal = getAsset('tunnel', 'metalness');
 
   return {
     name: name,
+    key: key,
     defaultColor: new THREE.Color(...defaultColorVal),
     behaviors: {
-      default:  { map: roadDiff, normalMap: roadNorm, color: new THREE.Color(...defaultMatColor) },
-      obstacle: { map: obsDiff, normalMap: obsNorm, color: new THREE.Color(0.4, 0.4, 0.4) },
-      tunnel:   { map: tunDiff, normalMap: tunNorm },
+      default:  { map: roadDiff, normalMap: roadNorm, roughnessMap: roadRough, metalnessMap: roadMetal, emissiveMap: roadEmit, edgeMap: roadEdgeDiff, edgeNormalMap: roadEdgeNorm, edgeRoughnessMap: roadEdgeRough, edgeMetalnessMap: roadEdgeMetal, edgeEmissiveMap: roadEdgeEmit, color: new THREE.Color(...defaultMatColor) },
+      obstacle: { map: obsDiff, normalMap: obsNorm, roughnessMap: obsRough, metalnessMap: obsMetal, color: new THREE.Color(0.4, 0.4, 0.4) },
+      tunnel:   { map: tunDiff, normalMap: tunNorm, roughnessMap: tunRough, metalnessMap: tunMetal },
       boost:    { map: roadDiff, normalMap: roadNorm, decal: getDecal('boost') || getCustomAssetUrl('decal_boost.png'), color: new THREE.Color(...defaultMatColor), emissive: new THREE.Color(0.0, 1.0, 0.0) },
       super_boost: { map: roadDiff, normalMap: roadNorm, decal: getDecal('boost') || getCustomAssetUrl('decal_boost.png'), color: new THREE.Color(...defaultMatColor), emissive: new THREE.Color(0.0, 1.0, 1.0) },
       refill:   { map: roadDiff, normalMap: roadNorm, decal: getDecal('refill') || getCustomAssetUrl('decal_refill.png'), color: new THREE.Color(...defaultMatColor), emissive: new THREE.Color(0.0, 0.5, 1.0) },
@@ -884,6 +910,7 @@ export const THEMES = [
 
   {
     name: 'Cyberpunk/Neon Grid',
+    key: 'cyberpunk',
     defaultColor: new THREE.Color(0.15, 0.15, 0.25),
     behaviors: {
       default:  { map: cpRoadDiff, normalMap: cpRoadNorm, color: new THREE.Color(0.2, 0.2, 0.35) },
@@ -899,6 +926,7 @@ export const THEMES = [
   },
   {
     name: 'Industrial Metal',
+    key: 'industrial',
     defaultColor: new THREE.Color(0.5, 0.5, 0.55),
     behaviors: {
       default:  { map: indRoadDiff, normalMap: indRoadNorm, color: new THREE.Color(0.5, 0.5, 0.5) },
@@ -914,6 +942,7 @@ export const THEMES = [
   },
   {
     name: 'Alien/Stained Glass',
+    key: 'alien',
     defaultColor: new THREE.Color(0.6, 0.2, 0.7),
     behaviors: {
       default:  { map: alienRoadDiff, normalMap: alienRoadNorm, color: new THREE.Color(0.6, 0.2, 0.7), roughness: 0.1, metalness: 0.9 },
@@ -929,6 +958,7 @@ export const THEMES = [
   },
   {
     name: 'Retro Cabin/Organics',
+    key: 'organic',
     defaultColor: new THREE.Color(0.45, 0.3, 0.15),
     behaviors: {
       default:  { map: orgRoadDiff, normalMap: orgRoadNorm, color: new THREE.Color(0.45, 0.3, 0.15) },
@@ -972,22 +1002,30 @@ export function getActiveThemeIndex(levelData) {
 
 export const loadedTextureCache = new Map();
 
-function getLoadedTexture(url) {
+function getLoadedTexture(url, isColorTexture = false) {
   if (typeof document === 'undefined') return null;
-  if (loadedTextureCache.has(url)) {
-    return loadedTextureCache.get(url);
+  // Use separate cache slots for sRGB vs linear so normal maps aren't accidentally colour-corrected
+  const cacheKey = isColorTexture ? `${url}#srgb` : url;
+  if (loadedTextureCache.has(cacheKey)) {
+    return loadedTextureCache.get(cacheKey);
   }
   try {
     const texture = textureLoader.load(url, (tex) => {
       if (tex) {
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
-        // Set repeat to 1.0, 1.0 as physical scaling is now done dynamically in UV coordinates
         tex.repeat.set(1.0, 1.0);
+        tex.minFilter = THREE.LinearMipmapLinearFilter; // trilinear — sharpest at distance
+        tex.magFilter = THREE.LinearFilter;             // bilinear — smoothest up close
+        tex.generateMipmaps = true;
         tex.anisotropy = 16;
+        if (isColorTexture && THREE.SRGBColorSpace !== undefined) {
+          tex.colorSpace = THREE.SRGBColorSpace;
+        }
+        tex.needsUpdate = true;
       }
     });
-    loadedTextureCache.set(url, texture);
+    loadedTextureCache.set(cacheKey, texture);
     return texture;
   } catch (e) {
     return null;
@@ -998,7 +1036,7 @@ function getLoadedTexture(url) {
  * Create a Three.js material for a tile based on its color and behavior,
  * supporting dynamic level skinning with 4 themes and multi-level fallbacks.
  */
-function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorIndex, levelData) {
+function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorIndex, levelData, colIndex) {
   const themeIndex = getActiveThemeIndex(levelData);
   const theme = THEMES[themeIndex];
   
@@ -1011,7 +1049,9 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   let activeMap = themeBehavior.map;
   let activeNorm = themeBehavior.normalMap;
 
-  if (isGenerated && levelIndex !== null) {
+  // For generated levels, theme textures on themeBehavior.map/normalMap are the SD1.5 assets —
+  // only fall through to per-level lookup when the theme has no texture (rare edge case).
+  if (isGenerated && levelIndex !== null && !themeBehavior.map) {
     if (behaviorKey === 'default' || behaviorKey === 'boost' || behaviorKey === 'refill' || behaviorKey === 'burning' || behaviorKey === 'sticky' || behaviorKey === 'slippery' || behaviorKey === 'slow') {
       const roadDiff = getLevelAssetUrl(levelIndex, 'road_diffuse.png');
       const roadNorm = getLevelAssetUrl(levelIndex, 'road_normal.png');
@@ -1036,11 +1076,30 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   
   const isTestEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') || (typeof window !== 'undefined' && window.__vitest_worker__);
   
+  let roughnessTex = null;
+  let metalnessTex = null;
+  let emissiveMapTex = null;
+
+  // Edge columns (0,1 = left rail, 5,6 = right rail) use road_edge textures for generated themes
+  const isEdgeCol = colIndex !== undefined && (colIndex <= 1 || colIndex >= 5);
+  const isRoadBehavior = !behaviorKey || behaviorKey === 'default';
+  if (isEdgeCol && isRoadBehavior && isGenerated && themeBehavior.edgeMap) {
+    activeMap = themeBehavior.edgeMap;
+    if (themeBehavior.edgeNormalMap) activeNorm = themeBehavior.edgeNormalMap;
+  }
+
   if (!isTestEnv && activeMap) {
-    texture = getLoadedTexture(activeMap);
+    texture = getLoadedTexture(activeMap, true);
     if (activeNorm) {
-      normalTexture = getLoadedTexture(activeNorm);
+      normalTexture = getLoadedTexture(activeNorm, false);
     }
+    // PBR maps — for edge columns use edge-specific maps, otherwise use behavior maps
+    const roughSrc = (isEdgeCol && isRoadBehavior && isGenerated) ? themeBehavior.edgeRoughnessMap : themeBehavior.roughnessMap;
+    const metalSrc = (isEdgeCol && isRoadBehavior && isGenerated) ? themeBehavior.edgeMetalnessMap : themeBehavior.metalnessMap;
+    const emitSrc  = (isEdgeCol && isRoadBehavior && isGenerated) ? themeBehavior.edgeEmissiveMap  : themeBehavior.emissiveMap;
+    if (roughSrc) roughnessTex   = getLoadedTexture(roughSrc, false);
+    if (metalSrc) metalnessTex   = getLoadedTexture(metalSrc, false);
+    if (emitSrc)  emissiveMapTex = getLoadedTexture(emitSrc,  true);
   }
 
 
@@ -1068,9 +1127,11 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   
   const matParams = {
     color: matColor,
-    roughness: themeBehavior.roughness !== undefined ? themeBehavior.roughness : (behavior === 'slippery' ? 0.05 : 0.65),
-    metalness: themeBehavior.metalness !== undefined ? themeBehavior.metalness : (behavior === 'slippery' ? 0.95 : 0.2),
+    roughness: roughnessTex ? 1.0 : (themeBehavior.roughness !== undefined ? themeBehavior.roughness : (behavior === 'slippery' ? 0.05 : 0.65)),
+    metalness: metalnessTex ? 1.0 : (themeBehavior.metalness !== undefined ? themeBehavior.metalness : (behavior === 'slippery' ? 0.95 : 0.2)),
   };
+  if (roughnessTex) matParams.roughnessMap = roughnessTex;
+  if (metalnessTex) matParams.metalnessMap = metalnessTex;
   
   // Obstacles render both sides to prevent hollow/invisible appearance from back-facing angles
   if (behaviorKey === 'obstacle') {
@@ -1093,10 +1154,15 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
 
   if (isGlowing) {
     matParams.emissive = matEmissive;
-    matParams.emissiveIntensity = 3.0; // Keep exactly 3.0 to perfectly match existing test expectations
+    matParams.emissiveIntensity = 0.9;
+  } else if (emissiveMapTex) {
+    // PBR emissive channel drives neon trim glow (WipEout-style edge lighting)
+    matParams.emissiveMap = emissiveMapTex;
+    matParams.emissive = new THREE.Color(1, 1, 1);
+    matParams.emissiveIntensity = 0.5;
   } else {
-    matParams.emissive = matColor.clone().multiplyScalar(0.2);
-    matParams.emissiveIntensity = 0.35;
+    matParams.emissive = matColor.clone().multiplyScalar(0.1);
+    matParams.emissiveIntensity = 0.12;
   }
 
   // Use MeshStandardMaterial for high fidelity support, MeshPhongMaterial as raw color fallback if needed
@@ -1126,7 +1192,12 @@ function loadAndApplyObstacleModel(mesh, levelIndex, r, c, width, height, length
     const scaleZ = size.z > 0 ? (Math.min(length, width) / size.z) : 1;
     
     obj.scale.set(scaleX, scaleY, scaleZ);
-    
+
+    // Deterministic pseudo-random Y rotation per-obstacle for visual variety
+    const rotSteps = 4; // 0°, 90°, 180°, 270°
+    const rotIndex = (r * 17 + c * 11) % rotSteps;
+    obj.rotation.y = (rotIndex * Math.PI) / 2;
+
     // Center the model relative to its bounding box center
     const center = new THREE.Vector3();
     bbox.getCenter(center);
@@ -1193,7 +1264,7 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
     const behaviorColor = activeColor > 0 ? (activeColor + 1) : 0;
     const { behavior, emissiveGlow, glowColor } = classifyTileBehavior(behaviorColor);
     const baseColor = getPaletteColor(palette, behaviorColor);
-    const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData);
+    const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData, c);
 
     const yBottom = Math.min(startY, endY, 0.0) - 2.0;
     const geom = createRampGeometry(TILE_WIDTH, TILE_LENGTH, yBottom, startY, endY);
@@ -1243,7 +1314,7 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
       }
 
       if (activeDecal) {
-        const decalTex = getLoadedTexture(activeDecal);
+        const decalTex = getLoadedTexture(activeDecal, true);
         if (decalTex) {
           decalTex.wrapS = THREE.RepeatWrapping;
           decalTex.wrapT = THREE.RepeatWrapping;
@@ -1259,7 +1330,7 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
             map: decalTex,
             transparent: true,
             emissive: themeBehavior.emissive || new THREE.Color(1, 1, 1),
-            emissiveIntensity: 3.0,
+            emissiveIntensity: 0.8,
             depthWrite: false,
           }));
 
@@ -1319,7 +1390,7 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
 
   const { behavior, emissiveGlow, glowColor } = classifyTileBehavior(behaviorColor);
   const baseColor = getPaletteColor(palette, behaviorColor);
-  const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior || (isObstacle ? 'obstacle' : null), behaviorColor, levelData);
+  const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior || (isObstacle ? 'obstacle' : null), behaviorColor, levelData, c);
 
   // Main block mesh — 2 depth segments for smooth curvature bending
   const geom = new THREE.BoxGeometry(TILE_WIDTH, height, TILE_LENGTH, 1, 1, 2);
@@ -1369,6 +1440,57 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
       },
       behavior,
     });
+
+    // Decal overlay for flat special tiles
+    if (!isObstacle) {
+      const themeIndex = getActiveThemeIndex(levelData);
+      const theme = THEMES[themeIndex];
+      const themeBehavior = theme.behaviors[behavior] || theme.behaviors.default;
+
+      let activeDecal = themeBehavior.decal;
+      if (isGenerated && levelIndex !== null) {
+        const localDecal = getLevelAssetUrl(levelIndex, `decal_${behavior}.png`);
+        if (localDecal) activeDecal = localDecal;
+      }
+
+      if (activeDecal) {
+        const decalTex = getLoadedTexture(activeDecal, true);
+        if (decalTex) {
+          decalTex.wrapS = THREE.RepeatWrapping;
+          decalTex.wrapT = THREE.RepeatWrapping;
+          decalTex.repeat.set(1, 1);
+
+          const decalGeom = new THREE.PlaneGeometry(TILE_WIDTH, TILE_LENGTH);
+          decalGeom.rotateX(-Math.PI / 2);
+
+          const decalMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
+            map: decalTex,
+            transparent: true,
+            emissive: themeBehavior.emissive || new THREE.Color(1, 1, 1),
+            emissiveIntensity: 0.8,
+            depthWrite: false,
+          }));
+
+          if (behavior === 'boost' || behavior === 'super_boost' || behavior === 'sticky' || behavior === 'burning' || behavior === 'refill') {
+            decalMat.userData = {
+              isAnimated: true,
+              speed: (behavior === 'boost' || behavior === 'super_boost') ? -2.5 : (behavior === 'sticky' ? 1.0 : 0.0),
+              pulse: behavior === 'burning' || behavior === 'refill',
+              baseIntensity: 3.0
+            };
+            if (scene.userData) {
+              if (!scene.userData.animatedDecals) scene.userData.animatedDecals = [];
+              scene.userData.animatedDecals.push(decalMat);
+            }
+          }
+
+          const decalMesh = new THREE.Mesh(decalGeom, decalMat);
+          decalMesh.position.set(xPos, yPos + halfH + 0.015, mesh.position.z);
+          scene.add(decalMesh);
+          roadMeshes.push(decalMesh);
+        }
+      }
+    }
   }
 
   // Tunnel archway handled at the row level in buildLevel / buildLevelAsync
@@ -1425,8 +1547,8 @@ function buildMergedTunnel(group, r, palette, scene, collidables, roadMeshes, ro
   let tunnelMap = null;
   let tunnelNormalMap = null;
   if (!isTestEnv) {
-    if (themeTunnel.map) tunnelMap = getLoadedTexture(themeTunnel.map);
-    if (themeTunnel.normalMap) tunnelNormalMap = getLoadedTexture(themeTunnel.normalMap);
+    if (themeTunnel.map) tunnelMap = getLoadedTexture(themeTunnel.map, true);
+    if (themeTunnel.normalMap) tunnelNormalMap = getLoadedTexture(themeTunnel.normalMap, false);
   }
 
   const tunnelMaterial = applyCurvatureShader(new THREE.MeshStandardMaterial({
@@ -1559,9 +1681,9 @@ function buildMergedTunnel(group, r, palette, scene, collidables, roadMeshes, ro
   const ribGeom = new THREE.CylinderGeometry(ribRadius, ribRadius, ribWidth, radialSegments, 1, openEnded, thetaStart, thetaLength);
   
   const ribMaterial = applyCurvatureShader(new THREE.MeshStandardMaterial({
-    color: 0x00ffcc, // Cyan-turquoise neon highlight
+    color: 0x00ffcc,
     emissive: 0x00ffcc,
-    emissiveIntensity: 2.2,
+    emissiveIntensity: 0.8,
     transparent: false,
     side: THREE.DoubleSide
   }));
@@ -1662,7 +1784,7 @@ function buildFinishLine(trackLength, scene, roadMeshes, zOffset = 0, isInfinite
   const finishMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
     color: 0x00ffff,
     emissive: 0x00ffff,
-    emissiveIntensity: 2.0,
+    emissiveIntensity: 0.7,
   }));
 
   // Ground strip
@@ -1724,9 +1846,9 @@ function buildFinishLine(trackLength, scene, roadMeshes, zOffset = 0, isInfinite
     const ribWidth = 0.35;
     const ribGeom = new THREE.CylinderGeometry(tubeRadius + 0.04, tubeRadius + 0.04, ribWidth, radialSegments, 1, openEnded, 0, Math.PI * 2);
     const ribMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
-      color: 0xff00ff, // Hot pink neon support rings!
+      color: 0xff00ff,
       emissive: 0xff00ff,
-      emissiveIntensity: 2.2,
+      emissiveIntensity: 0.8,
       transparent: false,
       side: THREE.DoubleSide
     }));
@@ -1841,6 +1963,16 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
     pass1Rows.push(newRow);
   }
 
+  // Road columns are split into three zones for edge-texture purposes:
+  // left rail (0-1), center lane (2-4), right rail (5-6).
+  // Merging is constrained to stay within the same zone so each zone can use its own texture.
+  function sameRoadZone(a, b) {
+    if (a <= 1 && b <= 1) return true;
+    if (a >= 2 && a <= 4 && b >= 2 && b <= 4) return true;
+    if (a >= 5 && b >= 5) return true;
+    return false;
+  }
+
   // Greedy 2D meshing loop for Pass 1
   for (let r = 0; r < numRows; r++) {
     for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
@@ -1855,9 +1987,9 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
         r_end++;
       }
 
-      // Find horizontal (X) expansion of matching columns for the Z-interval [r, r_end]
+      // Find horizontal (X) expansion — stop at zone boundaries to keep edge/center textures separate
       let c_end = c;
-      while (c_end + 1 < ROAD_WIDTH_LANES) {
+      while (c_end + 1 < ROAD_WIDTH_LANES && sameRoadZone(c, c_end + 1)) {
         let match = true;
         for (let check_r = r; check_r <= r_end; check_r++) {
           if (rendered1[check_r][c_end + 1] || !areTilesIdentical(tile, pass1Rows[check_r][c_end + 1])) {
@@ -1901,8 +2033,8 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
       const behaviorColor = activeColor > 0 ? (activeColor + 1) : 0;
       const { behavior, emissiveGlow, glowColor } = classifyTileBehavior(behaviorColor);
       const baseColor = getPaletteColor(palette, behaviorColor);
-      
-      const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData);
+
+      const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData, c);
 
       // Use standard BoxGeometry with Z-only subdivisions for smooth curvature bending.
       // RoundedBoxGeometry collapses intermediate vertices to corners (Math.sign snap),
@@ -1920,6 +2052,38 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
       mesh.castShadow = isObstacle; // false
       scene.add(mesh);
       roadMeshes.push(mesh);
+
+      // WipEout-style rail glow trim on edge columns — thin strip along the inner road edge
+      const levelIndexForGlow = levelData && typeof levelData.level_index === 'number' ? levelData.level_index : (typeof window !== 'undefined' ? window.currentLevelIndex : null);
+      const isGeneratedForGlow = (levelData && levelData.isGenerated) || (levelIndexForGlow >= 61) || (typeof window !== 'undefined' && window.currentGamePack === 'generated');
+      const isEdgeColBlock = c <= 1 || c >= 5;
+      if (isEdgeColBlock && isGeneratedForGlow && !isTestEnv) {
+        const railThemeIndex = getActiveThemeIndex(levelData);
+        const railTheme = THEMES[railThemeIndex];
+        const railColor = railTheme ? railTheme.defaultColor.clone() : new THREE.Color(0.0, 0.8, 1.0);
+        const stripW = 0.14;  // thin trim — not full column width
+        const stripH = 0.10;
+        const stripGeom = new THREE.BoxGeometry(stripW, stripH, length);
+        const stripMat = new THREE.MeshStandardMaterial({
+          color: railColor,
+          emissive: railColor,
+          emissiveIntensity: 0.8,  // scaled by distance falloff in graphics.js
+          roughness: 0.05,
+          metalness: 1.0,
+        });
+        // Position at the inner edge of the edge block (between edge zone and centre lane)
+        const innerEdgeX = (c <= 1)
+          ? xPos + width / 2 - stripW / 2   // left block → trim on its right edge
+          : xPos - width / 2 + stripW / 2;  // right block → trim on its left edge
+        const stripMesh = new THREE.Mesh(stripGeom, stripMat);
+        stripMesh.userData.isRailStrip = true;
+        stripMesh.userData.railBaseIntensity = 0.8;
+        stripMesh.position.set(innerEdgeX, yPos + height / 2 + stripH / 2 - 0.01, zPos_center);
+        if (!scene.userData.railStrips) scene.userData.railStrips = [];
+        scene.userData.railStrips.push(stripMesh);
+        scene.add(stripMesh);
+        roadMeshes.push(stripMesh);
+      }
 
       // Special behavior zone (single combined zone)
       if (behavior) {
@@ -1950,7 +2114,7 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
         }
 
         if (activeDecal) {
-          const decalTex = getLoadedTexture(activeDecal);
+          const decalTex = getLoadedTexture(activeDecal, true);
           if (decalTex) {
             decalTex.wrapS = THREE.RepeatWrapping;
             decalTex.wrapT = THREE.RepeatWrapping;
@@ -2150,7 +2314,7 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
         }
 
         if (activeDecal) {
-          const decalTex = getLoadedTexture(activeDecal);
+          const decalTex = getLoadedTexture(activeDecal, true);
           if (decalTex) {
             decalTex.wrapS = THREE.RepeatWrapping;
             decalTex.wrapT = THREE.RepeatWrapping;

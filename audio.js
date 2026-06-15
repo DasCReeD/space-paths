@@ -9,6 +9,33 @@ import {
   MuzaxPlayerJS
 } from './oplSynth.js';
 
+// Synthwave MP3 tracks — Vite resolves these to content-hashed URLs at build time.
+// Fallback direct paths are used when the glob finds nothing (e.g. dev server started
+// before the tracks directory was created — a hard refresh fixes it, but this is safer).
+const _synthwaveModules = import.meta.glob('./assets/Music/tracks/*.mp3', { query: '?url', eager: true });
+const SYNTHWAVE_TRACK_URLS = Object.keys(_synthwaveModules).sort().map(k => _synthwaveModules[k].default);
+
+const _TRACK_FILENAMES = [
+  '01_pulse_reconnected', '02_wake_sequence', '03_lost_frequency', '04_echo_of_earth',
+  '05_drift_into_memory', '06_signal_from_the_past', '07_cyber_tears', '08_reclaim_the_moment',
+  '09_cold_starlight', '10_archive_chamber', '11_the_halcyon_dream', '12_the_human_algorithm',
+];
+
+const SYNTHWAVE_TRACK_NAMES = [
+  'Pulse Reconnected',
+  'Wake Sequence',
+  'Lost Frequency',
+  'Echo of Earth',
+  'Drift Into Memory',
+  'Signal From the Past',
+  'Cyber Tears',
+  'Reclaim the Moment',
+  'Cold Starlight',
+  'Archive Chamber',
+  'The Halcyon Dream',
+  'The Human Algorithm',
+];
+
 const isTestEnv = (typeof globalThis !== 'undefined' && (globalThis.vi || globalThis.vitest || globalThis.describe)) || (typeof process !== 'undefined' && process.env.NODE_ENV === 'test');
 
 let muzaxAsset = null;
@@ -457,6 +484,131 @@ class ClassicMusicSequencer {
   }
 }
 
+// ── Synthwave MP3 Sequencer ───────────────────────────────────────────────────
+// Plays pre-split synthwave tracks through Web Audio, exposing an AnalyserNode
+// so graphics.js can drive music-reactive visuals each frame.
+class SynthwaveSequencer {
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.isPlaying = false;
+    this.musicEnabled = true;
+    this.volume = 0.7;
+    this.currentTrackIndex = -1;
+    this._lastLevelIndex = 0;
+
+    // Audio graph: HTMLAudioElement → MediaElementSource → Analyser → Gain → destination
+    this.gainNode = ctx.createGain();
+    this.gainNode.gain.value = this.volume;
+
+    this.analyserNode = ctx.createAnalyser();
+    this.analyserNode.fftSize = 2048;
+    this.analyserNode.smoothingTimeConstant = 0.8;
+    this.analyserNode.connect(this.gainNode);
+    this.gainNode.connect(ctx.destination);
+
+    this.audioElement = new Audio();
+    this.audioElement.crossOrigin = 'anonymous';
+    this.audioElement.loop = true;
+    this.mediaSource = ctx.createMediaElementSource(this.audioElement);
+    this.mediaSource.connect(this.analyserNode);
+
+    // Pre-allocated typed arrays — reused every frame
+    const binCount = this.analyserNode.frequencyBinCount;
+    this.frequencyData = new Uint8Array(binCount);
+    this.timeData     = new Uint8Array(binCount);
+
+    // Beat detection — rolling energy buffer (~1 s at 60 fps)
+    this._beatBuffer    = new Float32Array(60);
+    this._beatBufferIdx = 0;
+    this._beatDecay     = 0;
+  }
+
+  // levelIndex 0-based; maps 90 levels across 12 tracks sequentially.
+  // forcedTrack (0-based) overrides the level→track mapping (used by audio-generated levels).
+  start(levelIndex = this._lastLevelIndex, forcedTrack = null) {
+    if (!this.musicEnabled) return;
+    this._lastLevelIndex = levelIndex;
+    const trackIdx = (forcedTrack != null) ? Math.min(11, Math.max(0, forcedTrack)) : Math.min(11, Math.floor(levelIndex * 12 / 90));
+    // Prefer Vite-hashed URL; fall back to direct path when glob was empty at startup
+    const url = SYNTHWAVE_TRACK_URLS[trackIdx]
+      || `./assets/Music/tracks/${_TRACK_FILENAMES[trackIdx]}.mp3`;
+    if (trackIdx === this.currentTrackIndex && this.isPlaying) return;
+    this.currentTrackIndex = trackIdx;
+    this.audioElement.src = url;
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+    this.audioElement.play().catch(e => console.warn('Synthwave autoplay blocked:', e));
+    this.isPlaying = true;
+  }
+
+  stop() {
+    this.audioElement.pause();
+    this.isPlaying = false;
+  }
+
+  setVolume(val) {
+    this.volume = val;
+    this.gainNode.gain.setTargetAtTime(val, this.ctx.currentTime, 0.05);
+  }
+
+  nextTrack() {
+    const next = (this.currentTrackIndex + 1) % _TRACK_FILENAMES.length;
+    const url = SYNTHWAVE_TRACK_URLS[next]
+      || `./assets/Music/tracks/${_TRACK_FILENAMES[next]}.mp3`;
+    this.currentTrackIndex = next;
+    this.audioElement.src = url;
+    this.audioElement.play().catch(() => {});
+    this.isPlaying = true;
+    return SYNTHWAVE_TRACK_NAMES[next] || null;
+  }
+
+  // Returns audio analysis state for graphics — call once per frame while playing
+  getAnalysisState() {
+    if (!this.isPlaying) return null;
+
+    this.analyserNode.getByteFrequencyData(this.frequencyData);
+    this.analyserNode.getByteTimeDomainData(this.timeData);
+
+    const bins    = this.frequencyData.length;
+    const bassEnd = Math.floor(bins * 0.06);  // ~0–250 Hz
+    const midEnd  = Math.floor(bins * 0.18);  // ~250–4 kHz
+
+    let bass = 0, mid = 0, treble = 0;
+    for (let i = 0;        i < bassEnd; i++) bass   += this.frequencyData[i];
+    for (let i = bassEnd;  i < midEnd;  i++) mid    += this.frequencyData[i];
+    for (let i = midEnd;   i < bins;    i++) treble += this.frequencyData[i];
+
+    bass   /= bassEnd         * 255;
+    mid    /= (midEnd - bassEnd) * 255;
+    treble /= (bins - midEnd) * 255;
+
+    // Beat detection — spike in bass energy vs rolling average
+    const energy = bass * bass;
+    this._beatBuffer[this._beatBufferIdx] = energy;
+    this._beatBufferIdx = (this._beatBufferIdx + 1) % this._beatBuffer.length;
+    let avg = 0;
+    for (let i = 0; i < this._beatBuffer.length; i++) avg += this._beatBuffer[i];
+    avg /= this._beatBuffer.length;
+
+    const isBeat = energy > avg * 1.4 && bass > 0.08;
+    if (isBeat) this._beatDecay = 1.0;
+    else        this._beatDecay = Math.max(0, this._beatDecay - 0.06);
+
+    return {
+      frequencyData: this.frequencyData,
+      timeData:      this.timeData,
+      bassEnergy:    bass,
+      midEnergy:     mid,
+      trebleEnergy:  treble,
+      beatEnergy:    this._beatDecay,
+      isBeat,
+    };
+  }
+
+  getCurrentTrackName() {
+    return SYNTHWAVE_TRACK_NAMES[this.currentTrackIndex] ?? 'Synthwave';
+  }
+}
+
 class AudioSynthesizer {
   constructor() {
     this.ctx = null;
@@ -465,10 +617,11 @@ class AudioSynthesizer {
     this.isEngineRunning = false;
     this.retroSequencer = null;
     this.classicSequencer = null;
+    this.synthwaveSequencer = null;
     this.sfxVolume = 0.8; // default SFX volume (0.0 to 1.0)
     this.musicVolume = 0.7; // default Music volume (0.0 to 1.0)
     this.sfxGainNode = null;
-    this.soundMode = 'synth'; // 'synth' or 'classic'
+    this.soundMode = 'synth'; // 'synth' | 'classic' | 'synthwave'
     this.isTestEnv = (typeof globalThis !== 'undefined' && (globalThis.vi || globalThis.vitest || globalThis.describe)) || (typeof process !== 'undefined' && process.env.NODE_ENV === 'test');
   }
 
@@ -477,9 +630,8 @@ class AudioSynthesizer {
   }
 
   getActiveSequencer() {
-    if (this.soundMode === 'classic' && songsData) {
-      return this.classicSequencer;
-    }
+    if (this.soundMode === 'synthwave') return this.synthwaveSequencer;
+    if (this.soundMode === 'classic' && songsData) return this.classicSequencer;
     return this.retroSequencer;
   }
 
@@ -493,12 +645,9 @@ class AudioSynthesizer {
 
   setMusicVolume(val) {
     this.musicVolume = val;
-    if (this.retroSequencer) {
-      this.retroSequencer.setVolume(val);
-    }
-    if (this.classicSequencer) {
-      this.classicSequencer.setVolume(val);
-    }
+    if (this.retroSequencer)    this.retroSequencer.setVolume(val);
+    if (this.classicSequencer)  this.classicSequencer.setVolume(val);
+    if (this.synthwaveSequencer) this.synthwaveSequencer.setVolume(val);
   }
 
   setSfxVolume(val) {
@@ -511,17 +660,13 @@ class AudioSynthesizer {
   }
 
   setSoundMode(mode) {
-    const wasPlaying = this.musicSequencer && this.musicSequencer.isPlaying;
-    if (wasPlaying) {
-      this.stopMusic();
-    }
+    // Stop the currently active sequencer (it may or may not be playing)
+    this.stopMusic();
     this.soundMode = mode;
-    if (this.musicSequencer) {
-      this.musicSequencer.soundMode = mode;
-    }
-    if (wasPlaying) {
-      this.startMusic();
-    }
+    // Propagate soundMode to the retro sequencer (affects wave type)
+    if (this.retroSequencer) this.retroSequencer.soundMode = mode;
+    // Always try to start the new mode — each sequencer guards itself with musicEnabled
+    this.startMusic();
   }
 
   init() {
@@ -547,6 +692,11 @@ class AudioSynthesizer {
 
       this.classicSequencer = new ClassicMusicSequencer(this.ctx);
       this.classicSequencer.setVolume(this.musicVolume); // Apply initial volume settings
+
+      if (!this.isTestEnv) {
+        this.synthwaveSequencer = new SynthwaveSequencer(this.ctx);
+        this.synthwaveSequencer.setVolume(this.musicVolume);
+      }
 
       // Initialize classic buffers if assets are loaded
       this.initClassicBuffers();
@@ -1291,7 +1441,7 @@ class AudioSynthesizer {
     }
   }
 
-  startMusic(isGameplay) {
+  startMusic(isGameplay, levelIndex = 0, forcedTrack = null) {
     this.init();
     // Reset manual classic track overrides on a fresh level start
     if (isGameplay !== undefined && this.classicSequencer) {
@@ -1299,7 +1449,9 @@ class AudioSynthesizer {
     }
     const active = this.getActiveSequencer();
     if (active) {
-      active.start(isGameplay);
+      // Synthwave sequencer uses levelIndex (+ optional forced track); others use isGameplay
+      if (active === this.synthwaveSequencer) active.start(levelIndex, forcedTrack);
+      else                                    active.start(isGameplay);
     }
   }
 
@@ -1312,19 +1464,13 @@ class AudioSynthesizer {
 
   setMusicEnabled(enabled) {
     this.init();
-    if (this.retroSequencer) {
-      this.retroSequencer.musicEnabled = enabled;
-    }
-    if (this.classicSequencer) {
-      this.classicSequencer.musicEnabled = enabled;
-    }
+    if (this.retroSequencer)    this.retroSequencer.musicEnabled = enabled;
+    if (this.classicSequencer)  this.classicSequencer.musicEnabled = enabled;
+    if (this.synthwaveSequencer) this.synthwaveSequencer.musicEnabled = enabled;
     const active = this.getActiveSequencer();
     if (active) {
-      if (!enabled) {
-        active.stop();
-      } else {
-        active.start();
-      }
+      if (!enabled) active.stop();
+      else          active.start();
     }
   }
 
@@ -1338,6 +1484,9 @@ class AudioSynthesizer {
   }
 
   getCurrentTrackName() {
+    if (this.soundMode === 'synthwave') {
+      return this.synthwaveSequencer ? this.synthwaveSequencer.getCurrentTrackName() : 'Synthwave';
+    }
     if (this.soundMode === 'synth') {
       if (this.retroSequencer) {
         const idx = this.retroSequencer.currentTrackIndex;
@@ -1368,6 +1517,23 @@ class AudioSynthesizer {
       }
       return "Classic Theme";
     }
+  }
+
+  // Returns live FFT analysis data when synthwave mode is active; null otherwise.
+  // Called by the graphics engine every frame to drive music-reactive visuals.
+  getAnalyserData() {
+    if (this.soundMode === 'synthwave' && this.synthwaveSequencer) {
+      return this.synthwaveSequencer.getAnalysisState();
+    }
+    return null;
+  }
+
+  getAudioContext() {
+    return this.ctx;
+  }
+
+  getSynthwaveAnalyserNode() {
+    return this.synthwaveSequencer ? this.synthwaveSequencer.analyserNode : null;
   }
 }
 

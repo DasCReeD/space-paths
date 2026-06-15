@@ -25,6 +25,7 @@ A modern WebGL recreation of the classic 1993 DOS game **SkyRoads** by BlueMoon 
 ### 🎨 Visual System
 - 14 visual themes: Core, Cyberpunk, Industrial, Organic, Alien, Furnace, Glitch, Pulse, Ridge, Shallows, Spire, Thrill, Tundra, Void
 - Procedural skybox with stars, nebulae, and planets
+- **Whitecap-style 3D music visualizer:** FFT-driven receding spectrum grid (64×48) with 4 cycling presets (Spectrum, Mirror, Matrix, Rainbow); bass-reactive bloom and emissive tile pulse
 - 3D cockpit HUD with real-time gauges and LCD readouts
 - Corner minimap path scanner
 - Particle effects (exhaust, explosions, sparks)
@@ -34,6 +35,8 @@ A modern WebGL recreation of the classic 1993 DOS game **SkyRoads** by BlueMoon 
 - OPL2 FM synthesizer emulating the Yamaha YM3812 chip
 - Original 1993 SkyRoads sound assets (MUZAX.LZS, SFX.SND)
 - Retro 8-bit chiptune music mode
+- **12 procedural synthwave tracks** via SynthwaveSequencer (chord progressions, arpeggios, bass lines)
+- Real-time FFT analysis feeds the music visualizer and bloom system
 - Independent music and SFX volume controls
 - Procedural engine hum reactive to speed
 

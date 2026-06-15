@@ -316,7 +316,7 @@ describe('buildLevel', () => {
       const levelData = createBaseLevelData({ rows: [row] });
       const result = buildLevel(levelData, scene);
       const mesh = result.roadMeshes[0];
-      expect(mesh.material.emissiveIntensity).toBe(3.0);
+      expect(mesh.material.emissiveIntensity).toBe(0.9);
     });
 
     it('should set correct emissive glow colors for each behavior', () => {

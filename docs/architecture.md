@@ -1,6 +1,6 @@
 # SkyRoads WebGL — Architecture
 
-> **Last updated:** 2026-06-04
+> **Last updated:** 2026-06-15
 > Definitive architectural reference for the SkyRoads WebGL project.
 
 ---
@@ -156,6 +156,7 @@ flowchart TD
 flowchart LR
     subgraph Scene["Three.js Scene"]
         SKY["Procedural Skybox<br/>(stars, nebulae, planets)"]
+        VIZ["Whitecap Visualizer Grid<br/>(64×48 LineSegments + Points,<br/>4 preset modes, recedes into distance)"]
         ROAD["Road Segments<br/>(themed textures + decals)"]
         OBS["Obstacles<br/>(themed materials)"]
         TUN["Tunnels<br/>(archway models + interior)"]
@@ -165,10 +166,16 @@ flowchart LR
         MINI["Minimap<br/>(canvas-based path scanner)"]
     end
     
-    Scene --> RENDERER["WebGLRenderer"]
-    RENDERER --> CANVAS["HTMLCanvasElement"]
-    CANVAS --> DOM["DOM HUD Overlay<br/>(speed/fuel/oxygen bars)"]
+    Scene --> COMPOSER["EffectComposer"]
+    COMPOSER --> BLOOM["UnrealBloomPass<br/>(strength/threshold driven by bass+beat energy)"]
+    BLOOM --> OUTPUT["OutputPass → HTMLCanvasElement"]
+    OUTPUT --> DOM["DOM HUD Overlay<br/>(speed/fuel/oxygen bars)"]
 ```
+
+### Visualizer Render Order
+- **Whitecap grid** (`visualizerGrid`, `visualizerDots`): `depthWrite:false`, `AdditiveBlending` — renders in the transparent pass; base Y is set 9 units above road (`physics.position.y + 9`) so it projects into the sky/horizon area above the camera and does not overlap road pixels.
+- **Road tiles / obstacles**: opaque, render first and write depth. Road always paints over grid even where Z values match.
+- **Bloom**: `strength = 0.35 + bassEnergy × 0.5 + beatEnergy × 0.6`; `threshold = max(0.55, 0.88 − bassEnergy × 0.25)`.
 
 ---
 
@@ -179,11 +186,13 @@ flowchart TD
     subgraph AudioSynthesizer
         CTX["AudioContext"] --> MUSIC_GAIN["Music GainNode"]
         CTX --> SFX_GAIN["SFX GainNode"]
+        CTX --> ANALYSER["AnalyserNode<br/>(FFT size 2048, smoothing 0.8)"]
     end
     
     subgraph "Music Sources"
         OPL["OPL2 FM Synth<br/>(15 channels, ADSR, 8 waveforms)"]
         RETRO["RetroMusicSequencer<br/>(8-bit chiptune patterns)"]
+        SYNTH["SynthwaveSequencer<br/>(12 procedural tracks, chord progressions)"]
     end
     
     subgraph "SFX Sources"
@@ -196,7 +205,9 @@ flowchart TD
     
     OPL --> MUSIC_GAIN
     RETRO --> MUSIC_GAIN
-    MUSIC_GAIN --> DEST["AudioContext.destination"]
+    SYNTH --> MUSIC_GAIN
+    MUSIC_GAIN --> ANALYSER
+    ANALYSER --> DEST["AudioContext.destination"]
     
     ENGINE --> SFX_GAIN
     BOOST --> SFX_GAIN
@@ -207,6 +218,8 @@ flowchart TD
     
     DOS["MUZAX.LZS<br/>(LZS compressed)"] -->|"decompressStream()"| OPL
     SND["SFX.SND"] -->|"parseSfx()"| SFX_GAIN
+    
+    ANALYSER -->|"getAnalyserData()"| GFX["GraphicsEngine.setAudioData()<br/>→ Whitecap visualizer + bloom"]
 ```
 
 ---
@@ -384,3 +397,4 @@ File: [.github/workflows/deploy.yml](file:///c:/dev/Sky%20roads/.github/workflow
 10. **Automated visual playtest pipeline** — Puppeteer screenshots for regression
 11. **Standalone CLI scripts** for asset generation — decoupled from game runtime
 12. **Static physics solver** validates procedurally generated levels are completable
+13. **Real-time audio visualizer** — Whitecap-style 3D receding spectrum grid driven by Web Audio AnalyserNode FFT data; 4 cycling presets (Spectrum, Mirror, Matrix, Rainbow); bloom strength and emissive tile pulsing driven by bass/beat energy

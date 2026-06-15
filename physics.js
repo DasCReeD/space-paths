@@ -93,10 +93,12 @@ export class PhysicsEngine {
     this.dragSteer = 28.0; // quick stabilization when keys released
     
     this.jumpImpulse = 10.5;
-    
+
     // Engine states
     this.onGround = true;
     this.groundHeight = 0;
+    this.canDoubleJump = false; // granted on first jump, consumed mid-air, reset on landing
+    this.doubleJumpEnabled = false; // toggled from settings
     this.isDead = false;
     this.deathReason = '';
     this.difficulty = 'hard';
@@ -174,6 +176,7 @@ export class PhysicsEngine {
     this.velocity.set(0, 0, 0);
     this.onGround = true;
     this.groundHeight = 0;
+    this.canDoubleJump = false;
     this.isDead = false;
     this.deathReason = '';
     this.isTransitioning = false;
@@ -385,13 +388,22 @@ export class PhysicsEngine {
     // coyoteTimeBuffer setting defines the vertical near-ground distance threshold for jumping
     const isNearGround = this.velocity.y < 0 && this.groundHeight > -5.0 && (this.position.y - this.groundHeight) <= (this.settings.coyoteTimeBuffer !== undefined ? this.settings.coyoteTimeBuffer : 0.25);
     const wantsToJump = keyboard.jump || (keyboard.spacePressed !== undefined ? keyboard.spacePressed : false);
+    const jumpFactor = (this.settings.jumpFactor !== undefined ? this.settings.jumpFactor : 1.0) * (this.activeEffects.highJump ? 1.7 : 1.0);
     if (wantsToJump && (this.onGround || this.isRebounding || isNearGround)) {
-      this.velocity.y = this.jumpImpulse * (this.settings.jumpFactor !== undefined ? this.settings.jumpFactor : 1.0) * (this.activeEffects.highJump ? 1.7 : 1.0);
+      // Normal jump from ground / coyote time / rebound
+      this.velocity.y = this.jumpImpulse * jumpFactor;
       this.onGround = false;
       this.isRebounding = false;
       this.justRebounded = false;
+      this.canDoubleJump = true; // grant one mid-air jump
       this.triggerJumpAudio = true;
-      keyboard.resetJump(); // Avoid double jumping immediately
+      keyboard.resetJump();
+    } else if (this.doubleJumpEnabled && keyboard.jumpPulse && !this.onGround && !this.isRebounding && !isNearGround && this.canDoubleJump) {
+      // Double jump — jumpPulse is true only on the keydown frame, so holding space never auto-fires this
+      this.velocity.y = this.jumpImpulse * jumpFactor * 0.85;
+      this.canDoubleJump = false;
+      this.triggerJumpAudio = true;
+      keyboard.resetJump();
     }
 
     if (!this.onGround) {
@@ -574,6 +586,7 @@ export class PhysicsEngine {
               this.position.y = rampHeight;
               this.groundHeight = rampHeight;
               this.onGround = true;
+              this.canDoubleJump = false;
               this.velocity.y = 0;
               shipBox = this.getShipBox();
             }
@@ -720,6 +733,7 @@ export class PhysicsEngine {
             this.triggerLandingReboundAudio = true;
           } else {
             this.onGround = true;
+            this.canDoubleJump = false;
             this.velocity.y = 0;
             this.justRebounded = false;
           }
@@ -756,6 +770,7 @@ export class PhysicsEngine {
             this.triggerLandingReboundAudio = true;
           } else {
             this.onGround = true;
+            this.canDoubleJump = false;
             this.velocity.y = 0.0;
             this.justRebounded = false;
           }
@@ -917,6 +932,7 @@ export class KeyboardController {
     this.left = false;
     this.right = false;
     this.jump = false;
+    this.jumpPulse = false; // edge-triggered: true only on keydown, cleared by resetJump()
     this.rewind = false;
     this.spacePressed = false;
     this.steerAmount = 0; // Proportional steer amount (-1 to 1) like an analogue stick
@@ -1029,6 +1045,7 @@ export class KeyboardController {
     if (code === 'ArrowLeft' || code === 'KeyA') this.keys.left = isDown;
     if (code === 'ArrowRight' || code === 'KeyD') this.keys.right = isDown;
     if (code === 'Space') {
+      if (isDown && !this.keys.jump) this.jumpPulse = true; // rising edge
       this.keys.jump = isDown;
     }
     if (code === 'KeyR') {
@@ -1040,6 +1057,7 @@ export class KeyboardController {
   handleMouseDown(e) {
     if (!this.mouseControlsEnabled) return;
     if (e.button === 0) { // Left Click -> Jump
+      if (!this.mouse.jump) this.jumpPulse = true;
       this.mouse.jump = true;
     } else if (e.button === 2) { // Right Click -> Accelerate
       this.mouse.forward = true;
@@ -1087,6 +1105,7 @@ export class KeyboardController {
 
   setTouchState(action, active) {
     if (this.touch[action] !== undefined) {
+      if (action === 'jump' && active && !this.touch.jump) this.jumpPulse = true;
       this.touch[action] = active;
     }
     this.updateCombinedState();
@@ -1250,7 +1269,9 @@ export class KeyboardController {
     // Read action states
     this.gamepad.forward = this._isGamepadPressed(gp, this.gamepadMappings.forward);
     this.gamepad.backward = this._isGamepadPressed(gp, this.gamepadMappings.backward);
-    this.gamepad.jump = this._isGamepadPressed(gp, this.gamepadMappings.jump);
+    const gpJumpNow = this._isGamepadPressed(gp, this.gamepadMappings.jump);
+    if (gpJumpNow && !this.gamepad.jump) this.jumpPulse = true; // rising edge
+    this.gamepad.jump = gpJumpNow;
     this.gamepad.rewind = this._isGamepadPressed(gp, this.gamepadMappings.rewind);
 
     const steerLeftVal = this._isGamepadPressed(gp, this.gamepadMappings.left);
@@ -1329,6 +1350,7 @@ export class KeyboardController {
 
   resetJump() {
     this.jump = false;
+    this.jumpPulse = false;
   }
 }
 

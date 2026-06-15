@@ -59,6 +59,9 @@
     </svg>
   </button>
 
+  <!-- FPS counter — always visible, top-right below fullscreen button -->
+  <div id="fps-counter" class="fps-counter">-- FPS</div>
+
   <!-- Centered Cockpit Dashboard HUD overlay shown during gameplay -->
   <div id="hud" class="hud-container hidden">
     <!-- Legacy compatibility elements for unit tests -->
@@ -209,8 +212,8 @@
             <!-- FOV Slider (Next-Gen UI integration) -->
             <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px; pointer-events: auto; width: 100%;">
               <span style="font-size: 0.44rem; color: #8c8f99;">FOV</span>
-              <input type="range" id="hud-cam-fov-slider" min="45" max="110" value="65" style="width: 70px; height: 4px; background: #2f3035; border: none; cursor: pointer; outline: none; flex-grow: 1;" title="Adjust Field of View">
-              <span id="hud-cam-fov-val" style="font-size: 0.44rem; font-weight:900; color: #ff00ff; min-width: 22px; text-align: right;">65°</span>
+              <input type="range" id="hud-cam-fov-slider" min="45" max="120" value="95" style="width: 70px; height: 4px; background: #2f3035; border: none; cursor: pointer; outline: none; flex-grow: 1;" title="Adjust Field of View">
+              <span id="hud-cam-fov-val" style="font-size: 0.44rem; font-weight:900; color: #ff00ff; min-width: 22px; text-align: right;">95°</span>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 2px;">
               <span>CURVE: <span id="hud-track-curve" style="font-weight:900; color: #00ff88;">GENTLE</span></span>
@@ -611,6 +614,11 @@
               <input type="range" id="input-coyoteTimeBuffer" min="0.0" max="0.8" step="0.05" value="0.25">
             </div>
 
+            <div class="slider-row" style="justify-content: space-between; align-items: center;">
+              <span class="slider-label">DOUBLE JUMP</span>
+              <button id="btn-toggle-double-jump" class="btn btn-info btn-glow" style="min-width:160px;">DOUBLE JUMP: OFF</button>
+            </div>
+
           </div>
         </div>
 
@@ -654,9 +662,41 @@
           </div>
         </div>
 
-        <!-- SECTION 5: DAMAGE SYSTEM -->
+        <!-- SECTION 5: CHASE CAMERA & VIEW -->
         <div class="calibrator-group-card">
-          <div class="group-header">5. DAMAGE & WEIGHT TUNING</div>
+          <div class="group-header">5. CHASE CAMERA & VIEW</div>
+          <div class="sliders-list">
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">CAMERA HEIGHT</span>
+                <span id="val-cameraHeight" class="slider-value">-0.50</span>
+              </div>
+              <input type="range" id="input-cameraHeight" min="-3.0" max="8.0" step="0.25" value="-0.5">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">FORWARD PITCH</span>
+                <span id="val-cameraPitchDeg" class="slider-value">5°</span>
+              </div>
+              <input type="range" id="input-cameraPitchDeg" min="-60" max="60" step="1" value="5">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">FIELD OF VIEW</span>
+                <span id="val-cameraFOV" class="slider-value">95°</span>
+              </div>
+              <input type="range" id="input-cameraFOV" min="45" max="120" step="1" value="95">
+            </div>
+
+          </div>
+        </div>
+
+        <!-- SECTION 6: DAMAGE SYSTEM -->
+        <div class="calibrator-group-card">
+          <div class="group-header">6. DAMAGE & WEIGHT TUNING</div>
           <div class="sliders-list">
 
             <div class="slider-row">

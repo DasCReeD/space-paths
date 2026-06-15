@@ -1,0 +1,10 @@
+{
+  "skyroads_camera_mode": "cockpit",
+  "skyroads_mouse_play": "false",
+  "skyroads_lane_snap": "true",
+  "skyroads_double_jump": "false",
+  "skyroads_boat_throttle": "false",
+  "skyroads_stick_throttle": "false",
+  "skyroads_difficulty": "normal",
+  "skyroads_physics_active_preset": "snappy"
+}

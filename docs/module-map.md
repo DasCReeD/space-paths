@@ -1,6 +1,6 @@
 # SkyRoads WebGL — Module Map
 
-> **Last updated:** 2026-06-06
+> **Last updated:** 2026-06-15
 > Authoritative code map for all source modules, their exports, dependencies, and relationships.
 
 ---
@@ -36,6 +36,8 @@
 27. [Theme System](#theme-system)
 28. [Asset Structure](#asset-structure)
 29. [Data Files](#data-files)
+30. [analyze_audio.js — Audio Feature Extractor](#analyze_audiojs)
+31. [generate_audio_level.js — Audio Level Generator](#generate_audio_leveljs)
 
 ---
 
@@ -66,6 +68,8 @@
 | [levels.js](../levels.js) | 2 KB | ~78 | Level pack fetch + cache loader |
 | [vitest.setup.js](../vitest.setup.js) | 4 KB | ~103 | Test harness — asset stub generation + Python runners |
 | [vite.config.js](../vite.config.js) | <1 KB | ~20 | Build + test configuration |
+| [analyze_audio.js](../tools/analyze_audio.js) | 17 KB | ~480 | Extracts BPM, dynamic range, and sections from MP3s to JSON |
+| [generate_audio_level.js](../tools/generate_audio_level.js) | 18 KB | ~345 | Procedurally generates levels from analyzed audio JSON |
 
 ---
 
@@ -124,6 +128,9 @@
 | `GraphicsEngine.cycleCamera()` | method | Cycles through camera modes |
 | `GraphicsEngine.setZoom(level)` | method | Near / Med / Far |
 | `GraphicsEngine.createExplosionParticles()` | method | Death explosion effect |
+| `GraphicsEngine.setAudioData(data)` | method | Feeds FFT analyser data each frame; `null` disables visualizer |
+| `GraphicsEngine.createWhitecapGrid()` | method | Builds 64×48 receding spectrum grid (LineSegments + Points) |
+| `GraphicsEngine.updateWhitecapGrid(physics, dt)` | method | Pushes FFT snapshot every 50 ms, updates vertex positions/colors per preset |
 | `GraphicsEngine.dispose()` | method | Cleanup GPU resources |
 | `SHIP_MODELS` | const object | Model catalog: fighter, hauler, scout, dreadnought, cruiser, racer |
 | `SHIP_SKINS` | const object | Skin texture catalog: default, freelancer, lordshadow, psionic, shadee, thor |
@@ -131,8 +138,20 @@
 | `BASE_TEXTURES` | const object | Named texture presets (hull, road, skins) |
 | `LEGACY_MODEL_ALIASES` | const object | Legacy model name → current model mappings |
 
+**Key internal fields (visualizer):**
+
+| Field | Description |
+|-------|-------------|
+| `visualizerGrid` | `THREE.LineSegments` — the Whitecap receding grid |
+| `visualizerDots` | `THREE.Points` — accent dot layer |
+| `_fftHistory` | Ring buffer of `ROWS` × `Float32Array(COLS)` FFT snapshots |
+| `_gridPreset` | Active preset index (0=Spectrum, 1=Mirror, 2=Matrix, 3=Rainbow) |
+| `_gridPresetTimer` | Accumulates dt; cycles preset every 35 s |
+| `bloomPass` | `UnrealBloomPass` — strength/threshold driven by bass+beat energy |
+| `emissiveMeshCache` | All tile meshes with `emissiveIntensity > 0.05`; pulsed each frame |
+
 **Dependencies:**
-- `three` (+ OBJLoader, FBXLoader, GLTFLoader)
+- `three` (+ OBJLoader, FBXLoader, GLTFLoader, UnrealBloomPass, EffectComposer, RenderPass, OutputPass)
 - [physics.js](../physics.js) → `SHIP_WIDTH`, `SHIP_HEIGHT`, `SHIP_LENGTH`
 - [cockpitConsole.js](../cockpitConsole.js) → `CockpitConsole3D`
 - [levelLoader.js](../levelLoader.js) → `getLevelObjUrl`, `getLevelAssetUrl`, `getActiveThemeIndex`, `THEMES`
@@ -150,7 +169,9 @@
 |--------|------|-------------|
 | `PhysicsEngine` | class | Main physics simulation |
 | `PhysicsEngine.constructor(levelData, config)` | method | Initializes from calibration config |
-| `PhysicsEngine.update(dt, inputs)` | method | Throttle, steering, gravity, jump, collision, tile effects |
+| `PhysicsEngine.update(dt, inputs)` | method | Throttle, steering, gravity, jump, collision, tile effects (handles double jump) |
+| `PhysicsEngine.doubleJumpEnabled` | property | Boolean toggle for mid-air double jumping |
+| `PhysicsEngine.canDoubleJump` | property | State tracking if double jump is currently allowed |
 | `PhysicsEngine.getState()` | method | Returns position, velocity, speed, grounded, oxygen, fuel, progress |
 | `PhysicsEngine.checkCollisions()` | method | AABB collision with ramp height interpolation |
 | `PhysicsEngine.applyTileEffects()` | method | Boost, sticky, slippery, explosive, refill |
@@ -158,6 +179,7 @@
 | `PhysicsEngine.reset()` | method | Reset to start position |
 | `KeyboardController` | class | Keyboard + gamepad input handler |
 | `KeyboardController.getInputs()` | method | Returns `{ forward, backward, left, right, jump }` |
+| `KeyboardController.jumpPulse` | property | Rising-edge keyboard signal for space/jump press triggers |
 | `KeyboardController.setGamepadMapping(m)` | method | Configure gamepad button bindings |
 | `KeyboardController.pollGamepad()` | method | Reads Gamepad API state |
 | `CLASS_PRESETS` | const object | VGA Classic, Modern Snappy, Lunar Float, Custom Slot |
@@ -189,6 +211,7 @@
 | `getCustomAssetUrl(filename)` | function | Resolves custom asset path via import.meta.glob |
 | `getLevelAssetUrl(levelIndex, filename)` | function | Resolves per-level custom asset URL |
 | `getLevelObjUrl(levelIndex, filename)` | function | Resolves per-level OBJ model URL |
+| `sameRoadZone(a, b)` | function (internal) | Constrains column merging to rails (0-1), center (2-4), or right (5-6) |
 | `THEMES` | const array | 4 theme definitions with all texture URLs |
 | `textureCache` | Map | Primary loaded texture cache |
 | `loadedTextureCache` | Map | Secondary theme texture cache |
@@ -196,6 +219,11 @@
 | `TILE_LENGTH` | const `4.0` | Road tile length (redeclared) |
 | `ROAD_WIDTH_LANES` | const `7` | Lane count |
 | `TOTAL_ROAD_WIDTH` | const `14.0` | Total road width |
+
+**Key features added recently:**
+- **Animated Decal Materials:** Added to `scene.userData.animatedDecals` with custom offset speeds (boost/sticky) and pulse modifiers (burning/refill).
+- **Side Rail Strips:** Edge columns on generated levels spawn glowing side rails (`stripMesh.userData.isRailStrip = true`) that fade/pulse based on player distance.
+- **Neon Emissive Optimization:** Emissive intensity on rib highlight cylinders and finish lines scaled to `0.8` to prevent bloom blowouts.
 
 **Dependencies:**
 - `three` (+ `RoundedBoxGeometry` addon)
@@ -243,6 +271,10 @@
 | `.setSfxVolume(v)` | method | SFX volume (0–1) |
 | `.setSoundMode(mode)` | method | Toggle 'synth' vs 'opl' modes |
 | `.nextTrack()` | method | Cycle available music tracks |
+| `.getAnalyserData()` | method | Returns `{ frequencyData, bassEnergy, midEnergy, highEnergy, beatEnergy }` from the AnalyserNode; returns `null` if audio inactive |
+
+**Internal classes:**
+- `SynthwaveSequencer` — 12 procedural synthwave tracks with chord progressions and arpeggios; guarded by `isTestEnv` so it does not instantiate during Vitest runs.
 
 **Dependencies:**
 - [oplSynth.js](../oplSynth.js) → `muzaxUrl`, `sfxUrl`, `introUrl`, `parseMuzax`, `parseSfx`, `OplSynthJS`, `MuzaxPlayerJS`
@@ -728,3 +760,35 @@ assets/
 | [xmas_levels.json](../data/xmas_levels.json) | 2.2 MB | 31 Christmas Special levels |
 | [generated_levels.json](../data/generated_levels.json) | 3.2 MB | 30 procedurally generated levels (index 61–90) |
 | [level_patterns.json](../data/level_patterns.json) | 52 KB | Extracted statistical patterns from original levels |
+
+---
+
+## analyze_audio.js
+
+**Purpose:** Extracts musical features from MP3 soundtracks to provide structural metadata for level generation. Uses Web Audio API decoding in a Node context to analyze:
+- **BPM (Beats Per Minute):** Transient peak intervals for sync.
+- **Section Energy Levels:** Categorizes sections into low, mid, and high energy.
+- **Melody Prominence & Dynamic Range:** Identifies peak sections.
+- Saves analysis files to `tools/audio_analysis/{track_index}_{track_name}.json`.
+
+**Stats:** ~480 lines · 17 KB
+
+**Dependencies:**
+- `web-audio-api` (npm) or Node Web Audio bindings.
+- Node.js filesystem modules.
+
+---
+
+## generate_audio_level.js
+
+**Purpose:** Translates musical features from a JSON analysis file into a solvable 3D level. Operates on the following mapping rules:
+- **BPM → Gravity Mapping:** Calculates a gravity factor such that a full-height jump's airtime is exactly equal to a whole number of musical beats.
+- **Sections → Biomes & Mechanics:** Maps verse sections to ground slalom/jump paths, mid-energy sections to obstacle-dodging lanes, and high-energy chorus sections to elevated tunnel channels.
+- **Height Tiers:** Vertically lifts track sections based on energy level (lowered verse, elevated chorus) connected by smooth ramps.
+- **Verification:** Automatically passes the generated level structure through `worldBuilder.js`'s DFS path solver to guarantee completability before saving.
+
+**Stats:** ~345 lines · 18 KB
+
+**Dependencies:**
+- [worldBuilder.js](../worldBuilder.js) → `solveLevel`, `assembleFromSegments`
+- Node.js filesystem modules.

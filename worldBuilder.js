@@ -3,6 +3,7 @@
 // ==========================================================================
 import fs from 'fs';
 import path from 'path';
+import { pathToFileURL } from 'url';
 
 function createRng(seed) {
   let a = seed;
@@ -1818,6 +1819,7 @@ const WORLD_GENERATORS = [
   generatePulseLevel,   // World 9: 88-90
 ];
 
+function bakeAllWorlds() {
 const generatedLevels = [];
 
 console.log("Starting Build-Time Seeded Level Generation & Solver...");
@@ -1870,3 +1872,15 @@ if (!fs.existsSync(outDir)) {
 }
 fs.writeFileSync(OUT_PATH, JSON.stringify(generatedLevels, null, 2), 'utf8');
 console.log(`\nSuccessfully baked ${generatedLevels.length} playable levels and saved to ${OUT_PATH}!`);
+}
+
+// Only bake when run directly (`node worldBuilder.js`); allow importing the
+// solver + tile helpers (e.g. the audio-level generator reuses solveLevel).
+const isMain = import.meta.url === pathToFileURL(process.argv[1] || '').href;
+if (isMain) bakeAllWorlds();
+
+export {
+  solveLevel, getSegmentLibrary, assembleFromSegments,
+  createRoadRow, createRampTile, createTile, createObstacle, createTunnelTile,
+  createEmptyRow, createFullRow, clamp, normalizeRows
+};

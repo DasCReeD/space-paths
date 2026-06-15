@@ -34,3 +34,6 @@ top100-large.zip
 # Playwright Test Results
 test-results/
 
+# Large MP3 playlists (exceeding GitHub limit of 100MB)
+assets/Music/*.mp3
+

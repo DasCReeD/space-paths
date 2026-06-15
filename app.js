@@ -1,9 +1,12 @@
 // SkyRoads WebGL - Core Game Orchestrator & State Controller
+// Imported first: seeds localStorage from the committed defaults file before any
+// engine constructor reads settings, so durable preferences survive rebuilds.
+import './userSettings.js';
 import * as THREE from 'three';
 import { loadLevelPack, getCachedPack, registerCustomPack } from './levels.js';
 import { GraphicsEngine } from './graphics.js';
 import { PhysicsEngine, KeyboardController, SHIP_LENGTH } from './physics.js';
-import { buildLevelAsync, disposeUnusedThemes, getActiveThemeIndex, curvatureUniforms } from './levelLoader.js';
+import { buildLevelAsync, disposeUnusedThemes, getActiveThemeIndex, THEMES, curvatureUniforms } from './levelLoader.js';
 import { gameAudio } from './audio.js';
 import { ShipPreviewEngine } from './preview.js';
 import { TouchControlManager } from './touchControls.js';
@@ -82,7 +85,8 @@ class GameManager {
       "BURN FLANK", "VOLCANIC CHASM", "SUPERNOVA RIFT",
       "COSMIC RAILS", "FOG SHORE", "NEBULA PATH",
       "VOID ISLANDS", "QUANTUM LEAP", "MONOLITH REACH",
-      "STICKY SLOW", "PULSE GATE", "CHRONO SPEED"
+      "STICKY SLOW", "PULSE GATE", "CHRONO SPEED",
+      "♪ THE HUMAN ALGORITHM"
     ];
     this.wasSteeringLastFrame = false;
 
@@ -189,6 +193,10 @@ class GameManager {
     this.physics.boatThrottleEnabled = savedBoatThrottle;
     this.updateBoatThrottleToggleBtn();
 
+    // Load persisted double jump setting from localStorage
+    this.physics.doubleJumpEnabled = localStorage.getItem('skyroads_double_jump') === 'true';
+    this.updateDoubleJumpToggleBtn();
+
     // Load persisted difficulty setting from localStorage
     const savedDifficulty = localStorage.getItem('skyroads_difficulty') || 'normal';
     this.physics.difficulty = savedDifficulty;
@@ -248,10 +256,10 @@ class GameManager {
     // Initialize tunable physics preset profiles by loading from localStorage or falling back to defaults
     this.physicsPresets = { vga: {}, snappy: {}, lunar: {}, custom: {} };
     const basePresets = {
-      vga: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 25, dragSteer: 18, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0 },
-      snappy: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.25, gravityFactor: 1.45, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0 },
-      lunar: { maxSpeedNormal: 24, maxSpeedBoost: 50, accelForward: 12, decelBrakes: 25, dragZ: 2, maxSteerSpeed: 8, steerAccel: 15, dragSteer: 8, laneSnapStrength: 4.0, easyCollisionBounceVel: 8, easyCollisionBounceDist: 1.5, bounceFactor: 1.5, jumpImpulse: 7.5, jumpFactor: 1.0, gravityFactor: 0.45, fallGravityMultiplier: 1.15, variableJumpDampening: 0.90, coyoteTimeBuffer: 0.40, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0 },
-      custom: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0 }
+      vga: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 25, dragSteer: 18, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 },
+      snappy: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.25, gravityFactor: 1.45, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 },
+      lunar: { maxSpeedNormal: 24, maxSpeedBoost: 50, accelForward: 12, decelBrakes: 25, dragZ: 2, maxSteerSpeed: 8, steerAccel: 15, dragSteer: 8, laneSnapStrength: 4.0, easyCollisionBounceVel: 8, easyCollisionBounceDist: 1.5, bounceFactor: 1.5, jumpImpulse: 7.5, jumpFactor: 1.0, gravityFactor: 0.45, fallGravityMultiplier: 1.15, variableJumpDampening: 0.90, coyoteTimeBuffer: 0.40, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 },
+      custom: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 }
     };
 
     for (const key in basePresets) {
@@ -285,6 +293,14 @@ class GameManager {
         } catch (e) {
           // Graceful catch for JSDOM sandbox
         }
+      }
+      // Auto-migration: inject camera defaults for existing saved presets that lack them
+      let camMigrated = false;
+      if (this.physicsPresets[key].cameraHeight === undefined)    { this.physicsPresets[key].cameraHeight    = -0.5; camMigrated = true; }
+      if (this.physicsPresets[key].cameraPitchDeg === undefined)  { this.physicsPresets[key].cameraPitchDeg  = 5;   camMigrated = true; }
+      if (this.physicsPresets[key].cameraFOV === undefined)       { this.physicsPresets[key].cameraFOV       = 95;  camMigrated = true; }
+      if (camMigrated) {
+        try { localStorage.setItem(`skyroads_physics_preset_${key}`, JSON.stringify(this.physicsPresets[key])); } catch (e) {}
       }
     }
 
@@ -446,6 +462,21 @@ class GameManager {
     });
   }
 
+  updateDoubleJumpToggleBtn() {
+    const isEnabled = this.physics.doubleJumpEnabled;
+    const btn = document.getElementById('btn-toggle-double-jump');
+    if (!btn) return;
+    if (isEnabled) {
+      btn.innerText = 'DOUBLE JUMP: ON';
+      btn.classList.remove('btn-info');
+      btn.classList.add('btn-primary');
+    } else {
+      btn.innerText = 'DOUBLE JUMP: OFF';
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-info');
+    }
+  }
+
   updateBottomHudToggleBtn() {
     const isEnabled = this.bottomHudEnabled;
     const btn = document.getElementById('btn-settings-bottom-hud');
@@ -559,14 +590,16 @@ class GameManager {
     const btn = document.getElementById('btn-settings-sound-mode');
     if (!btn) return;
     const mode = gameAudio.soundMode || 'synth';
+    btn.classList.remove('btn-info', 'btn-secondary', 'btn-synthwave');
     if (mode === 'synth') {
       btn.innerText = 'SOUND: SYNTH';
-      btn.classList.remove('btn-secondary');
       btn.classList.add('btn-info');
-    } else {
+    } else if (mode === 'classic') {
       btn.innerText = 'SOUND: CLASSIC';
-      btn.classList.remove('btn-info');
       btn.classList.add('btn-secondary');
+    } else {
+      btn.innerText = 'SOUND: SYNTHWAVE';
+      btn.classList.add('btn-synthwave');
     }
   }
 
@@ -615,6 +648,22 @@ class GameManager {
     for (const param in config) {
       this.physics.settings[param] = config[param];
     }
+    this._applyCameraSettings(config);
+  }
+
+  _applyCameraSettings(config) {
+    if (!this.graphics) return;
+    if (config.cameraHeight !== undefined) {
+      this.graphics.cameraHeightAdjust = config.cameraHeight;
+      this.graphics.updateCameraHUD();
+    }
+    if (config.cameraPitchDeg !== undefined) {
+      this.graphics.cameraPitchAdjust = config.cameraPitchDeg * (Math.PI / 180);
+      this.graphics.updateCameraHUD();
+    }
+    if (config.cameraFOV !== undefined) {
+      this.graphics.setCameraFOV(config.cameraFOV);
+    }
   }
 
   togglePhysicsCalibrator(forceState) {
@@ -659,6 +708,10 @@ class GameManager {
       if (readout) {
         if (param === 'showCockpitBezel') {
           readout.innerText = Number(config[param]) === 1 ? 'ON' : 'OFF';
+        } else if (param === 'cameraPitchDeg' || param === 'cameraFOV') {
+          readout.innerText = `${Math.round(Number(config[param]))}°`;
+        } else if (param === 'cameraHeight') {
+          readout.innerText = Number(config[param]).toFixed(2);
         } else {
           readout.innerText = Number(config[param]).toFixed(param.startsWith('cockpitOffset') || param === 'coyoteTimeBuffer' || param === 'variableJumpDampening' || param === 'gravityFactor' || param === 'fallGravityMultiplier' || param === 'bounceFactor' || param === 'dragZ' ? 2 : 1);
         }
@@ -1008,6 +1061,16 @@ class GameManager {
       });
     }
 
+    const btnToggleDoubleJump = document.getElementById('btn-toggle-double-jump');
+    if (btnToggleDoubleJump) {
+      btnToggleDoubleJump.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.physics.doubleJumpEnabled = !this.physics.doubleJumpEnabled;
+        localStorage.setItem('skyroads_double_jump', this.physics.doubleJumpEnabled);
+        this.updateDoubleJumpToggleBtn();
+      });
+    }
+
     const btnOpenPicker = document.getElementById('btn-open-picker');
     if (btnOpenPicker) {
       btnOpenPicker.addEventListener('click', () => {
@@ -1251,7 +1314,7 @@ class GameManager {
       btnSettingsSoundMode.addEventListener('click', () => {
         gameAudio.playClick();
         const currentMode = gameAudio.soundMode || 'synth';
-        const nextMode = currentMode === 'synth' ? 'classic' : 'synth';
+        const nextMode = currentMode === 'synth' ? 'classic' : currentMode === 'classic' ? 'synthwave' : 'synth';
         gameAudio.setSoundMode(nextMode);
         localStorage.setItem('skyroads_sound_mode', nextMode);
         this.updateSoundModeToggleBtn();
@@ -1446,7 +1509,7 @@ class GameManager {
           if (this.preSettingsState === 'playing') {
             this.gameState = 'playing';
             gameAudio.startEngine();
-            gameAudio.startMusic(true);
+            gameAudio.startMusic(true, this.currentLevelIndex);
           } else {
             this.gameState = this.preSettingsState;
           }
@@ -1539,7 +1602,14 @@ class GameManager {
         // Save the active physics preset values as the new baseline default override
         const currentVals = this.physicsPresets[this.activePreset];
         localStorage.setItem(`skyroads_physics_preset_baseline_${this.activePreset}`, JSON.stringify(currentVals));
-        
+
+        // Also persist the current camera view + active preset so the whole
+        // "default" (view + calibration + controls) is durable, not just sliders
+        if (this.graphics && this.graphics.cameraMode) {
+          localStorage.setItem('skyroads_camera_mode', this.graphics.cameraMode);
+        }
+        localStorage.setItem('skyroads_physics_active_preset', this.activePreset);
+
         // Show success visual indicator alert inside HUD
         this.showCalibratorAlert();
         
@@ -1570,16 +1640,27 @@ class GameManager {
         // Auto-save active configuration to localStorage
         localStorage.setItem(`skyroads_physics_preset_${this.activePreset}`, JSON.stringify(this.physicsPresets[this.activePreset]));
         
+        // Apply camera-specific params directly to graphics
+        if (param === 'cameraHeight' || param === 'cameraPitchDeg' || param === 'cameraFOV') {
+          this._applyCameraSettings(this.physicsPresets[this.activePreset]);
+        }
+
         // Update active numerical readout text
         const readout = document.getElementById(`val-${param}`);
         if (readout) {
           if (param === 'showCockpitBezel') {
             readout.innerText = value === 1 ? 'ON' : 'OFF';
+          } else if (param === 'cameraPitchDeg') {
+            readout.innerText = `${Math.round(value)}°`;
+          } else if (param === 'cameraFOV') {
+            readout.innerText = `${Math.round(value)}°`;
+          } else if (param === 'cameraHeight') {
+            readout.innerText = value.toFixed(2);
           } else {
             readout.innerText = value.toFixed(param.startsWith('cockpitOffset') || param === 'coyoteTimeBuffer' || param === 'variableJumpDampening' || param === 'gravityFactor' || param === 'fallGravityMultiplier' || param === 'bounceFactor' || param === 'dragZ' ? 2 : 1);
           }
         }
-        
+
         this.showCalibratorAlert();
       });
 
@@ -1938,7 +2019,14 @@ class GameManager {
         });
       });
     }
-    disposeUnusedThemes(getActiveThemeIndex(this.currentLevelData));
+    const activeThemeIdx = getActiveThemeIndex(this.currentLevelData);
+    disposeUnusedThemes(activeThemeIdx);
+
+    // Switch skybox to match theme — texture loads async so it won't block the level build
+    const activeTheme = THEMES[activeThemeIdx];
+    if (activeTheme && activeTheme.key && this.graphics.setThemeSkybox) {
+      this.graphics.setThemeSkybox(activeTheme.key);
+    }
 
     // 2. Build track geometry asynchronously with progress updates
     const onProgress = (percent) => {
@@ -2008,7 +2096,14 @@ class GameManager {
 
     // 6. Trigger Continuous Sound Hum
     gameAudio.startEngine();
-    gameAudio.startMusic(true);
+    // Audio-generated levels carry the synthwave track they were built from — force
+    // synthwave mode + that exact track so the level plays in sync with its music.
+    const forcedTrack = (this.currentLevelData && this.currentLevelData.synthwaveTrack !== undefined)
+      ? this.currentLevelData.synthwaveTrack : null;
+    if (forcedTrack !== null && gameAudio.soundMode !== 'synthwave') {
+      gameAudio.setSoundMode('synthwave');
+    }
+    gameAudio.startMusic(true, this.currentLevelIndex, forcedTrack);
 
     this.lastTime = performance.now();
 
@@ -2044,7 +2139,7 @@ class GameManager {
     this.gameState = 'playing';
     this.lastTime = performance.now();
     gameAudio.startEngine();
-    gameAudio.startMusic(true);
+    gameAudio.startMusic(true, this.currentLevelIndex);
     
     const btnInGamePause = document.getElementById('btn-in-game-pause');
     if (btnInGamePause) btnInGamePause.classList.remove('hidden');
@@ -2058,7 +2153,7 @@ class GameManager {
       if (this.preSettingsState === 'playing') {
         this.gameState = 'playing';
         gameAudio.startEngine();
-        gameAudio.startMusic(true);
+        gameAudio.startMusic(true, this.currentLevelIndex);
         this.showScreen('');
       } else {
         this.gameState = this.preSettingsState;
@@ -2192,6 +2287,20 @@ class GameManager {
   animate(timestamp) {
     const dt = (timestamp - this.lastTime) / 1000.0;
     this.lastTime = timestamp;
+
+    // FPS counter — accumulate frames over 0.5s windows to avoid jitter
+    this._fpsFrameCount = (this._fpsFrameCount || 0) + 1;
+    this._fpsTimeAccum = (this._fpsTimeAccum || 0) + dt;
+    if (this._fpsTimeAccum >= 0.5) {
+      const fps = Math.round(this._fpsFrameCount / this._fpsTimeAccum);
+      const fpsEl = document.getElementById('fps-counter');
+      if (fpsEl) {
+        fpsEl.textContent = `${fps} FPS`;
+        fpsEl.style.color = fps >= 55 ? '#00ffcc' : fps >= 30 ? '#ffaa00' : '#ff4444';
+      }
+      this._fpsFrameCount = 0;
+      this._fpsTimeAccum = 0;
+    }
 
     if (this.keyboard && typeof this.keyboard.updateCombinedState === 'function') {
       this.keyboard.updateCombinedState();
@@ -2334,6 +2443,8 @@ class GameManager {
           }
 
           // Update camera to follow rewinding ship
+          const _rewindAudio = gameAudio.getAnalyserData();
+          this.graphics.setAudioData(_rewindAudio || null);
           this.graphics.update(this.physics, dt);
 
           // Force budget-depleted stop
@@ -2396,7 +2507,9 @@ class GameManager {
         this.updateHUD();
       }
 
-      // 3. Chase Camera and thrusters
+      // 3. Chase Camera and thrusters (feed live FFT data when synthwave mode is active)
+      const _audioData = gameAudio.getAnalyserData();
+      this.graphics.setAudioData(_audioData || null);
       this.graphics.update(this.physics, dt);
 
       // 4. Modulate Engine frequency

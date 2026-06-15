@@ -12,15 +12,26 @@ describe('Baked Generated Levels Structure & Integrity Tests', () => {
 
   const levels = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
-  it('should contain exactly 30 levels', () => {
+  it('should contain 31 levels (30 baked + 1 audio-generated)', () => {
     expect(levels).toBeInstanceOf(Array);
-    expect(levels).toHaveLength(30);
+    expect(levels).toHaveLength(31);
   });
 
-  it('should have levels index sequentially from 61 to 90', () => {
+  it('should have levels indexed sequentially from 61 onward', () => {
     levels.forEach((lvl, idx) => {
       expect(lvl.level_index).toBe(61 + idx);
     });
+  });
+
+  it('should have a valid audio-generated level as the last entry', () => {
+    const audio = levels[levels.length - 1];
+    expect(audio.level_index).toBe(91);
+    // built from a synthwave track → carries a 0-based track index in range
+    expect(typeof audio.synthwaveTrack).toBe('number');
+    expect(audio.synthwaveTrack).toBeGreaterThanOrEqual(0);
+    expect(audio.synthwaveTrack).toBeLessThanOrEqual(11);
+    // audio levels are long (full song at ~8 rows/sec)
+    expect(audio.rows.length).toBeGreaterThan(500);
   });
 
   it('should have valid level properties', () => {
