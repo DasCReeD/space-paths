@@ -1077,12 +1077,16 @@ export class GraphicsEngine {
     const ROWS   = this._gridRows;
     const WIDTH  = this._gridWidth;
     const DEPTH  = 240;
-    const MAX_H  = 12;   // reduced bar height
+    const MAX_H  = 6;    // lower peak height so the grid hugs the track instead of the mid-screen
     const START  = 45;   // start further ahead so near road tiles have no grid in front
+    const Y_DROP = 3;    // sink the baseline below track-surface level, closer to the bottom of frame
     const freq   = this.audioData.frequencyData;
     const beat   = this.audioData.beatEnergy;
     const bass   = this.audioData.bassEnergy;
     const treble = this.audioData.trebleEnergy;
+    // Same ring-curvature the track uses, so the grid bends upward into the distance with it
+    const curveOn  = curvatureUniforms.uCurvatureOn.value > 0.5;
+    const curveR   = curvatureUniforms.uCurvatureRadius.value;
 
     // Push a new FFT snapshot every _gridPushInterval seconds
     this._gridLastPushTime = (this._gridLastPushTime || 0) + dt;
@@ -1119,7 +1123,7 @@ export class GraphicsEngine {
     const col      = colAttr.array;
     const shipZ    = physics.position.z;
     const histLen  = this._fftHistory.length;
-    const BASE_Y   = physics.position.y;      // at road surface level; bars grow upward from the floor
+    const BASE_Y   = physics.position.y - Y_DROP; // sunk below road surface, bars grow upward from there
 
     // Sample one preset for a vertex → [verticalSign, r, g, b]. Presets are crossfaded
     // (colour AND mirror geometry) so transitions glide instead of snapping.
@@ -1166,6 +1170,16 @@ export class GraphicsEngine {
       const rowZ  = shipZ - START - t * DEPTH;
       const fade  = Math.pow(1.0 - t * 0.9, 2.5);  // steeper distance falloff
 
+      // Ring-curvature lift for this row — identical math to the track's vertex shader,
+      // so the grid arcs upward into the distance exactly like the road surface does.
+      let curveYOffset = 0, curvedZ = rowZ;
+      if (curveOn) {
+        const d   = shipZ - rowZ;          // distance ahead (matches GLSL: uCameraZ - wp.z)
+        const ang = d / curveR;
+        curveYOffset = curveR * (1 - Math.cos(ang));
+        curvedZ      = rowZ + curveR * Math.sin(ang) - d;
+      }
+
       for (let c = 0; c < COLS; c++) {
         const vi   = row * COLS + c;
         const mag  = rowData ? rowData[c] : 0;
@@ -1180,8 +1194,8 @@ export class GraphicsEngine {
         }
 
         pos[vi * 3]     = (c / (COLS - 1) - 0.5) * WIDTH;
-        pos[vi * 3 + 1] = BASE_Y + barH * sign;
-        pos[vi * 3 + 2] = rowZ;
+        pos[vi * 3 + 1] = BASE_Y + barH * sign + curveYOffset;
+        pos[vi * 3 + 2] = curvedZ;
         col[vi * 3]     = r;
         col[vi * 3 + 1] = g;
         col[vi * 3 + 2] = b;
