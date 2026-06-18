@@ -15,8 +15,8 @@ const COCKPIT_OVERLAYS = [
   cocpitPilotUrl
 ];
 
-// Glob all large high-res Hubble background images from the top100 folder
-const skyboxImages = import.meta.glob('./SBS - Seamless Abstract Pack - 512x512/top100-large/top100/*.jpg', { eager: true });
+// Lazy-load Hubble space background images — only the URL map is bundled, images fetch on-demand
+const skyboxImages = import.meta.glob('./SBS - Seamless Abstract Pack - 512x512/top100-large/top100/*.jpg', { query: '?url', eager: true });
 const skyboxKeys = Object.keys(skyboxImages);
 
 // Add OBJ and FBX loaders
@@ -903,85 +903,6 @@ export class GraphicsEngine {
       this.starField = new THREE.LineSegments(geom, mat);
       this.scene.add(this.starField);
 
-      // ── LOGARITHMIC SPIRAL GALAXY PARTICLES ──
-      // Implement an animated particle system containing ~1500 particles behind the play space
-      const galaxyCount = 1500;
-      const galaxyGeom = new THREE.BufferGeometry();
-      const galaxyPosArray = new Float32Array(galaxyCount * 3);
-      const galaxyColorArray = new Float32Array(galaxyCount * 3);
-      
-      this.galaxyParticlesData = [];
-      const aVal = 3.5;
-      const bVal = 0.28;
-      
-      for (let i = 0; i < galaxyCount; i++) {
-        // Place along double arms: 50% chance to shift theta by PI
-        const isArm2 = Math.random() < 0.5;
-        const theta = Math.random() * Math.PI * 4.0;
-        const spiralTheta = isArm2 ? theta + Math.PI : theta;
-        
-        // Logarithmic spiral base radius: r = a * e^(b*theta)
-        const spiralRadius = aVal * Math.exp(bVal * theta);
-        
-        // Add normal-distributed offsets
-        const u1 = Math.random() || 0.0001;
-        const u2 = Math.random();
-        const normalRand = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-        const radialOffset = normalRand * (spiralRadius * 0.15 + 1.2);
-        
-        const finalRadius = spiralRadius + radialOffset;
-        const finalX = Math.cos(spiralTheta) * finalRadius;
-        const finalY = Math.sin(spiralTheta) * finalRadius;
-        const finalZ = (Math.random() - 0.5) * (spiralRadius * 0.15 + 3.0);
-        
-        // Track the data for rotational updates
-        this.galaxyParticlesData.push({
-          radius: finalRadius,
-          theta: spiralTheta,
-          zOffset: finalZ
-        });
-        
-        galaxyPosArray[i * 3] = finalX;
-        galaxyPosArray[i * 3 + 1] = finalY + 25.0; // Place behind play space, shifted up
-        galaxyPosArray[i * 3 + 2] = -420.0 + finalZ; // Distant background
-        
-        // Blending cyberpunk colors
-        const randCol = Math.random();
-        if (randCol < 0.35) {
-          galaxyColorArray[i * 3] = 0.0; galaxyColorArray[i * 3 + 1] = 0.98; galaxyColorArray[i * 3 + 2] = 0.98; // Cyan
-        } else if (randCol < 0.70) {
-          galaxyColorArray[i * 3] = 0.98; galaxyColorArray[i * 3 + 1] = 0.0; galaxyColorArray[i * 3 + 2] = 0.6; // Magenta
-        } else {
-          galaxyColorArray[i * 3] = 0.4; galaxyColorArray[i * 3 + 1] = 0.0; galaxyColorArray[i * 3 + 2] = 0.7; // Deep purple
-        }
-      }
-      
-      galaxyGeom.setAttribute('position', new THREE.BufferAttribute(galaxyPosArray, 3));
-      galaxyGeom.setAttribute('color', new THREE.BufferAttribute(galaxyColorArray, 3));
-      
-      const galaxyCanvas = document.createElement('canvas');
-      galaxyCanvas.width = 16;
-      galaxyCanvas.height = 16;
-      const galaxyCtx = galaxyCanvas.getContext('2d');
-      const galaxyGrad = galaxyCtx.createRadialGradient(8, 8, 0, 8, 8, 8);
-      galaxyGrad.addColorStop(0, 'rgba(255,255,255,1)');
-      galaxyGrad.addColorStop(1, 'rgba(255,255,255,0)');
-      galaxyCtx.fillStyle = galaxyGrad;
-      galaxyCtx.fillRect(0, 0, 16, 16);
-      
-      const galaxyTex = new THREE.CanvasTexture(galaxyCanvas);
-      const galaxyMat = new THREE.PointsMaterial({
-        size: 3.5,
-        map: galaxyTex,
-        vertexColors: true,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        fog: false
-      });
-      
-      this.galaxyPoints = new THREE.Points(galaxyGeom, galaxyMat);
-      this.scene.add(this.galaxyPoints);
     }
 
     // Glowing Neon Synthwave Sun at the distant horizon
@@ -1027,9 +948,7 @@ export class GraphicsEngine {
               if (this.starField) {
                 this.starField.visible = false;
               }
-              if (this.galaxyPoints) {
-                this.galaxyPoints.visible = false;
-              }
+
               if (this.sunMesh) {
                 this.sunMesh.visible = false;
               }
@@ -1116,16 +1035,15 @@ export class GraphicsEngine {
 
     const mat = new THREE.LineBasicMaterial({
       vertexColors: true,
-      transparent: true,
-      opacity: 0.9,
+      transparent: false,         // opaque queue → renders BEFORE road tiles (road draws over us)
       depthWrite: false,
-      depthTest: true,            // opaque road always occludes the grid (track stays on top)
+      depthTest: false,           // no depth competition — road (renderOrder 0) simply overwrites
       blending: THREE.AdditiveBlending,
     });
 
     this.visualizerGrid = new THREE.LineSegments(geom, mat);
     this.visualizerGrid.visible = false;
-    this.visualizerGrid.renderOrder = -10; // draw as a background layer, behind other transparent FX
+    this.visualizerGrid.renderOrder = -100;
     this.scene.add(this.visualizerGrid);
 
     // Glow dots at every grid vertex
@@ -1134,17 +1052,17 @@ export class GraphicsEngine {
     dotGeom.setAttribute('color',    new THREE.BufferAttribute(colors.slice(), 3));
 
     const dotMat = new THREE.PointsMaterial({
-      size: 0.55,
+      size: 0.4,
       vertexColors: true,
-      transparent: true,
+      transparent: false,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      depthTest: true,
+      depthTest: false,
       sizeAttenuation: true,
     });
     this.visualizerDots = new THREE.Points(dotGeom, dotMat);
     this.visualizerDots.visible = false;
-    this.visualizerDots.renderOrder = -10;
+    this.visualizerDots.renderOrder = -100;
     this.scene.add(this.visualizerDots);
   }
 
@@ -1158,9 +1076,9 @@ export class GraphicsEngine {
     const COLS   = this._gridCols;
     const ROWS   = this._gridRows;
     const WIDTH  = this._gridWidth;
-    const DEPTH  = 240;  // world units the grid extends behind the ship (deep, epic)
-    const MAX_H  = 20;
-    const START  = 30;   // front row begins just past the immediate road
+    const DEPTH  = 240;
+    const MAX_H  = 12;   // reduced bar height
+    const START  = 45;   // start further ahead so near road tiles have no grid in front
     const freq   = this.audioData.frequencyData;
     const beat   = this.audioData.beatEnergy;
     const bass   = this.audioData.bassEnergy;
@@ -1211,21 +1129,21 @@ export class GraphicsEngine {
         case 0:                       // Spectrum: bass-warm left → treble-cool right
         case 1: {                     // Mirror: even rows full height, odd rows 40% (staggered echo at floor level)
           sign = (p === 1 && row % 2 === 1) ? 0.4 : 1;
-          const br0 = (0.3 + mag * 1.4 + beat * 0.35) * fade;
+          const br0 = (0.12 + mag * 0.75 + beat * 0.18) * fade;
           r = (0.5 + hue * 0.6 + bass * 0.3) * br0;
-          g = mag * 0.3 * fade;
+          g = mag * 0.18 * fade;
           b = (0.9 - hue * 0.7 + treble * 0.4) * br0;
           break;
         }
         case 2: {                     // Matrix green — dark scanline look
-          const gbr = (0.15 + mag * 1.8 + beat * 0.4) * fade;
-          r = mag * 0.08 * fade; g = gbr; b = mag * 0.12 * fade;
+          const gbr = (0.08 + mag * 1.1 + beat * 0.22) * fade;
+          r = mag * 0.04 * fade; g = gbr; b = mag * 0.06 * fade;
           break;
         }
         case 3: {                     // Rainbow — hue scrolls with time + column
           const hDeg = (((1 - hue) + tNow * 0.04) % 1.0) * 360;
           const [rr, gg, bb] = hslToRgb(hDeg, 90, 35 + mag * 30);
-          const rbr = (0.4 + mag * 1.2 + beat * 0.3) * fade * 2.0;
+          const rbr = (0.18 + mag * 0.7 + beat * 0.16) * fade * 1.2;
           r = (rr / 255) * rbr; g = (gg / 255) * rbr; b = (bb / 255) * rbr;
           break;
         }
@@ -1233,7 +1151,7 @@ export class GraphicsEngine {
           let hh = ((c / (COLS - 1)) * 0.55 + (row / (ROWS - 1)) * 0.35 + tNow * 0.08) % 1.0;
           if (hh < 0) hh += 1;
           const [rr, gg, bb] = hslToRgb(hh * 360, 95, 45 + mag * 25);
-          const rbr = (0.45 + mag * 1.1 + beat * 0.3) * fade * 2.0;
+          const rbr = (0.18 + mag * 0.65 + beat * 0.14) * fade * 1.2;
           r = (rr / 255) * rbr; g = (gg / 255) * rbr; b = (bb / 255) * rbr;
           break;
         }
@@ -1246,7 +1164,7 @@ export class GraphicsEngine {
       const rowData = row < histLen ? this._fftHistory[row] : null;
       const t     = row / (ROWS - 1);
       const rowZ  = shipZ - START - t * DEPTH;
-      const fade  = Math.pow(1.0 - t * 0.85, 1.2);
+      const fade  = Math.pow(1.0 - t * 0.9, 2.5);  // steeper distance falloff
 
       for (let c = 0; c < COLS; c++) {
         const vi   = row * COLS + c;
@@ -1298,7 +1216,7 @@ export class GraphicsEngine {
     if (this.nebulaSphere)      this.nebulaSphere.visible = false;
     if (this.gltfLoaded && this.skyboxMesh) this.skyboxMesh.visible = false;
     if (this.starField)    this.starField.visible = true;
-    if (this.galaxyPoints) this.galaxyPoints.visible = true;
+
     if (this.scene) this.scene.background = new THREE.Color(0x01000a); // deep-space black
   }
 
@@ -2224,27 +2142,6 @@ export class GraphicsEngine {
     // Update 3D Whitecap-style receding spectrum grid
     this.updateWhitecapGrid(physics, dt);
 
-    // ── ROTATE LOGARITHMIC SPIRAL GALAXY PARTICLES ──
-    // Only update when visible (hidden when GLTF or theme skybox is active)
-    if (this.galaxyPoints && this.galaxyPoints.visible && this.galaxyParticlesData) {
-      const posAttr = this.galaxyPoints.geometry.attributes.position;
-      const posArray = posAttr.array;
-      const timeFactor = this.uTimeAccumulator * 0.08;
-
-      for (let i = 0; i < this.galaxyParticlesData.length; i++) {
-        const data = this.galaxyParticlesData[i];
-
-        // Decay angular velocity based on radial distance: outer parts rotate slower!
-        const angularVelocity = 0.12 / (1.0 + data.radius * 0.06);
-        const currentTheta = data.theta + timeFactor * angularVelocity;
-
-        posArray[i * 3] = Math.cos(currentTheta) * data.radius;
-        posArray[i * 3 + 1] = Math.sin(currentTheta) * data.radius + 25.0;
-        posArray[i * 3 + 2] = -420.0 + data.zOffset;
-      }
-      posAttr.needsUpdate = true;
-    }
-
     // ── SPACESHIP EXHAUST FLAME MESHS PULSING ──
     // Exhaust flame scale pulsing using a periodic sin wave to look incredibly alive and organic
     if (this.nozzleL && this.nozzleR && !physics.isDead) {
@@ -2780,10 +2677,7 @@ export class GraphicsEngine {
 
     if (skyboxKeys.length === 0) return;
     const key = skyboxKeys[levelIndex % skyboxKeys.length];
-    const module = skyboxImages[key];
-    if (!module) return;
-
-    const url = module.default;
+    const url = skyboxImages[key];
     if (!url) return;
 
     const textureLoader = new THREE.TextureLoader();

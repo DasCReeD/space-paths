@@ -77,7 +77,14 @@
       "Bash(node scratch/run_audio_level_playtest.js)",
       "Bash(node -e 'const s=require\\(\"./data/segment_usage.json\"\\); console.log\\(Array.isArray\\(s\\)?\"array \"+s.length:Object.keys\\(s\\).slice\\(0,8\\)\\); console.log\\(JSON.stringify\\(Array.isArray\\(s\\)?s[0]:s[Object.keys\\(s\\)[0]]\\).slice\\(0,300\\)\\);')",
       "Bash(node -e 'import\\(\"./worldBuilder.js\"\\).then\\(m=>{console.log\\(\"exports:\",Object.keys\\(m\\).join\\(\", \"\\)\\);console.log\\(\"solveLevel is fn:\",typeof m.solveLevel\\);console.log\\(\"did NOT bake \\(good\\)\"\\);}\\).catch\\(e=>console.error\\(\"ERR\",e.message\\)\\)')",
-      "Bash(FLAT=1 node tools/generate_audio_level.js --dry)"
+      "Bash(FLAT=1 node tools/generate_audio_level.js --dry)",
+      "Bash(xargs ls -lh)",
+      "Bash(xargs -I {} bash -c 'stat -c \"%s %n\" \"{}\" 2>/dev/null || stat -f \"%z %N\" \"{}\"')",
+      "Bash(rm \"assets/Music/𝟭𝟵𝟵𝟵 𝗗𝗥𝗜𝗙𝗧 𝗜𝗡𝗧𝗢 𝗠𝗘𝗠𝗢𝗥𝗬 __ Synthwave, Vaporwave, Cyberpunk, Chillwave, Retrowave, Dreamwave Playlist [_Gajv2yJt5M].mp3\")",
+      "Bash(rm assets/Gemini_Generated_Image_*.jfif)",
+      "Bash(rm \"assets/street cyberpunk.jfif\" \"assets/street cyberpunk2.jfif\" \"assets/street1.jfif\" \"assets/street2.jfif\")",
+      "Bash(rm \"assets/cocpit and pilot.jfif\" \"assets/guages black backround.jfif\" \"assets/new dashboard.jfif\")",
+      "Bash(rm \"assets/with_Guages.png\" \"assets/with_Guages.tiff\" \"assets/no_Guage.tiff\" \"assets/Untitled.pdn\")"
     ]
   }
 }

@@ -825,7 +825,7 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
 const customAssets = import.meta.glob('./assets/custom/*.png', { eager: true });
 const levelAssets = import.meta.glob('./assets/custom/level_*/*.png', { eager: true });
 const levelObjAssets = import.meta.glob('./assets/custom/level_*/*.obj', { query: '?url', eager: true });
-const skyboxAssets = import.meta.glob('./assets/custom/skybox/*.png', { eager: true });
+const skyboxAssets = import.meta.glob('./assets/custom/skybox/*.jpg', { eager: true });
 
 export function getCustomAssetUrl(filename) {
   const key = `./assets/custom/${filename}`;
@@ -834,7 +834,7 @@ export function getCustomAssetUrl(filename) {
 }
 
 export function getSkyboxAssetUrl(themeKey) {
-  const key = `./assets/custom/skybox/${themeKey}_sky.png`;
+  const key = `./assets/custom/skybox/${themeKey}_sky.jpg`;
   const module = skyboxAssets[key];
   return module ? module.default : null;
 }
