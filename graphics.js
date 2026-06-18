@@ -1161,14 +1161,18 @@ export class GraphicsEngine {
         }
         default: r = g = b = mag * fade;
       }
-      return [sign, r, g, b];
+      const GLOW_SCALE = 0.55; // overall brightness trim — keeps bloom from blowing this out
+      return [sign, r * GLOW_SCALE, g * GLOW_SCALE, b * GLOW_SCALE];
     };
 
     for (let row = 0; row < ROWS; row++) {
       const rowData = row < histLen ? this._fftHistory[row] : null;
       const t     = row / (ROWS - 1);
       const rowZ  = shipZ - START - t * DEPTH;
-      const fade  = Math.pow(1.0 - t * 0.9, 2.5);  // steeper distance falloff
+      // Hard cutoff at 75% depth + steep power curve — far rows reach true zero so they
+      // can't pile up into a bright blob via additive blending at the vanishing point.
+      const FADE_CUTOFF = 0.75;
+      const fade  = t >= FADE_CUTOFF ? 0 : Math.pow(1.0 - t / FADE_CUTOFF, 3.5);
 
       // Ring-curvature lift for this row — identical math to the track's vertex shader,
       // so the grid arcs upward into the distance exactly like the road surface does.
