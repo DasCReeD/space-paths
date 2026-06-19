@@ -984,12 +984,12 @@ export class GraphicsEngine {
   }
 
   // ── 3D Whitecap-style receding spectrum grid ──────────────────────────────
-  // 64 frequency columns × 48 depth rows, extending 200 units behind the ship.
-  // A ring buffer stores one FFT snapshot per row, pushed every ~50ms, so the
+  // 64 frequency columns × 96 depth rows, extending 200 units behind the ship.
+  // A ring buffer stores one FFT snapshot per row, pushed every ~25ms, so the
   // spectrum appears to flow into the distance as the music plays.
   createWhitecapGrid() {
     const COLS = 64;
-    const ROWS = 48;
+    const ROWS = 96;
     const WIDTH = 260; // wide enough to sweep the full screen around the track
 
     // Ring buffer — ROWS entries of COLS magnitudes each, all silent to start
@@ -999,7 +999,7 @@ export class GraphicsEngine {
     this._fftHistory = [];
     for (let r = 0; r < ROWS; r++) this._fftHistory.push(new Float32Array(COLS));
     this._gridLastPushTime = 0;
-    this._gridPushInterval = 0.05; // seconds between new depth rows
+    this._gridPushInterval = 0.025; // seconds between new depth rows (halved -> denser bands)
     this._gridPreset      = 0;     // cycles: 0=Spectrum,1=Mirror,2=Matrix,3=Rainbow,4=RainbowGradient
     this._gridPresetTimer = 0;
     this._prevPreset      = 0;     // crossfade source preset
@@ -1084,11 +1084,11 @@ export class GraphicsEngine {
     const beat   = this.audioData.beatEnergy;
     const bass   = this.audioData.bassEnergy;
     const treble = this.audioData.trebleEnergy;
-    // Same ring-curvature the track uses, but damped — full curvature would arc the wide
-    // grid up into open sky; we only want a hint of the track's bend, hugging the horizon.
+    // Same ring-curvature the track uses, full strength — the grid arcs up into the sky
+    // in the distance exactly like the road surface does.
     const curveOn   = curvatureUniforms.uCurvatureOn.value > 0.5;
     const curveR    = curvatureUniforms.uCurvatureRadius.value;
-    const CURVE_DAMP = 0.25;
+    const CURVE_DAMP = 1.0;
 
     // Push a new FFT snapshot every _gridPushInterval seconds
     this._gridLastPushTime = (this._gridLastPushTime || 0) + dt;
