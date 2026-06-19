@@ -1077,16 +1077,18 @@ export class GraphicsEngine {
     const ROWS   = this._gridRows;
     const WIDTH  = this._gridWidth;
     const DEPTH  = 240;
-    const MAX_H  = 6;    // lower peak height so the grid hugs the track instead of the mid-screen
+    const MAX_H  = 3;    // lower peak height so the grid hugs the horizon, not the open sky
     const START  = 45;   // start further ahead so near road tiles have no grid in front
-    const Y_DROP = 3;    // sink the baseline below track-surface level, closer to the bottom of frame
+    const Y_DROP = 6;    // sink the baseline well below track-surface level, right at the horizon band
     const freq   = this.audioData.frequencyData;
     const beat   = this.audioData.beatEnergy;
     const bass   = this.audioData.bassEnergy;
     const treble = this.audioData.trebleEnergy;
-    // Same ring-curvature the track uses, so the grid bends upward into the distance with it
-    const curveOn  = curvatureUniforms.uCurvatureOn.value > 0.5;
-    const curveR   = curvatureUniforms.uCurvatureRadius.value;
+    // Same ring-curvature the track uses, but damped — full curvature would arc the wide
+    // grid up into open sky; we only want a hint of the track's bend, hugging the horizon.
+    const curveOn   = curvatureUniforms.uCurvatureOn.value > 0.5;
+    const curveR    = curvatureUniforms.uCurvatureRadius.value;
+    const CURVE_DAMP = 0.25;
 
     // Push a new FFT snapshot every _gridPushInterval seconds
     this._gridLastPushTime = (this._gridLastPushTime || 0) + dt;
@@ -1174,14 +1176,14 @@ export class GraphicsEngine {
       const FADE_CUTOFF = 0.75;
       const fade  = t >= FADE_CUTOFF ? 0 : Math.pow(1.0 - t / FADE_CUTOFF, 3.5);
 
-      // Ring-curvature lift for this row — identical math to the track's vertex shader,
-      // so the grid arcs upward into the distance exactly like the road surface does.
+      // Damped ring-curvature lift — same shape as the track's vertex shader, scaled down
+      // so the wide grid hints at the bend without arcing up into open sky.
       let curveYOffset = 0, curvedZ = rowZ;
       if (curveOn) {
         const d   = shipZ - rowZ;          // distance ahead (matches GLSL: uCameraZ - wp.z)
         const ang = d / curveR;
-        curveYOffset = curveR * (1 - Math.cos(ang));
-        curvedZ      = rowZ + curveR * Math.sin(ang) - d;
+        curveYOffset = curveR * (1 - Math.cos(ang)) * CURVE_DAMP;
+        curvedZ      = rowZ + (curveR * Math.sin(ang) - d) * CURVE_DAMP;
       }
 
       for (let c = 0; c < COLS; c++) {
