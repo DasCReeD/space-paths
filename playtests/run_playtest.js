@@ -198,18 +198,22 @@ async function run() {
       await page.screenshot({ path: path.join(playtestsDir, `menu_settings${suffix}.png`) });
       console.log(`Saved menu_settings${suffix}.png`);
 
-      // 3. Enable Touch HUD
-      const touchBtn = await page.$('#btn-settings-touch');
-      const touchText = await page.evaluate(el => el.innerText, touchBtn);
-      if (touchText.includes('OFF')) {
+      // 3. Enable Touch HUD (now under the CONTROLS category, whose item-track
+      // is hidden unless active — use a JS click, which works on hidden els).
+      const touchText = await page.evaluate(() => {
+        const el = document.getElementById('btn-settings-touch');
+        if (el && el.innerText.includes('OFF')) { el.click(); return 'toggled'; }
+        return el ? el.innerText : '';
+      });
+      if (touchText === 'toggled') {
         console.log('Toggling Touch HUD ON...');
-        await page.click('#btn-settings-touch');
         await delay(500);
       }
 
-      // 4. Click Hovercraft Garage
+      // 4. Open Hovercraft Garage (the button lives under the DISPLAY category
+      // now, so open it via the app method instead of clicking a hidden button).
       console.log('Opening Hovercraft Garage...');
-      await page.click('#btn-settings-picker');
+      await page.evaluate(() => window.gameManagerInstance.openShipPicker());
       await page.waitForSelector('#ship-picker-screen.active', { timeout: 5000 });
       
       // Wait for ship 3D model to load in garage
@@ -243,7 +247,7 @@ async function run() {
 
       // 7. Load first level
       console.log('Loading first level...');
-      await page.click('.level-grid-container .level-item');
+      await page.click('#level-crossbar .level-item');
       
       // Wait for HUD to become active, indicating level loaded
       await page.waitForSelector('#hud', { timeout: 15000 });

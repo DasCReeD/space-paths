@@ -2,16 +2,21 @@
 // rebuilds and fresh/incognito browser contexts.
 //
 // On import (before any engine constructor reads localStorage) we seed
-// localStorage from this file for any key that isn't already set. We never
-// overwrite an existing key, so runtime changes the player makes still persist
-// and take precedence. To change a durable default, edit userSettings.json.
-import defaults from './userSettings.json';
+// localStorage from this file, overwriting any previous values to ensure
+// the saved defaults from the file are applied.
+import staticDefaults from './userSettings.json';
 
 if (typeof localStorage !== 'undefined') {
   try {
-    for (const [key, value] of Object.entries(defaults)) {
-      if (localStorage.getItem(key) === null) {
-        localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+    for (const [key, value] of Object.entries(staticDefaults)) {
+      const valStr = typeof value === 'string' ? value : JSON.stringify(value);
+      localStorage.setItem(key, valStr);
+      
+      // If this is a baseline physics preset, also sync the active preset configuration
+      // so it takes effect immediately on page load/reload.
+      if (key.startsWith('skyroads_physics_preset_baseline_')) {
+        const activeKey = key.replace('_baseline_', '_');
+        localStorage.setItem(activeKey, valStr);
       }
     }
   } catch (e) {
@@ -19,4 +24,4 @@ if (typeof localStorage !== 'undefined') {
   }
 }
 
-export default defaults;
+export default staticDefaults;

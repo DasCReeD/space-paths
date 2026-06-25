@@ -29,6 +29,7 @@ A modern WebGL recreation of the classic 1993 DOS game **SkyRoads** by BlueMoon 
 - 3D cockpit HUD with real-time gauges and LCD readouts
 - Corner minimap path scanner
 - Particle effects (exhaust, explosions, sparks)
+- **PS3 XMB-style menu system:** every menu is a fixed-focal-point crossbar (horizontal categories, vertical items) drawn full-screen over a blurred game backdrop; keyboard, gamepad, and mouse all navigate it. Level select groups levels into decade pages; the music-visualizer controls live in the Settings → VISUALIZER category; the physics calibrator is a drag-movable, resizable window.
 - Glassmorphism UI with retro-futuristic design
 
 ### 🎵 Audio

@@ -12,6 +12,30 @@ export const SHIP_WIDTH = 0.6;
 export const SHIP_HEIGHT = 0.4;
 export const SHIP_LENGTH = 1.8;
 
+// Old/imported model & class names mapped to the current ship roster — shared by every
+// module that resolves a saved/legacy ship name (was duplicated 4x across the codebase).
+export const LEGACY_MODEL_ALIASES = {
+  corvette1: 'fighter',
+  ship1: 'fighter',
+  ship2: 'fighter',
+
+  corvette2: 'scout',
+  corvette4: 'scout',
+  frigate4: 'scout',
+
+  corvette3: 'cruiser',
+  frigate2: 'cruiser',
+  frigate3: 'cruiser',
+  ship3: 'cruiser',
+
+  corvette5: 'hauler',
+  frigate1: 'hauler',
+  ship4: 'hauler',
+
+  frigate5: 'dreadnought',
+  ship5: 'dreadnought'
+};
+
 export const CLASS_PRESETS = {
   fighter: {
     maxSpeedNormal: 35.0,
@@ -97,6 +121,8 @@ export class PhysicsEngine {
     // Engine states
     this.onGround = true;
     this.groundHeight = 0;
+    this.onRamp = false;
+    this.rampSlope = 0.0;
     this.canDoubleJump = false; // granted on first jump, consumed mid-air, reset on landing
     this.doubleJumpEnabled = false; // toggled from settings
     this.isDead = false;
@@ -166,7 +192,7 @@ export class PhysicsEngine {
     if (typeof localStorage !== 'undefined') {
       const savedModel = localStorage.getItem('skyroads_selected_model');
       if (savedModel) {
-        this.applyShipClass(savedModel);
+        this.applyShipClass(savedModel, false);
       }
     }
   }
@@ -433,6 +459,8 @@ export class PhysicsEngine {
     // 7. Ground Collisions and Bounding Boxes
     this.onGround = false;
     this.groundHeight = -10.0; // If you fall, you keep falling
+    this.onRamp = false;
+    this.rampSlope = 0.0;
 
     // Create ship bounding box
     let shipBox = this.getShipBox();
@@ -527,7 +555,9 @@ export class PhysicsEngine {
           let isSideHit = false;
           if (this.position.z <= block.maxZ && this.position.z >= block.minZ) {
             const blockCenterX = (block.minX + block.maxX) / 2;
-            const isSideCollision = Math.abs(this.position.x - blockCenterX) > 0.35;
+            const isSideCollision = (block.maxX - block.minX <= TILE_WIDTH + 0.1)
+              ? Math.abs(this.position.x - blockCenterX) > 0.35
+              : (this.position.x < block.minX || this.position.x > block.maxX);
 
             if (isSideCollision && this.position.y < rampHeight - 0.1) {
               // Check if ship is currently riding an adjacent ramp of the same slope
@@ -589,6 +619,12 @@ export class PhysicsEngine {
               this.canDoubleJump = false;
               this.velocity.y = 0;
               shipBox = this.getShipBox();
+              
+              // Only set onRamp if the ship's center is actually within the ramp's Z range
+              if (this.position.z <= block.maxZ && this.position.z >= block.minZ) {
+                this.onRamp = true;
+                this.rampSlope = Math.atan2(block.endY - block.startY, block.maxZ - block.minZ);
+              }
             }
           }
         }
@@ -616,24 +652,30 @@ export class PhysicsEngine {
           const isAboveBottom = shipBox.maxY > block.minY;
 
           if (isBelowTop && isAboveBottom) {
-            // Calculate overlap depths in X and Z
-            const overlapZ = Math.min(shipBox.maxZ, block.maxZ) - Math.max(shipBox.minZ, block.minZ);
-            const overlapX = Math.min(shipBox.maxX, block.maxX) - Math.max(shipBox.minX, block.minX);
+            // Check if this obstacle is preceded by a ramp and the ship is transitioning onto it
+            const isPrecededByRamp = levelInfo.collidables.some(other => 
+              other.isRamp && 
+              Math.abs(other.minZ - block.maxZ) < 0.1 &&
+              this.position.x >= other.minX - 0.2 && this.position.x <= other.maxX + 0.2
+            );
+            const isOnRamp = isPrecededByRamp && 
+              this.position.z >= block.maxZ - 0.5 && this.position.z <= block.maxZ + TILE_LENGTH + 0.1;
 
-            // A side collision occurs if the back of the ship has already crossed the front of the block,
-            // OR if the horizontal overlap is shallow while the vertical longitudinal overlap is deep.
-            const isSideCollision = (shipBox.maxZ <= block.maxZ + 0.15) || (overlapX < 0.35 && overlapZ > 0.5);
+            if (isOnRamp && shipBox.minY >= block.maxY - 0.25) {
+              // Bypassed! Transitioning onto the platform.
+              // Raise the ship's Y to block.maxY to ensure it lands smoothly in the subsequent landing check.
+              this.position.y = Math.max(this.position.y, block.maxY);
+              shipBox = this.getShipBox();
+            } else {
+              // Calculate overlap depths in X and Z
+              const overlapZ = Math.min(shipBox.maxZ, block.maxZ) - Math.max(shipBox.minZ, block.minZ);
+              const overlapX = Math.min(shipBox.maxX, block.maxX) - Math.max(shipBox.minX, block.minX);
 
-            if (!isSideCollision) {
-              const isPrecededByRamp = levelInfo.collidables.some(other => 
-                other.isRamp && 
-                Math.abs(other.minZ - block.maxZ) < 0.1 &&
-                this.position.x >= other.minX - 0.2 && this.position.x <= other.maxX + 0.2
-              );
-              const isOnRamp = isPrecededByRamp && 
-                this.position.z >= block.maxZ - 0.5 && this.position.z <= block.maxZ + TILE_LENGTH + 0.1;
+              // A side collision occurs if the back of the ship has already crossed the front of the block,
+              // OR if the horizontal overlap is shallow while the vertical longitudinal overlap is deep.
+              const isSideCollision = (shipBox.maxZ <= block.maxZ + 0.15) || (overlapX < 0.35 && overlapZ > 0.5);
 
-              if (!isOnRamp) {
+              if (!isSideCollision) {
                 if (this.difficulty === 'easy') {
                   // Bounce back instead of dying!
                   this.velocity.z = this.settings.easyCollisionBounceVel !== undefined ? this.settings.easyCollisionBounceVel : 10.0; // Positive Z is backward
@@ -671,46 +713,46 @@ export class PhysicsEngine {
                   this.velocity.set(0, 0, 0);
                   return;
                 }
-              }
-            } else {
-              // Side wall collision -> Push ship out of the block and slide!
-              const halfW = SHIP_WIDTH / 2;
-              const shipCenterX = this.position.x;
-              const blockCenterX = (block.minX + block.maxX) / 2;
-
-              if (shipCenterX > blockCenterX) {
-                // Push to the right of the block
-                this.position.x = block.maxX + halfW + 0.01;
               } else {
-                // Push to the left of the block
-                this.position.x = block.minX - halfW - 0.01;
-              }
+                // Side wall collision -> Push ship out of the block and slide!
+                const halfW = SHIP_WIDTH / 2;
+                const shipCenterX = this.position.x;
+                const blockCenterX = (block.minX + block.maxX) / 2;
 
-              if (this.difficulty === 'normal') {
-                const shipMass = this.settings.shipMass !== undefined ? this.settings.shipMass : 1.0;
-                const damageModifier = this.settings.damageModifier !== undefined ? this.settings.damageModifier : 1.0;
-                const minDamageSpeed = this.settings.minDamageSpeed !== undefined ? this.settings.minDamageSpeed : 4.0;
-                const impactSpeed = Math.abs(this.velocity.x);
-                const damage = impactSpeed < minDamageSpeed ? 0 : impactSpeed * shipMass * damageModifier * 1.5;
-                if (this.health > damage) {
-                  this.health -= damage;
+                if (shipCenterX > blockCenterX) {
+                  // Push to the right of the block
+                  this.position.x = block.maxX + halfW + 0.01;
                 } else {
-                  this.health = 0;
-                  this.isDead = true;
-                  this.deathReason = 'COLLIDED WITH BLOCK';
-                  this.velocity.set(0, 0, 0);
-                  return;
+                  // Push to the left of the block
+                  this.position.x = block.minX - halfW - 0.01;
                 }
+
+                if (this.difficulty === 'normal') {
+                  const shipMass = this.settings.shipMass !== undefined ? this.settings.shipMass : 1.0;
+                  const damageModifier = this.settings.damageModifier !== undefined ? this.settings.damageModifier : 1.0;
+                  const minDamageSpeed = this.settings.minDamageSpeed !== undefined ? this.settings.minDamageSpeed : 4.0;
+                  const impactSpeed = Math.abs(this.velocity.x);
+                  const damage = impactSpeed < minDamageSpeed ? 0 : impactSpeed * shipMass * damageModifier * 1.5;
+                  if (this.health > damage) {
+                    this.health -= damage;
+                  } else {
+                    this.health = 0;
+                    this.isDead = true;
+                    this.deathReason = 'COLLIDED WITH BLOCK';
+                    this.velocity.set(0, 0, 0);
+                    return;
+                  }
+                }
+
+                // Stop lateral steering velocity
+                this.velocity.x = 0;
+
+                // Trigger side scrape sound!
+                this.triggerWallCollisionAudio = true;
+
+                // Update the ship's bounding box for subsequent collision checks in this frame
+                shipBox = this.getShipBox();
               }
-
-              // Stop lateral steering velocity
-              this.velocity.x = 0;
-
-              // Trigger side scrape sound!
-              this.triggerWallCollisionAudio = true;
-
-              // Update the ship's bounding box for subsequent collision checks in this frame
-              shipBox = this.getShipBox();
             }
           }
         }
@@ -722,6 +764,8 @@ export class PhysicsEngine {
         if (fallingDown && aboveBlockTop) {
           this.position.y = block.maxY;
           this.groundHeight = block.maxY;
+          this.onRamp = false;
+          this.rampSlope = 0.0;
 
           const isJumpHeld = keyboard.spacePressed !== undefined ? keyboard.spacePressed : false;
           if (this.velocity.y < -3.0 && !isJumpHeld && !this.justRebounded) {
@@ -759,6 +803,8 @@ export class PhysicsEngine {
         if (tileExists) {
           this.position.y = 0.0;
           this.groundHeight = 0.0;
+          this.onRamp = false;
+          this.rampSlope = 0.0;
 
           const isJumpHeld = keyboard.spacePressed !== undefined ? keyboard.spacePressed : false;
           if (this.velocity.y < -3.0 && !isJumpHeld && !this.justRebounded) {
@@ -777,9 +823,69 @@ export class PhysicsEngine {
         }
       }
     }
+    // Calculate smoothly-interpolated/blended ramp slope if on the ground
+    if (this.onGround && !this.isDead && levelInfo && levelInfo.collidables) {
+      let sumOverlap = 0;
+      let sumWeightedSlope = 0;
+      const shipBox = this.getShipBox();
+      const halfL = SHIP_LENGTH / 2;
+
+      for (const block of levelInfo.collidables) {
+        if (block.isRamp) {
+          // Check if ship overlaps block in X and Z
+          const xOverlap = shipBox.maxX > block.minX && shipBox.minX < block.maxX;
+          const zOverlap = shipBox.maxZ > block.minZ && shipBox.minZ < block.maxZ;
+          
+          if (xOverlap && zOverlap) {
+            // Check if ship is vertically close to the ramp at its current position
+            const t = (this.position.z - block.maxZ) / (block.minZ - block.maxZ);
+            const clampedT = Math.max(0, Math.min(1, t));
+            const rampHeight = block.startY + clampedT * (block.endY - block.startY);
+            
+            // Ship position.y is close to the rampHeight (within 0.5 units)
+            if (Math.abs(this.position.y - rampHeight) < 0.5) {
+              const startIntersect = Math.max(this.position.z - halfL, block.minZ);
+              const endIntersect = Math.min(this.position.z + halfL, block.maxZ);
+              const overlap = Math.max(0, endIntersect - startIntersect);
+              
+              if (overlap > 0) {
+                const slope = Math.atan2(block.endY - block.startY, block.maxZ - block.minZ);
+                sumOverlap += overlap;
+                sumWeightedSlope += overlap * slope;
+              }
+            }
+          }
+        }
+      }
+
+      if (sumOverlap > 0) {
+        this.onRamp = true;
+        // Remaining ship length is assumed to be on flat ground (slope 0)
+        this.rampSlope = sumWeightedSlope / SHIP_LENGTH;
+      } else {
+        this.onRamp = false;
+        this.rampSlope = 0.0;
+      }
+    } else {
+      this.onRamp = false;
+      this.rampSlope = 0.0;
+    }
 
     // 8. Fall out of track detection
-    if (this.position.y < -4.0) {
+    let deathY = -4.0;
+    if (levelInfo && levelInfo.collidables && levelInfo.collidables.length > 0) {
+      let minRoadY = 0.0;
+      for (const block of levelInfo.collidables) {
+        if ((!block.isObstacle || block.isRamp) && !block.isCeiling) {
+          const tileMinY = block.isRamp ? Math.min(block.startY, block.endY) : (block.minY || 0.0);
+          if (tileMinY < minRoadY) {
+            minRoadY = tileMinY;
+          }
+        }
+      }
+      deathY = Math.min(-4.0, minRoadY - 4.0);
+    }
+    if (this.position.y < deathY) {
       this.isDead = true;
       this.deathReason = 'FELL OFF ROAD';
       this.velocity.set(0, -15, 0);
@@ -867,28 +973,7 @@ export class PhysicsEngine {
     }
   }
 
-  applyShipClass(className) {
-    const LEGACY_MODEL_ALIASES = {
-      corvette1: 'fighter',
-      ship1: 'fighter',
-      ship2: 'fighter',
-      
-      corvette2: 'scout',
-      corvette4: 'scout',
-      frigate4: 'scout',
-      
-      corvette3: 'cruiser',
-      frigate2: 'cruiser',
-      frigate3: 'cruiser',
-      ship3: 'cruiser',
-      
-      corvette5: 'hauler',
-      frigate1: 'hauler',
-      ship4: 'hauler',
-      
-      frigate5: 'dreadnought',
-      ship5: 'dreadnought'
-    };
+  applyShipClass(className, writeToLocalStorage = true) {
     const mappedClass = LEGACY_MODEL_ALIASES[className] || className;
     this.shipClass = mappedClass;
     const stats = CLASS_PRESETS[mappedClass] || CLASS_PRESETS.original;
@@ -901,7 +986,7 @@ export class PhysicsEngine {
       }
     }
     
-    if (typeof localStorage !== 'undefined') {
+    if (writeToLocalStorage && typeof localStorage !== 'undefined') {
       const activePreset = localStorage.getItem('skyroads_physics_active_preset') || 'snappy';
       const presetKey = `skyroads_physics_preset_${activePreset}`;
       let presetData = {};
@@ -1039,6 +1124,11 @@ export class KeyboardController {
          document.activeElement.tagName === 'SELECT')) {
       return;
     }
+    // Ignore key presses (keydown) when the game is not actively playing.
+    // However, always process key releases (keyup) so that keys do not get stuck.
+    if (isDown && typeof window !== 'undefined' && window.gameManagerInstance && window.gameManagerInstance.gameState !== 'playing') {
+      return;
+    }
     const code = e.code;
     if (code === 'ArrowUp' || code === 'KeyW') this.keys.forward = isDown;
     if (code === 'ArrowDown' || code === 'KeyS') this.keys.backward = isDown;
@@ -1056,6 +1146,9 @@ export class KeyboardController {
 
   handleMouseDown(e) {
     if (!this.mouseControlsEnabled) return;
+    if (typeof window !== 'undefined' && window.gameManagerInstance && window.gameManagerInstance.gameState !== 'playing') {
+      return;
+    }
     if (e.button === 0) { // Left Click -> Jump
       if (!this.mouse.jump) this.jumpPulse = true;
       this.mouse.jump = true;
@@ -1083,6 +1176,9 @@ export class KeyboardController {
       this.updateCombinedState();
       return;
     }
+    if (typeof window !== 'undefined' && window.gameManagerInstance && window.gameManagerInstance.gameState !== 'playing') {
+      return;
+    }
     // Proportional analogue-style steering with central deadzone
     const centerX = window.innerWidth / 2;
     const diff = e.clientX - centerX;
@@ -1104,6 +1200,9 @@ export class KeyboardController {
   }
 
   setTouchState(action, active) {
+    if (active && typeof window !== 'undefined' && window.gameManagerInstance && window.gameManagerInstance.gameState !== 'playing') {
+      return;
+    }
     if (this.touch[action] !== undefined) {
       if (action === 'jump' && active && !this.touch.jump) this.jumpPulse = true;
       this.touch[action] = active;
@@ -1112,6 +1211,9 @@ export class KeyboardController {
   }
 
   setTouchSteerAmount(amount) {
+    if (amount !== 0 && typeof window !== 'undefined' && window.gameManagerInstance && window.gameManagerInstance.gameState !== 'playing') {
+      return;
+    }
     this.steerAmount = amount;
     if (amount < 0) {
       this.touch.left = true;
@@ -1132,6 +1234,9 @@ export class KeyboardController {
       this.touch.backward = false;
       return;
     }
+    if (yAmount !== 0 && typeof window !== 'undefined' && window.gameManagerInstance && window.gameManagerInstance.gameState !== 'playing') {
+      return;
+    }
     // yAmount ranges from -1 (top/forward) to 1 (bottom/backward)
     if (yAmount < -0.2) {
       this.touch.forward = true;
@@ -1144,6 +1249,45 @@ export class KeyboardController {
       this.touch.backward = false;
     }
     this.updateCombinedState();
+  }
+
+  resetKeys() {
+    this.keys.forward = false;
+    this.keys.backward = false;
+    this.keys.left = false;
+    this.keys.right = false;
+    this.keys.jump = false;
+    this.keys.rewind = false;
+    
+    this.mouse.forward = false;
+    this.mouse.left = false;
+    this.mouse.right = false;
+    this.mouse.jump = false;
+
+    this.touch.forward = false;
+    this.touch.backward = false;
+    this.touch.left = false;
+    this.touch.right = false;
+    this.touch.jump = false;
+    this.touch.rewind = false;
+
+    this.gamepad.forward = false;
+    this.gamepad.backward = false;
+    this.gamepad.left = false;
+    this.gamepad.right = false;
+    this.gamepad.jump = false;
+    this.gamepad.rewind = false;
+    this.gamepad.steerAmount = 0;
+
+    this.forward = false;
+    this.backward = false;
+    this.left = false;
+    this.right = false;
+    this.jump = false;
+    this.jumpPulse = false;
+    this.rewind = false;
+    this.spacePressed = false;
+    this.steerAmount = 0;
   }
 
   updateCombinedState() {

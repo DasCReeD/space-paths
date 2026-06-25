@@ -1,8 +1,9 @@
 // SkyRoads Three.js Visual & Rendering Pipeline
 import * as THREE from 'three';
-import { SHIP_WIDTH, SHIP_HEIGHT, SHIP_LENGTH } from './physics.js';
+import { SHIP_WIDTH, SHIP_HEIGHT, SHIP_LENGTH, LEGACY_MODEL_ALIASES } from './physics.js';
 import { CockpitConsole3D } from './cockpitConsole.js';
-import { getLevelObjUrl, getLevelAssetUrl, getActiveThemeIndex, THEMES, getSkyboxAssetUrl, curvatureUniforms, applyCurvatureShader } from './levelLoader.js';
+import { getLevelObjUrl, getActiveThemeIndex, THEMES, curvatureUniforms, applyCurvatureShader } from './levelLoader.js';
+import { gameAudio } from './audio.js';
 import spaceshipHullPlatingUrl from './spaceship_hull_plating.png';
 import roadMetallicUrl from './road_metallic_plate.png';
 import hudOverlayUrl from './hud_overlay.jfif';
@@ -14,10 +15,6 @@ const COCKPIT_OVERLAYS = [
   cocpitUrl,
   cocpitPilotUrl
 ];
-
-// Lazy-load Hubble space background images — only the URL map is bundled, images fetch on-demand
-const skyboxImages = import.meta.glob('./SBS - Seamless Abstract Pack - 512x512/top100-large/top100/*.jpg', { query: '?url', eager: true });
-const skyboxKeys = Object.keys(skyboxImages);
 
 // Add OBJ and FBX loaders
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
@@ -40,7 +37,6 @@ import racerClassUrl from './assets/custom/racer.glb?url';
 import hovdiClassUrl from './assets/custom/hovdi.glb?url';
 import uvMapUrl from './uvmap.jpg';
 import cityFbxUrl from './futuristic low poly city by niko.fbx?url';
-import skyboxGltfUrl from './assets/free_colorful_sci_fi_skybox_gltf/scene.gltf?url';
 
 // Custom skin textures provided by user in fighter.zip
 import freelancerSkinUrl from './freelancer.jpg';
@@ -63,28 +59,6 @@ import frigate5Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Sp
 import freeBattleTexUrl from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Texture/T_Spase_64.png';
 
 const MAJADROID_BASE = './SBS - Seamless Abstract Pack - 512x512/LowPoly-Spaceships-By-Majadroid';
-
-export const LEGACY_MODEL_ALIASES = {
-  corvette1: 'fighter',
-  ship1: 'fighter',
-  ship2: 'fighter',
-  
-  corvette2: 'scout',
-  corvette4: 'scout',
-  frigate4: 'scout',
-  
-  corvette3: 'cruiser',
-  frigate2: 'cruiser',
-  frigate3: 'cruiser',
-  ship3: 'cruiser',
-  
-  corvette5: 'hauler',
-  frigate1: 'hauler',
-  ship4: 'hauler',
-  
-  frigate5: 'dreadnought',
-  ship5: 'dreadnought'
-};
 
 export const SHIP_MODELS = {
   original: fighterObjUrl,
@@ -216,48 +190,27 @@ function swapTextureColor(img, hexColor, isPackA) {
   return canvas;
 }
 
+// Thin wrappers around THREE.Color's native HSL conversion, kept in the same
+// [h:0-360, s:0-100, l:0-100] <-> [r,g,b:0-255] shape the call sites already use.
+const _hslColor = new THREE.Color();
+const _hslTarget = { h: 0, s: 0, l: 0 };
+
 function rgbToHsl(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h, s, l = (max + min) / 2;
-  if (max === min) {
-    h = s = 0;
-  } else {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-      case g: h = (b - r) / d + 2; break;
-      case b: h = (r - g) / d + 4; break;
-    }
-    h /= 6;
-  }
-  return [h * 360, s * 100, l * 100];
+  _hslColor.setRGB(r / 255, g / 255, b / 255);
+  _hslColor.getHSL(_hslTarget);
+  return [_hslTarget.h * 360, _hslTarget.s * 100, _hslTarget.l * 100];
 }
 
 function hslToRgb(h, s, l) {
-  h /= 360; s /= 100; l /= 100;
-  let r, g, b;
-  if (s === 0) {
-    r = g = b = l;
-  } else {
-    const hue2rgb = (p, q, t) => {
-      if (t < 0) t += 1;
-      if (t > 1) t -= 1;
-      if (t < 1/6) return p + (q - p) * 6 * t;
-      if (t < 1/2) return q;
-      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-      return p;
-    };
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p = 2 * l - q;
-    r = hue2rgb(p, q, h + 1/3);
-    g = hue2rgb(p, q, h);
-    b = hue2rgb(p, q, h - 1/3);
-  }
-  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  _hslColor.setHSL(h / 360, s / 100, l / 100);
+  return [Math.round(_hslColor.r * 255), Math.round(_hslColor.g * 255), Math.round(_hslColor.b * 255)];
 }
 
+const CAMERA_MODE_HUD = {
+  fixed:   { text: 'FIXED',   color: '#00ffcc' },
+  follow:  { text: 'FOLLOW',  color: '#ffaa00' },
+  cockpit: { text: 'COCKPIT', color: '#ff00ff' },
+};
 
 export class GraphicsEngine {
   constructor() {
@@ -276,21 +229,9 @@ export class GraphicsEngine {
     this._leftTrailPositions = new Float32Array(15 * 2 * 3);
     this._rightTrailPositions = new Float32Array(15 * 2 * 3);
     this.starField = null;
-    this.nebulaSphere = null;
-    this.skyboxMesh = null;
-    this.gltfLoaded = false;
-    // Music-reactive visuals
-    this.audioData      = null;
-    this.visualizerRing = null;
-    this._freqDataTex   = null; // THREE.DataTexture updated each frame with FFT data
-    // 3D Whitecap-style receding spectrum grid
-    this.visualizerGrid    = null;
-    this.visualizerDots    = null;
-    this._fftHistory       = null;
-    this._gridLastPushTime = 0;
-    this._gridPreset       = 0;   // 0=Spectrum 1=Mirror 2=Matrix 3=Rainbow
-    this._gridPresetTimer  = 0;
-    
+    this.starSizeMultiplier = 1.0;
+    this.starCount = 1500;
+
     // Scenery templates & groups
     this.buildingTemplates = [];
     this.customBuildingTemplates = [];
@@ -348,7 +289,7 @@ export class GraphicsEngine {
   init(container) {
     // 1. Create Scene & Renderer
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x01000a); // deep-space black (flying starfield backdrop)
+    this.scene.background = new THREE.Color(0x01000a); // deep-space black fallback until the visualizer texture loads
     this.scene.fog = null; // Disable atmospheric fog entirely
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -365,6 +306,10 @@ export class GraphicsEngine {
     this.camera = new THREE.PerspectiveCamera(95, container.clientWidth / container.clientHeight, 0.1, 1000);
     this.camera.position.set(0, 3, 8);
     this.scene.add(this.camera);
+    this.baseFov = 95;
+    this.cockpitFov = 95;
+    this.speedFovEnabled = false;
+    this.speedFovMaxAdd = 14; // degrees added at max boost speed
 
     // 3. Add Premium Lighting — bright enough to see the road clearly
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.70);
@@ -606,9 +551,10 @@ export class GraphicsEngine {
 
   setCameraFOV(fov) {
     if (this.camera) {
+      this.baseFov = fov;
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
-      
+
       const fovValEl = document.getElementById('hud-cam-fov-val');
       if (fovValEl) {
         fovValEl.innerText = `${Math.round(fov)}°`;
@@ -617,6 +563,18 @@ export class GraphicsEngine {
       if (sliderEl) {
         sliderEl.value = fov;
       }
+    }
+  }
+
+  setSpeedFovEnabled(enabled) {
+    this.speedFovEnabled = enabled;
+  }
+
+  setCockpitFOV(fov) {
+    this.cockpitFov = fov;
+    if (this.camera && this.cameraMode === 'cockpit') {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
     }
   }
 
@@ -639,17 +597,9 @@ export class GraphicsEngine {
       this.shipMesh.visible = true; // Always visible for geometry cockpit view!
     }
 
-    if (modeEl) {
-      if (this.cameraMode === 'fixed') {
-        modeEl.innerText = 'FIXED';
-        modeEl.style.color = '#00ffcc';
-      } else if (this.cameraMode === 'follow') {
-        modeEl.innerText = 'FOLLOW';
-        modeEl.style.color = '#ffaa00';
-      } else if (this.cameraMode === 'cockpit') {
-        modeEl.innerText = 'COCKPIT';
-        modeEl.style.color = '#ff00ff';
-      }
+    if (modeEl && CAMERA_MODE_HUD[this.cameraMode]) {
+      modeEl.innerText = CAMERA_MODE_HUD[this.cameraMode].text;
+      modeEl.style.color = CAMERA_MODE_HUD[this.cameraMode].color;
     }
     if (zoomEl) {
       zoomEl.innerText = this.zoomLevel.toUpperCase();
@@ -666,131 +616,7 @@ export class GraphicsEngine {
   }
 
   createSkybox() {
-    // 1. Create a massive background sphere with a custom fBm shader or a solid fallback
-    const sphereGeom = new THREE.SphereGeometry(450, 32, 32);
-    let sphereMat;
-    if (this.isTestEnv) {
-      sphereMat = new THREE.MeshBasicMaterial({
-        color: 0x0a0210,
-        side: THREE.BackSide,
-        depthWrite: false,
-        fog: false // Disable level fog entirely
-      });
-    } else {
-      // Build a 256×1 DataTexture to carry FFT frequency data into the shader each frame.
-      // All zeros initially; updated by updateNebulaAudioUniforms() when synthwave is active.
-      const freqTexData = new Uint8Array(256 * 4); // RGBA
-      this._freqDataTex = new THREE.DataTexture(freqTexData, 256, 1, THREE.RGBAFormat);
-      this._freqDataTex.needsUpdate = true;
-
-      sphereMat = new THREE.ShaderMaterial({
-        uniforms: {
-          uTime:       { value: 0 },
-          uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-          uBass:       { value: 0.0 },
-          uMid:        { value: 0.0 },
-          uTreble:     { value: 0.0 },
-          uBeat:       { value: 0.0 },
-          uFrequencies: { value: this._freqDataTex },
-        },
-        vertexShader: `
-          varying vec2 vUv;
-          varying vec3 vPosition;
-          void main() {
-            vUv = uv;
-            vPosition = position;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          uniform float uTime;
-          uniform float uBass;
-          uniform float uMid;
-          uniform float uTreble;
-          uniform float uBeat;
-          uniform sampler2D uFrequencies;
-          varying vec2 vUv;
-          varying vec3 vPosition;
-
-          float hash(float n) { return fract(sin(n)*753.5453123); }
-          float noise(in vec3 x) {
-            vec3 p = floor(x);
-            vec3 f = fract(x);
-            f = f*f*(3.0-2.0*f);
-            float n = p.x + p.y*157.0 + 113.0*p.z;
-            return mix(mix(mix(hash(n+  0.0), hash(n+  1.0),f.x),
-                           mix(hash(n+157.0), hash(n+158.0),f.x),f.y),
-                       mix(mix(hash(n+113.0), hash(n+114.0),f.x),
-                           mix(hash(n+270.0), hash(n+271.0),f.x),f.y),f.z);
-          }
-          float fbm(vec3 p) {
-            float f = 0.0;
-            f += 0.5000 * noise(p); p = p * 2.01;
-            f += 0.2500 * noise(p); p = p * 2.02;
-            f += 0.1250 * noise(p); p = p * 2.03;
-            f += 0.0625 * noise(p);
-            return f;
-          }
-
-          void main() {
-            vec3 dir = normalize(vPosition);
-
-            float angle = uTime * 0.005;
-            float s = sin(angle);
-            float c = cos(angle);
-            vec3 rotDir = vec3(
-              dir.x * c - dir.z * s,
-              dir.y,
-              dir.x * s + dir.z * c
-            );
-
-            // Bass breathes the noise scale — sphere appears to expand on beat
-            float noiseScale = 3.5 + uBass * 1.2;
-            float n = fbm(rotDir * noiseScale + vec3(0.0, 0.0, uTime * 0.03));
-
-            // Base cyberpunk palette shifted by audio: bass → magenta, treble → cyan
-            vec3 purple  = vec3(0.12, 0.02, 0.25);
-            vec3 magenta = mix(vec3(0.98, 0.0,  0.6 ), vec3(1.0, 0.0, 0.9), uBass * 0.6);
-            vec3 cyan    = mix(vec3(0.0,  0.98, 0.98), vec3(0.4, 1.0, 1.0), uTreble * 0.5);
-
-            vec3 col = mix(purple, magenta, n);
-            col = mix(col, cyan, pow(max(0.0, n - 0.4), 2.0) * 2.5);
-
-            // Mid frequencies add a subtle green shimmer
-            col += vec3(0.0, uMid * 0.18, 0.0) * n;
-
-            // Oscilloscope scanline — timeData baked into red channel of uFrequencies.
-            // Drawn as a thin glowing band that wraps around the mid-latitude of the sphere.
-            float lat    = dir.y;                              // −1 (bottom) to +1 (top)
-            float u      = fract(atan(dir.z, dir.x) / 6.2832 + 0.5); // 0..1 around equator
-            float wave   = texture2D(uFrequencies, vec2(u, 0.0)).g;   // green channel = timeData
-            float waveY  = (wave - 0.5) * 0.18;               // −0.09 .. +0.09
-            float lineDist = abs(lat - waveY);
-            float lineGlow = smoothstep(0.025, 0.0, lineDist);
-            // A second fainter band 40° above
-            float lineDist2 = abs(lat - 0.55 - waveY * 0.4);
-            float lineGlow2 = smoothstep(0.018, 0.0, lineDist2) * 0.4;
-
-            vec3 lineCol = mix(cyan, magenta, u) * 2.0;
-            col += lineCol * (lineGlow + lineGlow2) * (0.6 + uBass * 0.8);
-
-            // Beat flash — whole sky brightens on kick
-            float brightness = (0.8 + 0.2 * n) * (1.0 + uBeat * 0.45);
-            gl_FragColor = vec4(col * brightness, 1.0);
-          }
-        `,
-        side: THREE.BackSide,
-        depthWrite: false,
-        fog: false
-      });
-    }
-
-    const nebulaSphere = new THREE.Mesh(sphereGeom, sphereMat);
-    nebulaSphere.visible = false; // purple nebula off by default — flying starfield is the backdrop
-    this.nebulaSphere = nebulaSphere;
-    this.scene.add(nebulaSphere);
-
-    // 2. A beautiful 3D starry skybox using a particle system (layered on top)
+    // A beautiful 3D starry skybox using a particle system — decorative parallax backdrop.
     if (this.isTestEnv) {
       const starCount = 2000;
       const geom = new THREE.BufferGeometry();
@@ -846,76 +672,8 @@ export class GraphicsEngine {
       this.starField = new THREE.Points(geom, mat);
       this.scene.add(this.starField);
     } else {
-      // Stunning 3D hyperdrive warp-speed starfield using LineSegments for beautiful smearing lines!
-      const starCount = 1500;
-      this.starData = [];
-      const positions = new Float32Array(starCount * 2 * 3); // 2 vertices per star (start and end)
-      const colors = new Float32Array(starCount * 2 * 3);
-
-      for (let i = 0; i < starCount; i++) {
-        // Distribute stars in a cylindrical corridor flanking the track to create a gorgeous zoom effect
-        const theta = Math.random() * Math.PI * 2;
-        const radius = Math.random() * 120 + 6; // wide spread to fill the screen with warp streaks
-        const x = Math.cos(theta) * radius;
-        const y = Math.sin(theta) * radius + 15; // slightly shifted up
-        const z = Math.random() * -450; // distribute far along the corridor
-        const speedMultiplier = Math.random() * 0.8 + 0.6;
-
-        this.starData.push({ x, y, z, speedMultiplier });
-
-        const idx = i * 6;
-        // Vertex 1: Start
-        positions[idx] = x;
-        positions[idx + 1] = y;
-        positions[idx + 2] = z;
-        // Vertex 2: End (starts flush)
-        positions[idx + 3] = x;
-        positions[idx + 4] = y;
-        positions[idx + 5] = z;
-
-        // Realistic stellar colors by spectral class — white-dominant, with blue-white
-        // hot stars, sun-like yellow, and rarer amber/red giants (matches a real sky).
-        const rand = Math.random();
-        let r, g, b;
-        if (rand < 0.50)      { r = 1.0; g = 1.0;  b = 1.0;  } // white (most common)
-        else if (rand < 0.72) { r = 0.7; g = 0.82; b = 1.0;  } // blue-white (hot O/B/A)
-        else if (rand < 0.86) { r = 1.0; g = 0.96; b = 0.82; } // yellow-white (sun-like G)
-        else if (rand < 0.96) { r = 1.0; g = 0.72; b = 0.42; } // amber/orange (K)
-        else                  { r = 1.0; g = 0.5;  b = 0.38; } // red giant (M)
-
-        colors[idx] = r; colors[idx + 1] = g; colors[idx + 2] = b;
-        colors[idx + 3] = r; colors[idx + 4] = g; colors[idx + 5] = b;
-      }
-
-      const geom = new THREE.BufferGeometry();
-      geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-      const mat = new THREE.LineBasicMaterial({
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.85,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        fog: false
-      });
-
-      this.starField = new THREE.LineSegments(geom, mat);
-      this.scene.add(this.starField);
-
+      this._buildWarpStarfield();
     }
-
-    // Glowing Neon Synthwave Sun at the distant horizon
-    const sunGeom = new THREE.CircleGeometry(50, 32);
-    const sunMat = new THREE.MeshBasicMaterial({
-      color: 0xff0055,
-      transparent: true,
-      opacity: 0.9,
-      side: THREE.DoubleSide
-    });
-    this.sunMesh = new THREE.Mesh(sunGeom, sunMat);
-    this.sunMesh.position.set(0, 20, -350);
-    this.scene.add(this.sunMesh);
 
     // Initialize time variables
     this.uTimeAccumulator = 0;
@@ -924,325 +682,6 @@ export class GraphicsEngine {
     this.wingtipHistory = { left: [], right: [] };
     this.leftTrailMesh = null;
     this.rightTrailMesh = null;
-
-    // Asynchronously load the 3D GLTF model under assets/free_colorful_sci_fi_skybox_gltf/scene.gltf
-    if (!this.isTestEnv) {
-      try {
-        const gltfLoader = new GLTFLoader();
-        gltfLoader.load(
-          skyboxGltfUrl,
-          (gltf) => {
-            try {
-              this.skyboxMesh = gltf.scene;
-              // Scale it up by a massive factor so it serves as the environment backdrop
-              this.skyboxMesh.scale.set(500, 500, 500);
-              
-              // Add loaded mesh to scene
-              this.scene.add(this.skyboxMesh);
-              this.gltfLoaded = true;
-
-              // Cleanly disable and hide the old procedural elements
-              if (this.nebulaSphere) {
-                this.nebulaSphere.visible = false;
-              }
-              if (this.starField) {
-                this.starField.visible = false;
-              }
-
-              if (this.sunMesh) {
-                this.sunMesh.visible = false;
-              }
-            } catch (err) {
-              console.error("Error setting up loaded GLTF skybox:", err);
-            }
-          },
-          undefined,
-          (err) => {
-            console.error("Error loading GLTF skybox:", err);
-          }
-        );
-      } catch (e) {
-        console.error("GLTFLoader instantiation failed:", e);
-      }
-    }
-
-    // Theme skybox sphere — sits inside the nebula sphere, replaced per-level
-    // Starts invisible; setThemeSkybox() populates it when a level loads.
-    const themeSkyGeom = new THREE.SphereGeometry(420, 64, 32);
-    const themeSkyMat = new THREE.MeshBasicMaterial({
-      side: THREE.BackSide,
-      depthWrite: false,
-      fog: false,
-      transparent: false,
-    });
-    this.themeSkyboxSphere = new THREE.Mesh(themeSkyGeom, themeSkyMat);
-    this.themeSkyboxSphere.visible = false;
-    this.scene.add(this.themeSkyboxSphere);
-
-    // 3D Whitecap-style receding spectrum grid — hidden until synthwave mode feeds data
-    if (!this.isTestEnv) this.createWhitecapGrid();
-  }
-
-  // ── 3D Whitecap-style receding spectrum grid ──────────────────────────────
-  // 64 frequency columns × 96 depth rows, extending 200 units behind the ship.
-  // A ring buffer stores one FFT snapshot per row, pushed every ~25ms, so the
-  // spectrum appears to flow into the distance as the music plays.
-  createWhitecapGrid() {
-    const COLS = 64;
-    const ROWS = 96;
-    const WIDTH = 260; // wide enough to sweep the full screen around the track
-
-    // Ring buffer — ROWS entries of COLS magnitudes each, all silent to start
-    this._gridCols = COLS;
-    this._gridRows = ROWS;
-    this._gridWidth = WIDTH;
-    this._fftHistory = [];
-    for (let r = 0; r < ROWS; r++) this._fftHistory.push(new Float32Array(COLS));
-    this._gridLastPushTime = 0;
-    this._gridPushInterval = 0.025; // seconds between new depth rows (halved -> denser bands)
-    this._gridPreset      = 0;     // cycles: 0=Spectrum,1=Mirror,2=Matrix,3=Rainbow,4=RainbowGradient
-    this._gridPresetTimer = 0;
-    this._prevPreset      = 0;     // crossfade source preset
-    this._presetBlend     = 1;     // 0→1 over the transition (1 = fully on current preset)
-
-    const vertCount = COLS * ROWS;
-    const positions = new Float32Array(vertCount * 3);
-    const colors    = new Float32Array(vertCount * 3);
-
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const vi = r * COLS + c;
-        positions[vi * 3] = (c / (COLS - 1) - 0.5) * WIDTH;
-        positions[vi * 3 + 1] = 0;
-        positions[vi * 3 + 2] = 0;
-        colors[vi * 3] = 0.2; colors[vi * 3 + 1] = 0; colors[vi * 3 + 2] = 0.5;
-      }
-    }
-
-    // Horizontal lines (across each depth row) + vertical lines (into depth per column)
-    const idxList = [];
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS - 1; c++) idxList.push(r * COLS + c, r * COLS + c + 1);
-    }
-    for (let c = 0; c < COLS; c++) {
-      for (let r = 0; r < ROWS - 1; r++) idxList.push(r * COLS + c, (r + 1) * COLS + c);
-    }
-
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geom.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
-    geom.setIndex(new THREE.BufferAttribute(new Uint32Array(idxList), 1));
-
-    const mat = new THREE.LineBasicMaterial({
-      vertexColors: true,
-      transparent: false,         // opaque queue → renders BEFORE road tiles (road draws over us)
-      depthWrite: false,
-      depthTest: false,           // no depth competition — road (renderOrder 0) simply overwrites
-      blending: THREE.AdditiveBlending,
-    });
-
-    this.visualizerGrid = new THREE.LineSegments(geom, mat);
-    this.visualizerGrid.visible = false;
-    this.visualizerGrid.renderOrder = -100;
-    this.scene.add(this.visualizerGrid);
-
-    // Glow dots at every grid vertex
-    const dotGeom = new THREE.BufferGeometry();
-    dotGeom.setAttribute('position', new THREE.BufferAttribute(positions.slice(), 3));
-    dotGeom.setAttribute('color',    new THREE.BufferAttribute(colors.slice(), 3));
-
-    const dotMat = new THREE.PointsMaterial({
-      size: 0.4,
-      vertexColors: true,
-      transparent: false,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      depthTest: false,
-      sizeAttenuation: true,
-    });
-    this.visualizerDots = new THREE.Points(dotGeom, dotMat);
-    this.visualizerDots.visible = false;
-    this.visualizerDots.renderOrder = -100;
-    this.scene.add(this.visualizerDots);
-  }
-
-  updateWhitecapGrid(physics, dt) {
-    if (!this.visualizerGrid || !this.audioData) {
-      if (this.visualizerGrid) this.visualizerGrid.visible = false;
-      if (this.visualizerDots) this.visualizerDots.visible = false;
-      return;
-    }
-
-    const COLS   = this._gridCols;
-    const ROWS   = this._gridRows;
-    const WIDTH  = this._gridWidth;
-    const DEPTH  = 240;
-    const MAX_H  = 3;    // lower peak height so the grid hugs the horizon, not the open sky
-    const START  = 45;   // start further ahead so near road tiles have no grid in front
-    const Y_DROP = 6;    // sink the baseline well below track-surface level, right at the horizon band
-    const freq   = this.audioData.frequencyData;
-    const beat   = this.audioData.beatEnergy;
-    const bass   = this.audioData.bassEnergy;
-    const treble = this.audioData.trebleEnergy;
-    // Same ring-curvature the track uses, full strength — the grid arcs up into the sky
-    // in the distance exactly like the road surface does.
-    const curveOn   = curvatureUniforms.uCurvatureOn.value > 0.5;
-    const curveR    = curvatureUniforms.uCurvatureRadius.value;
-    const CURVE_DAMP = 1.0;
-
-    // Push a new FFT snapshot every _gridPushInterval seconds
-    this._gridLastPushTime = (this._gridLastPushTime || 0) + dt;
-    if (this._gridLastPushTime >= this._gridPushInterval) {
-      this._gridLastPushTime = 0;
-      const snap = new Float32Array(COLS);
-      for (let c = 0; c < COLS; c++) {
-        // Standard spectrum layout: low freq (bass) on LEFT (c=0), high (treble) on RIGHT (c=max).
-        // Mirror the FFT index so bass appears on the left side of the grid.
-        const fi = Math.floor((COLS - 1 - c) / COLS * freq.length * 0.65);
-        snap[c] = freq[fi] / 255;
-      }
-      this._fftHistory.unshift(snap);
-      if (this._fftHistory.length > ROWS) this._fftHistory.pop();
-    }
-
-    // Cycle visual preset every 35 s, crossfading over 1.5 s so switches aren't jarring
-    this._gridPresetTimer += dt;
-    if (this._gridPresetTimer >= 35.0) {
-      this._gridPresetTimer = 0;
-      this._prevPreset = this._gridPreset;
-      this._gridPreset = (this._gridPreset + 1) % 5;
-      this._presetBlend = 0;
-    }
-    if (this._presetBlend < 1) this._presetBlend = Math.min(1, this._presetBlend + dt / 1.5);
-    const preset = this._gridPreset;
-    const prevPreset = this._prevPreset;
-    const blend = this._presetBlend;
-    const tNow = this.uTimeAccumulator;
-
-    const posAttr  = this.visualizerGrid.geometry.attributes.position;
-    const colAttr  = this.visualizerGrid.geometry.attributes.color;
-    const pos      = posAttr.array;
-    const col      = colAttr.array;
-    const shipZ    = physics.position.z;
-    const histLen  = this._fftHistory.length;
-    const BASE_Y   = physics.position.y - Y_DROP; // sunk below road surface, bars grow upward from there
-
-    // Sample one preset for a vertex → [verticalSign, r, g, b]. Presets are crossfaded
-    // (colour AND mirror geometry) so transitions glide instead of snapping.
-    const sample = (p, c, row, mag, fade, hue) => {
-      let sign = 1, r, g, b;
-      switch (p) {
-        case 0:                       // Spectrum: bass-warm left → treble-cool right
-        case 1: {                     // Mirror: even rows full height, odd rows 40% (staggered echo at floor level)
-          sign = (p === 1 && row % 2 === 1) ? 0.4 : 1;
-          const br0 = (0.12 + mag * 0.75 + beat * 0.18) * fade;
-          r = (0.5 + hue * 0.6 + bass * 0.3) * br0;
-          g = mag * 0.18 * fade;
-          b = (0.9 - hue * 0.7 + treble * 0.4) * br0;
-          break;
-        }
-        case 2: {                     // Matrix green — dark scanline look
-          const gbr = (0.08 + mag * 1.1 + beat * 0.22) * fade;
-          r = mag * 0.04 * fade; g = gbr; b = mag * 0.06 * fade;
-          break;
-        }
-        case 3: {                     // Rainbow — hue scrolls with time + column
-          const hDeg = (((1 - hue) + tNow * 0.04) % 1.0) * 360;
-          const [rr, gg, bb] = hslToRgb(hDeg, 90, 35 + mag * 30);
-          const rbr = (0.18 + mag * 0.7 + beat * 0.16) * fade * 1.2;
-          r = (rr / 255) * rbr; g = (gg / 255) * rbr; b = (bb / 255) * rbr;
-          break;
-        }
-        case 4: {                     // Rainbow Gradient — a flowing diagonal rainbow sheet
-          let hh = ((c / (COLS - 1)) * 0.55 + (row / (ROWS - 1)) * 0.35 + tNow * 0.08) % 1.0;
-          if (hh < 0) hh += 1;
-          const [rr, gg, bb] = hslToRgb(hh * 360, 95, 45 + mag * 25);
-          const rbr = (0.18 + mag * 0.65 + beat * 0.14) * fade * 1.2;
-          r = (rr / 255) * rbr; g = (gg / 255) * rbr; b = (bb / 255) * rbr;
-          break;
-        }
-        default: r = g = b = mag * fade;
-      }
-      const GLOW_SCALE = 0.55; // overall brightness trim — keeps bloom from blowing this out
-      return [sign, r * GLOW_SCALE, g * GLOW_SCALE, b * GLOW_SCALE];
-    };
-
-    for (let row = 0; row < ROWS; row++) {
-      const rowData = row < histLen ? this._fftHistory[row] : null;
-      const t     = row / (ROWS - 1);
-      const rowZ  = shipZ - START - t * DEPTH;
-      // Hard cutoff at 75% depth + steep power curve — far rows reach true zero so they
-      // can't pile up into a bright blob via additive blending at the vanishing point.
-      const FADE_CUTOFF = 0.75;
-      const fade  = t >= FADE_CUTOFF ? 0 : Math.pow(1.0 - t / FADE_CUTOFF, 3.5);
-
-      // Damped ring-curvature lift — same shape as the track's vertex shader, scaled down
-      // so the wide grid hints at the bend without arcing up into open sky.
-      let curveYOffset = 0, curvedZ = rowZ;
-      if (curveOn) {
-        const d   = shipZ - rowZ;          // distance ahead (matches GLSL: uCameraZ - wp.z)
-        const ang = d / curveR;
-        curveYOffset = curveR * (1 - Math.cos(ang)) * CURVE_DAMP;
-        curvedZ      = rowZ + (curveR * Math.sin(ang) - d) * CURVE_DAMP;
-      }
-
-      for (let c = 0; c < COLS; c++) {
-        const vi   = row * COLS + c;
-        const mag  = rowData ? rowData[c] : 0;
-        const barH = mag * MAX_H * (1.0 + beat * 0.5);
-        const hue  = 1.0 - c / (COLS - 1); // 1 at c=0 (LEFT/bass), 0 at c=COLS-1 (RIGHT/treble)
-
-        let [sign, r, g, b] = sample(preset, c, row, mag, fade, hue);
-        if (blend < 1) {              // crossfade from the previous preset
-          const [s0, r0, g0, b0] = sample(prevPreset, c, row, mag, fade, hue);
-          sign = s0 + (sign - s0) * blend;
-          r = r0 + (r - r0) * blend; g = g0 + (g - g0) * blend; b = b0 + (b - b0) * blend;
-        }
-
-        pos[vi * 3]     = (c / (COLS - 1) - 0.5) * WIDTH;
-        pos[vi * 3 + 1] = BASE_Y + barH * sign + curveYOffset;
-        pos[vi * 3 + 2] = curvedZ;
-        col[vi * 3]     = r;
-        col[vi * 3 + 1] = g;
-        col[vi * 3 + 2] = b;
-      }
-    }
-
-    posAttr.needsUpdate = true;
-    colAttr.needsUpdate = true;
-
-    if (this.visualizerDots) {
-      const dp = this.visualizerDots.geometry.attributes.position;
-      const dc = this.visualizerDots.geometry.attributes.color;
-      dp.array.set(pos);
-      dc.array.set(col);
-      dp.needsUpdate = true;
-      dc.needsUpdate = true;
-      this.visualizerDots.visible = true;
-    }
-
-    this.visualizerGrid.visible = true;
-  }
-
-
-  /**
-   * Background is a flying hyperdrive starfield (no purple skyboxes). We hide the
-   * AI sky sphere, procedural nebula and GLTF skybox, and show the warp starfield
-   * + spiral galaxy over near-black space. Called from app.js when a level starts.
-   * (themeKey kept for signature compatibility.)
-   */
-  setThemeSkybox(themeKey) {
-    if (this.themeSkyboxSphere) this.themeSkyboxSphere.visible = false;
-    if (this.nebulaSphere)      this.nebulaSphere.visible = false;
-    if (this.gltfLoaded && this.skyboxMesh) this.skyboxMesh.visible = false;
-    if (this.starField)    this.starField.visible = true;
-
-    if (this.scene) this.scene.background = new THREE.Color(0x01000a); // deep-space black
-  }
-
-  // Called by the game loop each frame when synthwave mode is active.
-  setAudioData(data) {
-    this.audioData = data;
   }
 
   optimizeShipTexture(texture) {
@@ -1725,6 +1164,33 @@ export class GraphicsEngine {
     this.scene.add(this.shipMesh);
   }
 
+  // ponytail: clone of the real ship, recolored translucent. Geometries are
+  // shared with shipMesh via clone(true) — only the new materials get disposed.
+  createGhostMesh() {
+    if (!this.shipMesh) return null;
+    this.ghostMesh = this.shipMesh.clone(true);
+    this.ghostMesh.traverse((obj) => {
+      if (obj.isMesh) {
+        obj.material = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.35, depthWrite: false });
+      }
+    });
+    this.scene.add(this.ghostMesh);
+    return this.ghostMesh;
+  }
+
+  setGhostVisible(visible) {
+    if (this.ghostMesh) this.ghostMesh.visible = visible;
+  }
+
+  removeGhostMesh() {
+    if (!this.ghostMesh) return;
+    this.scene.remove(this.ghostMesh);
+    this.ghostMesh.traverse((obj) => {
+      if (obj.isMesh && obj.material) obj.material.dispose();
+    });
+    this.ghostMesh = null;
+  }
+
   changeShipSkin(skinName, colorHex) {
     if (colorHex === undefined) {
       if (skinName && skinName.startsWith('#')) {
@@ -1910,6 +1376,17 @@ export class GraphicsEngine {
     // Update track curvature center point (follows camera Z for consistent ring-road bend)
     curvatureUniforms.uCameraZ.value = physics.position.z;
 
+    // Speed-dependent FOV widening: smoothly blend toward a wider FOV as speed approaches boost max
+    let targetFov = this.cameraMode === 'cockpit' ? this.cockpitFov : this.baseFov;
+    if (this.speedFovEnabled) {
+      const speedRatio = Math.min(1, Math.abs(physics.velocity.z) / (physics.maxSpeedBoost || 60));
+      targetFov += speedRatio * this.speedFovMaxAdd;
+    }
+    if (Math.abs(this.camera.fov - targetFov) > 0.01) {
+      this.camera.fov += (targetFov - this.camera.fov) * 0.08;
+      this.camera.updateProjectionMatrix();
+    }
+
     // 1. Position the spaceship
     this.shipMesh.position.copy(physics.position);
 
@@ -1924,7 +1401,10 @@ export class GraphicsEngine {
       // but looking 1 tile ahead gives a gentle forward tilt matching the curve
       curvaturePitch = -1.0 / this.trackCurvatureRadius; // Subtle nose-down to follow ring
     }
-    const targetPitch = -physics.velocity.y * 0.0075 + curvaturePitch;
+    let targetPitch = -physics.velocity.y * 0.0075 + curvaturePitch;
+    if (physics.onRamp) {
+      targetPitch = physics.rampSlope;
+    }
     this.shipMesh.rotation.x += (targetPitch - this.shipMesh.rotation.x) * 0.15;
 
     // 2. Smooth Chase Camera (with distance scaling and multiple camera modes)
@@ -2081,7 +1561,7 @@ export class GraphicsEngine {
 
           // Vertex 2: Smear streak trailing backward based on forward speed
           // Tiny base length (0.05) when stopped, and stretches proportionally to actual ship speed!
-          const smearLength = 0.05 + speed * 0.16;
+          const smearLength = (0.05 + speed * 0.16) * this.starSizeMultiplier;
           posArray[idx + 3] = star.x;
           posArray[idx + 4] = star.y;
           posArray[idx + 5] = star.z - smearLength;
@@ -2093,74 +1573,21 @@ export class GraphicsEngine {
       // only tracking the ship's forward progress along the Z axis!
       this.starField.position.set(0, 0, physics.position.z);
     }
-    if (this.nebulaSphere && this.nebulaSphere.visible) {
-      // Keep background sphere centered around the ship so we never fly out of bounds
-      this.nebulaSphere.position.copy(physics.position);
 
-      // Slowly pan the background UP and DOWN (X-axis rotation) based SOLELY on forward Z-position!
-      // This links the vertical pan directly to the ship's forward motion (no constant time-based panning).
-      this.nebulaSphere.rotation.x = physics.position.z * -0.00025; // Pitch the skybox vertically with forward distance!
-      this.nebulaSphere.rotation.y = 0; // Zero out horizontal rotation
-    }
-    if (this.sunMesh && this.sunMesh.visible) {
-      this.sunMesh.position.x = physics.position.x;
-      this.sunMesh.position.z = physics.position.z - 350;
-    }
-    if (this.skyboxMesh && this.gltfLoaded) {
-      this.skyboxMesh.position.copy(physics.position);
-      // Pan with forward progress — sky scrolls as you fly through it
-      this.skyboxMesh.rotation.y = -physics.position.z * 0.00015;
-    }
-    if (this.themeSkyboxSphere && this.themeSkyboxSphere.visible) {
-      // Center on player and pan the sky with Z progress
-      this.themeSkyboxSphere.position.copy(physics.position);
-      this.themeSkyboxSphere.rotation.y = -physics.position.z * 0.00012;
-      this.themeSkyboxSphere.rotation.x = -physics.position.z * 0.00005;
+    if (this.visualizerWallMode && this.visualizerWalls) {
+      this.visualizerWalls.forEach(w => { w.position.z = physics.position.z; });
     }
 
     // 3. Update active particles (thrusters and explosions)
     this.updateParticles(physics, dt);
 
-    // Update uTime uniform for the fBm background nebula shader material
     this.uTimeAccumulator += dt;
-    if (this.nebulaSphere && this.nebulaSphere.visible && this.nebulaSphere.material && this.nebulaSphere.material.uniforms && this.nebulaSphere.material.uniforms.uTime) {
-      const u = this.nebulaSphere.material.uniforms;
-      u.uTime.value = this.uTimeAccumulator;
-      // Feed live audio into nebula shader when synthwave is active
-      if (this.audioData) {
-        u.uBass.value   = this.audioData.bassEnergy;
-        u.uMid.value    = this.audioData.midEnergy;
-        u.uTreble.value = this.audioData.trebleEnergy;
-        u.uBeat.value   = this.audioData.beatEnergy;
-        // Bake 256 FFT bins into the DataTexture (R=freq, G=time-domain)
-        if (this._freqDataTex) {
-          const td  = this._freqDataTex.image.data;
-          const fd  = this.audioData.frequencyData;
-          const tvd = this.audioData.timeData;
-          for (let i = 0; i < 256; i++) {
-            td[i * 4 + 0] = fd[Math.floor(i * fd.length / 256)];  // R = frequency
-            td[i * 4 + 1] = tvd[Math.floor(i * tvd.length / 256)]; // G = waveform
-            td[i * 4 + 2] = 0;
-            td[i * 4 + 3] = 255;
-          }
-          this._freqDataTex.needsUpdate = true;
-        }
-      } else {
-        u.uBass.value = u.uMid.value = u.uTreble.value = u.uBeat.value = 0;
-      }
-    }
 
-    // Beat-reactive bloom — gentle boost that stays within reason
-    if (this.bloomPass && this.audioData) {
-      this.bloomPass.strength  = 0.35 + this.audioData.bassEnergy * 0.5 + this.audioData.beatEnergy * 0.6;
-      this.bloomPass.threshold = Math.max(0.55, 0.88 - this.audioData.bassEnergy * 0.25);
-    } else if (this.bloomPass && !this.audioData) {
+    // Static bloom — no audio-reactive modulation
+    if (this.bloomPass) {
       this.bloomPass.strength  = 0.35;
       this.bloomPass.threshold = 0.88;
     }
-
-    // Update 3D Whitecap-style receding spectrum grid
-    this.updateWhitecapGrid(physics, dt);
 
     // ── SPACESHIP EXHAUST FLAME MESHS PULSING ──
     // Exhaust flame scale pulsing using a periodic sin wave to look incredibly alive and organic
@@ -2278,17 +1705,30 @@ export class GraphicsEngine {
         });
       }
 
-      // Pulse emissive materials — beat-reactive in synthwave mode, gentle sin otherwise.
-      // Kept subtle (max 1.6×) so tiles don't overexpose when the bloom pass is also boosted.
-      const pulseMultiplier = this.audioData
-        ? 1.0 + this.audioData.bassEnergy * 0.4 + this.audioData.beatEnergy * 0.2
-        : 1.0 + Math.sin(this.uTimeAccumulator * 6.0) * 0.12;
+      const speed = Math.abs(physics.velocity.z);
+      const maxSpeed = physics.maxSpeedBoost || 60;
+      const speedRatio = Math.min(1, speed / maxSpeed);
+      const speedMultiplier = 1.0 + speedRatio * 0.5; // Up to 1.5x at max speed
+
+      let beatEnergy = 0.0;
+      try {
+        const audioState = gameAudio ? gameAudio.getAnalyserData() : null;
+        if (audioState && typeof audioState.beatEnergy === 'number') {
+          beatEnergy = audioState.beatEnergy;
+        }
+      } catch (e) {
+        // Guard against AudioContext issues
+      }
+      const beatMultiplier = 1.0 + beatEnergy * 0.45; // Up to 1.45x boost on beats
+
+      // Pulse emissive materials with a gentle sin wave + speed reactivity + beat energy.
+      const pulseMultiplier = (1.0 + Math.sin(this.uTimeAccumulator * 6.0) * 0.12) * speedMultiplier * beatMultiplier;
       for (const child of this.emissiveMeshCache) {
         const base = child.userData._baseEmissiveIntensity || 1.0;
-        child.material.emissiveIntensity = Math.min(base * pulseMultiplier, base * 1.6);
+        child.material.emissiveIntensity = Math.min(base * pulseMultiplier, base * 2.2);
       }
 
-      // Distance-based glow falloff for rail trim strips
+      // Distance-based glow falloff for rail trim strips + speed reactivity
       if (this.scene.userData.railStrips && this.camera) {
         const camPos = this.camera.position;
         for (const strip of this.scene.userData.railStrips) {
@@ -2296,17 +1736,38 @@ export class GraphicsEngine {
           const dist = camPos.distanceTo(strip.position);
           // Full intensity within 8 units, exponential decay beyond — visible but not flooding
           const falloff = dist < 8 ? 1.0 : Math.max(0.15, Math.exp(-(dist - 8) / 35));
-          strip.material.emissiveIntensity = strip.userData.railBaseIntensity * falloff;
+          strip.material.emissiveIntensity = strip.userData.railBaseIntensity * falloff * speedMultiplier * beatMultiplier;
         }
       }
 
-      // Animate custom decal texture offsets and pulsing glow intensities
+      // Music-reactive and speed-reactive dynamic tunnel ribs scaling & glow
+      if (this.scene.userData.tunnelRibs) {
+        for (const rib of this.scene.userData.tunnelRibs) {
+          if (!rib.material) continue;
+          // Pulse the emissive glow matching the beat energy and ship speed
+          rib.material.emissiveIntensity = 0.8 * speedMultiplier * beatMultiplier;
+          // Scale/pulse the rib thickness along its local axes in sync with music beat energy
+          if (rib.userData && rib.userData.baseScale) {
+            const scalePulse = 1.0 + beatEnergy * 0.22; // up to 1.22x thicker on beats
+            rib.scale.set(
+              rib.userData.baseScale.x * scalePulse,
+              rib.userData.baseScale.y * scalePulse,
+              rib.userData.baseScale.z * scalePulse
+            );
+          }
+          // Keep ribs statically aligned to prevent clipping/skewing below the track
+        }
+      }
+
+      // Animate custom decal texture offsets (speed up scroll at high speeds) and pulsing glow intensities
       if (this.scene.userData.animatedDecals) {
         this.scene.userData.animatedDecals.forEach((decalMat) => {
           if (decalMat.map && decalMat.userData && decalMat.userData.isAnimated) {
-            decalMat.map.offset.y += decalMat.userData.speed * dt;
+            const speedScale = 1.0 + speedRatio * 1.5; // scroll up to 2.5x faster at full speed
+            decalMat.map.offset.y += decalMat.userData.speed * speedScale * dt;
             if (decalMat.userData.pulse) {
-              decalMat.emissiveIntensity = decalMat.userData.baseIntensity + Math.sin(this.uTimeAccumulator * 8.0) * 1.5;
+              const amp = decalMat.userData.pulseAmplitude !== undefined ? decalMat.userData.pulseAmplitude : 1.5;
+              decalMat.emissiveIntensity = (decalMat.userData.baseIntensity + Math.sin(this.uTimeAccumulator * 8.0) * amp) * speedMultiplier * beatMultiplier;
             }
           }
         });
@@ -2651,81 +2112,6 @@ export class GraphicsEngine {
     }
   }
 
-  /**
-   * Dynamically hot-swaps the massive background sphere texture to a unique, high-resolution
-   * Hubble space image matching the active level index, creating a stunning visual atmosphere.
-   */
-  updateSkyboxBackground() {
-    if (!this.nebulaSphere) return;
-
-    // Dispose of any previously active scene background cube texture to prevent memory leaks
-    if (this.scene && this.scene.background) {
-      if (typeof this.scene.background.dispose === 'function') {
-        this.scene.background.dispose();
-      }
-      this.scene.background = null;
-    }
-
-    const levelIndex = window.currentLevelIndex || 0;
-
-    // Check if it is a generated level with 6-sided custom skybox assets
-    if (levelIndex >= 61 && !this.isTestEnv) {
-      const px = getLevelAssetUrl(levelIndex, 'skybox_px.png');
-      const nx = getLevelAssetUrl(levelIndex, 'skybox_nx.png');
-      const py = getLevelAssetUrl(levelIndex, 'skybox_py.png');
-      const ny = getLevelAssetUrl(levelIndex, 'skybox_ny.png');
-      const pz = getLevelAssetUrl(levelIndex, 'skybox_pz.png');
-      const nz = getLevelAssetUrl(levelIndex, 'skybox_nz.png');
-
-      if (px && nx && py && ny && pz && nz) {
-        const cubeLoader = new THREE.CubeTextureLoader();
-        try {
-          cubeLoader.load([px, nx, py, ny, pz, nz], (cubeTex) => {
-            this.scene.background = cubeTex;
-            this.nebulaSphere.visible = false;
-          });
-          return;
-        } catch (e) {
-          // Fall back to standard sphere skybox on loader failure
-        }
-      }
-    }
-
-    // Classic/fallback handling: clear cube background and use the nebula sphere skybox
-    this.scene.background = null;
-    this.nebulaSphere.visible = true;
-
-    if (skyboxKeys.length === 0) return;
-    const key = skyboxKeys[levelIndex % skyboxKeys.length];
-    const url = skyboxImages[key];
-    if (!url) return;
-
-    const textureLoader = new THREE.TextureLoader();
-    try {
-      textureLoader.load(url, (tex) => {
-        if (tex) {
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.RepeatWrapping;
-          
-          // Disable mipmapping and use linear filtering to force maximum crispness (no blurry skybox)
-          tex.minFilter = THREE.LinearFilter;
-          tex.magFilter = THREE.LinearFilter;
-          tex.generateMipmaps = false;
-          
-          // Enable anisotropic filtering if renderer and capabilities are available
-          if (this.renderer && this.renderer.capabilities) {
-            tex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
-          }
-          
-          this.nebulaSphere.material.map = tex;
-          this.nebulaSphere.material.needsUpdate = true;
-        }
-      });
-    } catch (e) {
-      // Graceful fallback for test runner environments
-    }
-  }
-
   clearLevel() {
     if (this.shipMesh) {
       this.shipMesh.visible = (!this.app || this.app.gameState !== 'editor');
@@ -2735,9 +2121,6 @@ export class GraphicsEngine {
     if (this.starField) {
       this.starField.rotation.set(0, 0, 0);
     }
-
-    // Hot-swap background skybox texture dynamically for the level
-    this.updateSkyboxBackground();
 
     // Invalidate emissive cache so it is rebuilt for new level geometry
     this.emissiveMeshCache = null;
@@ -2908,7 +2291,221 @@ export class GraphicsEngine {
     }
   }
 
+  /**
+   * Uses the Butterchurn visualizer's own canvas as the scene background,
+   * read in each frame as a CanvasTexture.
+   *
+   * Not composited as a separate DOM overlay: the bloom/post-processing
+   * pipeline below always writes alpha=1 in its final output regardless of
+   * the scene's own transparency, confirmed via live debugging (a hardcoded
+   * solid-color test block rendered into a separate overlay canvas but never
+   * appeared on screen, even though the renderer's own clear alpha was 0).
+   * Reading the visualizer's pixels into this scene's own background sidesteps
+   * that entirely — single WebGL context, no cross-canvas compositing.
+   */
+  setVisualizerCanvas(canvasEl) {
+    this.visualizerCanvasEl = canvasEl;
+    this.visualizerTexture = new THREE.CanvasTexture(canvasEl);
+    this.visualizerTexture.colorSpace = THREE.SRGBColorSpace;
+    // Default CanvasTexture filtering is mipmapped — with needsUpdate set
+    // every frame (see render() below), that forces a full mipmap chain
+    // rebuild every frame at full screen resolution, which is brutally
+    // expensive. A flat background quad never needs mipmaps.
+    this.visualizerTexture.generateMipmaps = false;
+    this.visualizerTexture.minFilter = THREE.LinearFilter;
+    this.visualizerTexture.magFilter = THREE.LinearFilter;
+    this.scene.background = this.visualizerTexture;
+    // Tunable wall params — live-adjustable via setVisualizerWallParams(), see settings sliders.
+    this.visualizerWallParams = { angleDeg: 45, halfTrack: 9, height: 300, nearZ: 30 };
+    this._buildVisualizerWalls();
+  }
+
+  /**
+   * Alternate display mode: two tall walls flanking the track instead of a
+   * flat skybox background, like canyon walls made of the same Butterchurn
+   * output. Both meshes share the ONE `visualizerTexture` (same texture
+   * object as the background mode) — only one GPU upload per frame
+   * regardless of which mode is active, so switching modes is free
+   * performance-wise.
+   *
+   * Each wall is a genuine trapezoid (4 hand-built vertices, not a rotated
+   * rectangle): full width at the near edge, tapering to X=0 at the far
+   * edge, where `farZ` is derived from `angleDeg` (the angle each wall makes
+   * with the track/Z-axis) so they meet exactly at X=0 by construction — no
+   * risk of the planes crossing past each other beyond that point (which is
+   * what a tilted-rotation approach does, and looked bad — tried it,
+   * reverted in favor of this).
+   */
+  _buildVisualizerWalls() {
+    if (this.visualizerWalls) {
+      this.visualizerWalls.forEach(w => {
+        this.scene.remove(w);
+        w.geometry.dispose();
+      });
+      this.visualizerWalls[0].material.dispose();
+    }
+
+    const { angleDeg, halfTrack, height, nearZ } = this.visualizerWallParams;
+    const bottomY = -20, topY = bottomY + height;
+    // tan(angle) = halfTrack / depth, so depth = halfTrack / tan(angle)
+    const depth = halfTrack / Math.tan(THREE.MathUtils.degToRad(Math.min(89, Math.max(1, angleDeg))));
+    
+    // In Three.js / Skyroads, the ship moves forward in the negative Z direction.
+    // To position the walls in front of the ship/camera, the local Z vertex coordinates must be negative.
+    // Near edge starts at -nearZ, and far edge (converging at X=0) is at -(nearZ + depth).
+    const nearZCoord = -nearZ;
+    const farZCoord = -(nearZ + depth);
+
+    const buildTrapezoid = (xNear, mirrorUv) => {
+      const positions = new Float32Array([
+        xNear, bottomY, nearZCoord,
+        xNear, topY, nearZCoord,
+        0, bottomY, farZCoord,
+        0, topY, farZCoord
+      ]);
+      const u0 = mirrorUv ? 1 : 0, u1 = mirrorUv ? 0 : 1;
+      const uvs = new Float32Array([u0, 0, u0, 1, u1, 0, u1, 1]);
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+      geom.setIndex([0, 2, 1, 1, 2, 3]);
+      geom.computeVertexNormals();
+      return geom;
+    };
+
+    const mat = new THREE.MeshBasicMaterial({
+      map: this.visualizerTexture,
+      side: THREE.DoubleSide,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false
+    });
+
+    const wasVisible = this.visualizerWallMode || false;
+    const leftWall = new THREE.Mesh(buildTrapezoid(-halfTrack, false), mat);
+    leftWall.visible = wasVisible;
+
+    // Mirrored UVs so the same texture reads as a mirror image on the right wall.
+    const rightWall = new THREE.Mesh(buildTrapezoid(halfTrack, true), mat);
+    rightWall.visible = wasVisible;
+
+    this.visualizerWalls = [leftWall, rightWall];
+    this.scene.add(leftWall, rightWall);
+  }
+
+  /** Live-tune wall geometry (angle/spread/height/distance) — rebuilds immediately. */
+  setVisualizerWallParams(params) {
+    if (!this.visualizerWallParams) return;
+    Object.assign(this.visualizerWallParams, params);
+    this._buildVisualizerWalls();
+  }
+
+  /** Toggles between flat skybox-background mode (default) and the wall mode above. */
+  setVisualizerWallMode(enabled) {
+    this.visualizerWallMode = enabled;
+    if (this.visualizerWalls) {
+      this.visualizerWalls.forEach(w => { w.visible = enabled; });
+    }
+    if (this.scene) {
+      this.scene.background = enabled ? new THREE.Color(0x01000a) : this.visualizerTexture;
+    }
+  }
+
+  /** Builds the production warp-streak starfield (LineSegments) at this.starCount. */
+  _buildWarpStarfield() {
+    const starCount = this.starCount;
+    this.starData = [];
+    const positions = new Float32Array(starCount * 2 * 3); // 2 vertices per star (start and end)
+    const colors = new Float32Array(starCount * 2 * 3);
+
+    for (let i = 0; i < starCount; i++) {
+      // Distribute stars in a cylindrical corridor flanking the track to create a gorgeous zoom effect
+      const theta = Math.random() * Math.PI * 2;
+      const radius = Math.random() * 120 + 6; // wide spread to fill the screen with warp streaks
+      const x = Math.cos(theta) * radius;
+      const y = Math.sin(theta) * radius + 15; // slightly shifted up
+      const z = Math.random() * -450; // distribute far along the corridor
+      const speedMultiplier = Math.random() * 0.8 + 0.6;
+
+      this.starData.push({ x, y, z, speedMultiplier });
+
+      const idx = i * 6;
+      // Vertex 1: Start
+      positions[idx] = x;
+      positions[idx + 1] = y;
+      positions[idx + 2] = z;
+      // Vertex 2: End (starts flush)
+      positions[idx + 3] = x;
+      positions[idx + 4] = y;
+      positions[idx + 5] = z;
+
+      // Realistic stellar colors by spectral class — white-dominant, with blue-white
+      // hot stars, sun-like yellow, and rarer amber/red giants (matches a real sky).
+      const rand = Math.random();
+      let r, g, b;
+      if (rand < 0.50)      { r = 1.0; g = 1.0;  b = 1.0;  } // white (most common)
+      else if (rand < 0.72) { r = 0.7; g = 0.82; b = 1.0;  } // blue-white (hot O/B/A)
+      else if (rand < 0.86) { r = 1.0; g = 0.96; b = 0.82; } // yellow-white (sun-like G)
+      else if (rand < 0.96) { r = 1.0; g = 0.72; b = 0.42; } // amber/orange (K)
+      else                  { r = 1.0; g = 0.5;  b = 0.38; } // red giant (M)
+
+      colors[idx] = r; colors[idx + 1] = g; colors[idx + 2] = b;
+      colors[idx + 3] = r; colors[idx + 4] = g; colors[idx + 5] = b;
+    }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const mat = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false
+    });
+
+    this.starField = new THREE.LineSegments(geom, mat);
+    this.scene.add(this.starField);
+  }
+
+  /** Regenerates the starfield at a new star count (density). */
+  setStarDensity(count) {
+    this.starCount = Math.max(0, Math.round(count));
+    if (!this.starField || this.isTestEnv) return;
+    const wasVisible = this.starField.visible;
+    this.scene.remove(this.starField);
+    this.starField.geometry.dispose();
+    this.starField.material.dispose();
+    this._buildWarpStarfield();
+    this.starField.visible = wasVisible;
+  }
+
+  /**
+   * Scales the warp streaks' trail length (see update()'s smearLength calc).
+   * True line *width* isn't reliably adjustable across GPUs/drivers with
+   * THREE's basic LineBasicMaterial (a well-known WebGL limitation — native
+   * gl.lineWidth is ignored on most platforms), so streak length is the
+   * practical, working "bigger stars" lever here.
+   */
+  setStarSize(multiplier) {
+    this.starSizeMultiplier = Math.max(0.1, multiplier);
+  }
+
   render() {
+    if (this.visualizerTexture) {
+      // The visualizer canvas only actually repaints at ~30fps (see
+      // visualizer/engine.js) — re-uploading the same unchanged pixels into
+      // this texture on every one of the game's own frames (90-144fps) pays
+      // the upload's cross-context sync cost for nothing. Match its cadence.
+      const now = performance.now();
+      if (!this._lastVisualizerUpload || now - this._lastVisualizerUpload >= 1000 / 30) {
+        this._lastVisualizerUpload = now;
+        this.visualizerTexture.needsUpdate = true;
+      }
+    }
     if (this.composer) {
       this.composer.render();
     } else if (this.renderer && this.scene && this.camera) {

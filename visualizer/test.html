@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Visualizer smoke test</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; }
+    </style>
+  </head>
+  <body>
+    <div id="webamp-container"></div>
+    <script type="module">
+      import { initVisualizer } from './index.js'
+
+      initVisualizer(document.getElementById('webamp-container'), { initialTracks: [] })
+        .then(() => {
+          window.__visualizerReady = true
+          console.log('[test] initVisualizer resolved')
+        })
+        .catch((err) => {
+          window.__visualizerError = err.message
+          console.error('[test] initVisualizer failed', err)
+        })
+    </script>
+  </body>
+</html>

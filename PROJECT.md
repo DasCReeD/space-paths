@@ -1,6 +1,6 @@
 # SkyRoads WebGL — Project Overview
 
-> **Last updated:** 2026-06-15
+> **Last updated:** 2026-06-25
 
 ---
 
@@ -19,6 +19,7 @@
 | [preview.js](file:///c:/dev/Sky%20roads/preview.js) | ~600 | Ship garage preview engine (isolated Three.js scene) |
 | [oplSynth.js](file:///c:/dev/Sky%20roads/oplSynth.js) | ~637 | OPL2 FM synthesis (Yamaha YM3812) + LZS decompressor |
 | [levels.js](file:///c:/dev/Sky%20roads/levels.js) | ~78 | Level pack fetch + cache loader |
+| [layoutDebugPanel.js](file:///c:/dev/Sky%20roads/layoutDebugPanel.js) | ~256 | Dev tool — live drag-to-reposition overlay for UI element placement |
 | [generate_textures.js](file:///c:/dev/Sky%20roads/generate_textures.js) | ~511 | Procedural PNG texture generator (standalone CLI) |
 | [debug_coords.js](file:///c:/dev/Sky%20roads/debug_coords.js) | ~220 | Puppeteer-based UI debug automation |
 | [vitest.setup.js](file:///c:/dev/Sky%20roads/vitest.setup.js) | ~103 | Test harness — asset stub generation |
@@ -52,6 +53,8 @@
 | 19 | Resolve curvature bending on decal overlays and scenery blocks | ✅ DONE |
 | 20 | Real-time music visualizer — Whitecap-style 3D receding spectrum grid + bloom | ✅ DONE |
 | 21 | SynthwaveSequencer — 12 procedural synthwave tracks with chord progressions | ✅ DONE |
+| 22 | Visualizer Preset Variety — 179 Cream-of-the-Crop Waveform presets with fetch-on-demand | ✅ DONE |
+| 23 | Live UI layout debug panel — drag-to-reposition menu/title-card/HUD overlays | ✅ DONE |
 
 ---
 
@@ -59,12 +62,12 @@
 
 | # | Milestone | Status | Priority |
 |---|-----------|--------|----------|
-| 22 | VRAM garbage collection & memory optimization | ⏳ Planned | P1 |
-| 23 | E2E browser testing with Playwright | ⏳ Planned | P1 |
-| 24 | Audio-driven level generator (offline tool, baked JSON) | ⏳ Planned | P2 |
-| 25 | World Builder UI (in-game level editor) | ⏳ Planned | P2 |
-| 26 | Extract shared `shipCatalog.js` from graphics.js/preview.js | ⏳ Planned | P2 |
-| 27 | Module splitting (app.js, graphics.js, levelLoader.js) | ⏳ Planned | P2 |
+| 24 | VRAM garbage collection & memory optimization | ⏳ Planned | P1 |
+| 25 | E2E browser testing with Playwright | ⏳ Planned | P1 |
+| 26 | Audio-driven level generator (offline tool, baked JSON) | ⏳ Planned | P2 |
+| 27 | World Builder UI (in-game level editor) | ⏳ Planned | P2 |
+| 28 | Extract shared `shipCatalog.js` from graphics.js/preview.js | ⏳ Planned | P2 |
+| 29 | Module splitting (app.js, graphics.js, levelLoader.js) | ⏳ Planned | P2 |
 
 ---
 

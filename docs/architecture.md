@@ -1,6 +1,6 @@
 # SkyRoads WebGL — Architecture
 
-> **Last updated:** 2026-06-15
+> **Last updated:** 2026-06-22
 > Definitive architectural reference for the SkyRoads WebGL project.
 
 ---
@@ -24,7 +24,10 @@
 
 | File | Size | Lines | Responsibility |
 |------|------|-------|----------------|
-| [app.js](file:///c:/dev/Sky%20roads/app.js) | 111 KB | ~2,797 | GameManager — state machine, UI, game loop, input, garage, settings |
+| [app.js](file:///c:/dev/Sky%20roads/app.js) | 111 KB | ~2,797 | GameManager — state machine, UI, game loop, input, garage, settings, XMB menu wiring |
+| [xmbMenu.js](file:///c:/dev/Sky%20roads/xmbMenu.js) | ~13 KB | ~360 | `CrossbarController` — shared PS3-XMB crossbar engine |
+| [menuConfig.js](file:///c:/dev/Sky%20roads/menuConfig.js) | ~10 KB | ~210 | Pure-data menu trees + `buildLevelSelectConfig` |
+| [visualizer/](file:///c:/dev/Sky%20roads/visualizer/) | — | — | Webamp + Butterchurn visualizer; preset controls surfaced in the XMB Settings menu |
 | [graphics.js](file:///c:/dev/Sky%20roads/graphics.js) | 93 KB | ~1,800 | Three.js rendering, particles, skybox, theming, ship models |
 | [levelLoader.js](file:///c:/dev/Sky%20roads/levelLoader.js) | 88 KB | ~2,200 | Level geometry builder, themed textures, async building, VRAM disposal |
 | [index.css](file:///c:/dev/Sky%20roads/index.css) | 78 KB | ~3,145 | Retro-futuristic glassmorphism design system |
@@ -53,6 +56,12 @@ graph TD
     APP --> PRV["preview.js<br/>ShipPreviewEngine"]
     APP --> LVL["levels.js<br/>Pack Loader"]
     APP --> TC["touchControls.js<br/>TouchControlManager"]
+    APP --> XMB["xmbMenu.js<br/>CrossbarController"]
+    APP --> MCFG["menuConfig.js<br/>menu data"]
+    APP --> VIS["visualizer/<br/>Webamp + Butterchurn"]
+
+    XMB --> AUD
+    VIS --> GFX
 
     GFX --> PHY
     GFX --> CC["cockpitConsole.js<br/>CockpitConsole3D + Minimap"]
@@ -255,6 +264,49 @@ flowchart TD
 
 ---
 
+## Menu System (XMB Crossbar)
+
+All in-game menus are a PS3 XrossMediaBar-style crossbar (rebuilt 2026-06). The
+design lives in [design guide.md](file:///c:/dev/Sky%20roads/design%20guide.md)
+and the binding spec in `.claude/skills/xmb-menu/SKILL.md`.
+
+```mermaid
+flowchart TD
+    DATA["menuConfig.js<br/>pure data trees (actionKey strings)"] --> WIRE["app.js<br/>setupXmbMenus / mountSettingsCrossbar /<br/>setupGarageCrossbar / showLevelSelection"]
+    WIRE -->|"resolve actionKey → handler + DOM el"| CTRL["xmbMenu.js<br/>CrossbarController per screen"]
+    WIRE --> MAP["this.crossbarControllers[screenId]"]
+    KEY["keydown listener"] --> DISP["getActiveCrossbarController()"]
+    PAD["gamepad poll (gp.menu*)"] --> DISP
+    MOUSE["click on item/category"] --> CTRL
+    DISP --> CTRL
+    CTRL -->|"render(): translate + scale/opacity"| DOM["index.html .xmb-crossbar markup<br/>(full-screen, blurred backdrop)"]
+    CTRL -->|"5 hooks"| AUD2["audio.js SFX"]
+```
+
+**Key properties:**
+- **Fixed focal point, centered:** the active category/item is pinned to screen
+  centre; the category row + item column translate through it. Fixed slot sizes
+  (`CATEGORY_SLOT_PX=200`, `ITEM_SLOT_PX=56`) shared between engine + CSS.
+- **One engine, all screens:** main menu, settings (6 categories incl.
+  VISUALIZER), garage (Hull/Skin/Paint), level select (decade groups, Infinite
+  Road as first item), and single-category dialogs (pause/death/success/how-to/
+  gamepad-config) all use `CrossbarController`.
+- **Full-screen, no window:** `.overlay-screen.active` blurs the live game
+  behind it (`backdrop-filter`) instead of a rounded glass-card.
+- **Input:** keyboard (arrows/WASD/Enter/Esc), gamepad (`gp.menu*`), and mouse
+  (item + category clicks) all drive the same controller; tap vs 200 ms-hold
+  repeat; clamp-at-bounds with a boundary SFX (no wrap).
+- **Data/wiring split:** `menuConfig.js` is pure data; `app.js` resolves each
+  `actionKey` to a live handler + DOM element, so adding an item never touches
+  the engine.
+- **Visualizer integration:** the Webamp/Butterchurn preset controls
+  (`visualizer/controls.js`) are exposed as the Settings **VISUALIZER** category
+  (preset slider + lock/fav/mode/webamp toggles); the old floating panel is gone.
+- **Physics calibrator:** remains its own window but is now drag-movable (title
+  bar) and CSS-resizable.
+
+---
+
 ## Theme System
 
 14 visual themes assigned per-level via `getThemeForLevel()`:
@@ -342,11 +394,13 @@ flowchart LR
 
 ## Test Architecture
 
-20 test files in `tests/`, powered by Vitest + jsdom:
+28 test files in `tests/`, powered by Vitest + jsdom (591 tests):
 
 | Test File | Module Under Test | Focus |
 |-----------|-------------------|-------|
-| `app.test.js` | GameManager | Full DOM lifecycle, state machine, settings, scoring |
+| `app.test.js` | GameManager | Full DOM lifecycle, state machine, settings, scoring, XMB level/settings wiring |
+| `xmbMenu.test.js` | CrossbarController | Tween math, retarget continuity, boundary clamp, slider exception, hold-timer |
+| `menuConfig.test.js` | menuConfig | Category/item counts, unique ids, slider bounds, decade-group math |
 | `graphics.test.js` | GraphicsEngine | Scene, camera, particles, ship mesh, skybox |
 | `physics.test.js` | PhysicsEngine | Acceleration, collision, jump, effects, death |
 | `levelLoader.test.js` | buildLevel() | Tile types, blocks, tunnels, finish line, gravity |
@@ -398,3 +452,4 @@ File: [.github/workflows/deploy.yml](file:///c:/dev/Sky%20roads/.github/workflow
 11. **Standalone CLI scripts** for asset generation — decoupled from game runtime
 12. **Static physics solver** validates procedurally generated levels are completable
 13. **Real-time audio visualizer** — Whitecap-style 3D receding spectrum grid driven by Web Audio AnalyserNode FFT data; 4 cycling presets (Spectrum, Mirror, Matrix, Rainbow); bloom strength and emissive tile pulsing driven by bass/beat energy
+14. **XMB crossbar menus** — one framework-free `CrossbarController` engine + pure-data `menuConfig.js` drive every menu as a PS3-style fixed-focal-point crossbar over a full-screen blurred backdrop; keyboard/gamepad/mouse share one input path; visualizer + calibrator folded into / launched from the menu

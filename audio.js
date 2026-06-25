@@ -13,7 +13,7 @@ import {
 // Fallback direct paths are used when the glob finds nothing (e.g. dev server started
 // before the tracks directory was created — a hard refresh fixes it, but this is safer).
 const _synthwaveModules = import.meta.glob('./assets/Music/tracks/*.mp3', { query: '?url', eager: true });
-const SYNTHWAVE_TRACK_URLS = Object.keys(_synthwaveModules).sort().map(k => _synthwaveModules[k].default);
+export const SYNTHWAVE_TRACK_URLS = Object.keys(_synthwaveModules).sort().map(k => _synthwaveModules[k].default);
 
 const _TRACK_FILENAMES = [
   '01_pulse_reconnected', '02_wake_sequence', '03_lost_frequency', '04_echo_of_earth',
@@ -21,7 +21,7 @@ const _TRACK_FILENAMES = [
   '09_cold_starlight', '10_archive_chamber', '11_the_halcyon_dream', '12_the_human_algorithm',
 ];
 
-const SYNTHWAVE_TRACK_NAMES = [
+export const SYNTHWAVE_TRACK_NAMES = [
   'Pulse Reconnected',
   'Wake Sequence',
   'Lost Frequency',
@@ -788,9 +788,104 @@ class AudioSynthesizer {
     
     osc.connect(gain);
     this.connectSfxNode(gain);
-    
+
     osc.start();
     osc.stop(this.ctx.currentTime + 0.08);
+  }
+
+  // ── XMB crossbar SFX hooks (see design guide.md / xmb-menu skill) ──────
+  // Minimalist synthesized Foley, near-zero reverb, all <80ms. Each guards
+  // ctx init so a missing/blocked AudioContext degrades to a silent no-op
+  // instead of throwing and breaking the calling navigation logic.
+
+  // Vertical item move: short, crisp, high-frequency tick (<50ms, soft attack).
+  playVerticalTick() {
+    this.init();
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1400, this.ctx.currentTime);
+    gain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.04, this.ctx.currentTime + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.04);
+    osc.connect(gain);
+    this.connectSfxNode(gain);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.04);
+  }
+
+  // Horizontal category change: softer, airy whoosh — differentiates from the tick.
+  playHorizontalSwoosh() {
+    this.init();
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(900, this.ctx.currentTime + 0.07);
+    gain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.035, this.ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+    osc.connect(gain);
+    this.connectSfxNode(gain);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.08);
+  }
+
+  // Confirm/select: deeper, bass-heavy soft thunk.
+  playConfirmSound() {
+    this.init();
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(90, this.ctx.currentTime + 0.07);
+    gain.gain.setValueAtTime(0.06, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.09);
+    osc.connect(gain);
+    this.connectSfxNode(gain);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.09);
+  }
+
+  // Cancel/back: lower-pitched, duller clack.
+  playCancelSound() {
+    this.init();
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(160, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(70, this.ctx.currentTime + 0.05);
+    gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.06);
+    osc.connect(gain);
+    this.connectSfxNode(gain);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.06);
+  }
+
+  // Boundary error (top/bottom/edge of list): muted double-bass "buh-buh".
+  playBoundaryError() {
+    this.init();
+    if (!this.ctx) return;
+    const playThump = (delaySec) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(110, this.ctx.currentTime + delaySec);
+      gain.gain.setValueAtTime(0.0001, this.ctx.currentTime + delaySec);
+      gain.gain.linearRampToValueAtTime(0.05, this.ctx.currentTime + delaySec + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delaySec + 0.07);
+      osc.connect(gain);
+      this.connectSfxNode(gain);
+      osc.start(this.ctx.currentTime + delaySec);
+      osc.stop(this.ctx.currentTime + delaySec + 0.07);
+    };
+    playThump(0);
+    playThump(0.09);
   }
 
   // Start continuous engine hum

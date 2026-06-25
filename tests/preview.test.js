@@ -25,7 +25,7 @@ vi.mock('three', async () => {
 
 // ── Import the class under test ────────────────────────────────────────────────
 
-import { ShipPreviewEngine } from '../preview.js';
+import { ShipPreviewEngine, computeFitScale } from '../preview.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +38,23 @@ function createMockContainer(width = 400, height = 300) {
 }
 
 // ── Test Suites ─────────────────────────────────────────────────────────────────
+
+describe('computeFitScale', () => {
+  it('normalizes by the LARGEST dimension, not width', () => {
+    // A narrow-but-long ship (small x, large z): must scale by z, not x, so it
+    // doesn't balloon past the camera frustum and render blank.
+    const scale = computeFitScale({ x: 0.2, y: 0.3, z: 4 }, 1.6);
+    expect(scale).toBeCloseTo(1.6 / 4, 10);
+  });
+
+  it('fits a cube to the target size', () => {
+    expect(computeFitScale({ x: 2, y: 2, z: 2 }, 1.6)).toBeCloseTo(0.8, 10);
+  });
+
+  it('handles a zero/degenerate size without dividing by zero', () => {
+    expect(computeFitScale({ x: 0, y: 0, z: 0 }, 1.6)).toBe(1.6);
+  });
+});
 
 describe('ShipPreviewEngine', () => {
   let engine;

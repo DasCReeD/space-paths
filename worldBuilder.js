@@ -1006,6 +1006,325 @@ function solveLevel(levelData) {
 }
 
 // ==========================================================================
+// SECTION 7C: CUSTOM SET-PIECE BUILDERS & POOL ENRICHMENT
+// These build the 9 biome signature set-pieces named in the world design docs,
+// validate each is solvable, and bake them into data/segment_library.json so
+// the build step has ONE uniform job: pick from the pool. (No custom-vs-pick
+// branch at build time — custom generation happens here, ahead of the bake.)
+// Each builder returns an array of 7-wide rows, entering and exiting centered
+// on lane 3 at height 0 so segments stitch cleanly into any blueprint slot.
+// ==========================================================================
+
+const BIOME_GRAVITY = { void: 8, ridge: 14, thrill: 8, core: 8, glitch: 8, tundra: 8, furnace: 8, shallows: 8, spire: 4, pulse: 8 };
+
+/** Smoothly damped S-curve center lane: 0 at both ends, peak amplitude mid. */
+function _sCurveCenter(i, n, amp) {
+  const progress = i / Math.max(1, n - 1);
+  const damping = Math.sin(progress * Math.PI);
+  const curve = Math.sin(i / 4.0) * amp + Math.sin(i / 1.5) * (amp * 0.33);
+  return clamp(Math.round(3 + curve * damping), 1, 5);
+}
+
+/** drift_curve — sweeping S-curve with guardrails + rhythmic slalom walls. */
+function buildDriftCurve(rng, { len = 30, difficulty = 1, biome = 'void' }) {
+  const rows = [];
+  const amp = 1.0 + difficulty * 0.15;
+  const wallRhythm = 8;
+  const slippery = (biome === 'tundra');
+  for (let i = 0; i < len; i++) {
+    const c = _sCurveCenter(i, len, amp);
+    const row = createRoadRow(c, 5, slippery ? 9 : 1);
+    const lg = clamp(c - 2, 0, 6), rg = clamp(c + 2, 0, 6);
+    if (row[lg]) row[lg] = createObstacle('half', 2);
+    if (row[rg]) row[rg] = createObstacle('half', 2);
+    if (i > 0 && i % wallRhythm === 0) {
+      const off = (Math.floor(i / wallRhythm) % 2 === 0) ? -1 : 1;
+      const wl = clamp(c + off, 0, 6);
+      if (row[wl] && wl !== lg && wl !== rg) row[wl] = createObstacle('full', 2);
+    }
+    if (biome === 'void' && i % wallRhythm === 2 && row[c]) {
+      row[c] = { ...row[c], top_color: 11, bottom_color: 10 };
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** tiered_hill — multi-tier ramp-up hill, sparse obstacles + hidden boosts. */
+function buildTieredHill(rng, { len = 30, difficulty = 1, biome = 'ridge' }) {
+  const rows = [];
+  const tiers = 1 + Math.min(2, difficulty - 1);
+  const tierHeight = 2.0, rampLen = 5, platLen = 6;
+  let h = 0;
+  for (let t = 0; t < tiers; t++) {
+    for (let i = 0; i < rampLen; i++) {
+      const h1 = h + (i / rampLen) * tierHeight, h2 = h + ((i + 1) / rampLen) * tierHeight;
+      const row = createEmptyRow();
+      for (let l = 1; l <= 5; l++) row[l] = createRampTile(h1, h2, 1);
+      rows.push(row);
+    }
+    h += tierHeight;
+    for (let i = 0; i < platLen; i++) {
+      const row = createEmptyRow();
+      for (let l = 1; l <= 5; l++) row[l] = createRampTile(h, h, 1);
+      if (i === 2) { const ol = rngInt(rng, 2, 4); row[ol] = { ...createObstacle('full', 2), startY: h, endY: h }; }
+      if (i === 4) row[3] = { ...createRampTile(h, h, 1), top_color: 11, bottom_color: 10 };
+      rows.push(row);
+    }
+  }
+  const downLen = rampLen * tiers, totalDown = h;
+  for (let i = 0; i < downLen; i++) {
+    const h1 = h - (i / downLen) * totalDown, h2 = h - ((i + 1) / downLen) * totalDown;
+    const row = createEmptyRow();
+    for (let l = 1; l <= 5; l++) row[l] = createRampTile(h1, h2, 1);
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** launch_jump — boost runway, ramp, launch peak, void gap, refill landing. */
+function buildLaunchJump(rng, { len = 26, difficulty = 1, biome = 'thrill' }) {
+  const rows = [];
+  const peakH = 2.0, rampLen = 5, peakLen = 4, gap = 3 + Math.min(2, difficulty - 1), landLen = 6;
+  const approach = Math.max(3, len - (rampLen + peakLen + gap + landLen));
+  for (let i = 0; i < approach; i++) {
+    const row = createRoadRow(3, 5, 1);
+    if (i >= approach - 2 && row[3]) row[3] = { ...row[3], top_color: 11, bottom_color: 10 };
+    rows.push(row);
+  }
+  for (let i = 0; i < rampLen; i++) {
+    const h1 = (i / rampLen) * peakH, h2 = ((i + 1) / rampLen) * peakH;
+    const row = createEmptyRow();
+    for (let l = 1; l <= 5; l++) row[l] = createRampTile(h1, h2, 1);
+    rows.push(row);
+  }
+  for (let i = 0; i < peakLen; i++) {
+    const row = createEmptyRow();
+    for (let l = 1; l <= 5; l++) row[l] = createRampTile(peakH, peakH, 1);
+    if (i === peakLen - 1 && row[3]) row[3] = { ...row[3], top_color: 11, bottom_color: 10 };
+    rows.push(row);
+  }
+  for (let i = 0; i < gap; i++) rows.push(createEmptyRow());
+  for (let i = 0; i < landLen; i++) {
+    const row = createRoadRow(3, 5, 1);
+    if (i === 0 && row[3]) row[3] = { ...row[3], top_color: 10, bottom_color: 10 };
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** floating_islands — island hops separated by void gaps (low-g friendly). */
+function buildFloatingIslandsSP(rng, { len = 30, difficulty = 1, biome = 'glitch' }) {
+  const rows = [];
+  const islandLen = Math.max(4, 6 - (difficulty - 1));
+  const gap = 2 + Math.min(2, difficulty - 1);
+  const islandW = 3;
+  let lane = 3, total = 0;
+  while (total < len) {
+    for (let i = 0; i < islandLen && total < len; i++) { rows.push(createRoadRow(lane, islandW, 1)); total++; }
+    if (total >= len) break;
+    for (let i = 0; i < gap && total < len; i++) { rows.push(createEmptyRow()); total++; }
+    lane = clamp(lane + (rng() < 0.5 ? -1 : 1), 2, 4);
+  }
+  while (rows.length && rows[rows.length - 1].every(t => t === null)) rows.pop();
+  for (let i = 0; i < 3; i++) rows.push(createRoadRow(3, islandW, 1));
+  return rows;
+}
+
+/** burn_chain — burn-tile grid with a safe center lane + boost chain. */
+function buildBurnChain(rng, { len = 26, difficulty = 1, biome = 'furnace' }) {
+  const rows = [];
+  const safeW = difficulty >= 3 ? 1 : 3;
+  const halfSafe = Math.floor(safeW / 2), c = 3;
+  for (let i = 0; i < len; i++) {
+    const row = createEmptyRow();
+    for (let l = 1; l <= 5; l++) {
+      if (l >= c - halfSafe && l <= c + halfSafe) row[l] = createTile(1);
+      else row[l] = createTile(13, 13);
+    }
+    if (i % 6 === 3 && row[c]) row[c] = { ...row[c], top_color: 11, bottom_color: 10 };
+    if (safeW >= 3 && i > 4 && i % 9 === 0) {
+      const ol = clamp(c + (rng() < 0.5 ? -1 : 1), c - halfSafe, c + halfSafe);
+      if (row[ol] && row[ol].bottom_color !== 13) row[ol] = createObstacle('half', 2);
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** gate_run — rhythmic timing gates (one open lane), sticky brake telegraph. */
+function buildGateRun(rng, { len = 28, difficulty = 1, biome = 'pulse' }) {
+  const rows = [];
+  const spacing = Math.max(5, 9 - (difficulty - 1) * 2);
+  const sticky = (biome === 'pulse');
+  let i = 0;
+  while (i < len) {
+    const straight = Math.max(2, spacing - 2);
+    for (let k = 0; k < straight && i < len; k++, i++) {
+      const row = createRoadRow(3, 5, 1);
+      if (k === straight - 1 && sticky) for (let l = 2; l <= 4; l++) if (row[l]) row[l] = { ...row[l], top_color: 3, bottom_color: 3 };
+      rows.push(row);
+    }
+    if (i >= len) break;
+    const openLane = rngInt(rng, 2, 4);
+    const row = createRoadRow(3, 5, 1);
+    for (let l = 1; l <= 5; l++) if (l !== openLane && row[l]) row[l] = createObstacle('full', 2);
+    rows.push(row); i++;
+  }
+  return rows;
+}
+
+/** bumper_canyon — wide (frictionless) lane bounded by half-wall bumpers. */
+function buildBumperCanyon(rng, { len = 22, difficulty = 1, biome = 'tundra' }) {
+  const rows = [];
+  const slippery = (biome === 'tundra');
+  for (let i = 0; i < len; i++) {
+    const row = createRoadRow(3, 7, slippery ? 9 : 1);
+    if (row[0]) row[0] = createObstacle('half', 2);
+    if (row[6]) row[6] = createObstacle('half', 2);
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** speed_chain — wide track, chained boost pads, minimal sparse walls. */
+function buildSpeedChain(rng, { len = 30, difficulty = 1, biome = 'thrill' }) {
+  const rows = [];
+  for (let i = 0; i < len; i++) {
+    const row = createRoadRow(3, 6, 1);
+    if (i % 5 === 2 && row[3]) row[3] = { ...row[3], top_color: 11, bottom_color: 10 };
+    if (i > 6 && i % 11 === 0) { const ol = rngInt(rng, 1, 5); if (row[ol]) row[ol] = createObstacle('full', 2); }
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** tunnel_guided — gentle tunnel run with half-wall guide rails on the edges. */
+function buildTunnelGuided(rng, { len = 28, difficulty = 1, biome = 'shallows' }) {
+  const rows = [];
+  for (let i = 0; i < len; i++) {
+    const c = _sCurveCenter(i, len, 0.8);
+    const row = createEmptyRow();
+    for (let l = c - 1; l <= c + 1; l++) if (l >= 0 && l < 7) row[l] = createTunnelTile(1);
+    const lr = clamp(c - 2, 0, 6), rr = clamp(c + 2, 0, 6);
+    if (row[lr] === null) row[lr] = createObstacle('half', 2);
+    if (row[rr] === null) row[rr] = createObstacle('half', 2);
+    rows.push(row);
+  }
+  return rows;
+}
+
+const CUSTOM_BUILDERS = {
+  drift_curve: buildDriftCurve, tiered_hill: buildTieredHill, launch_jump: buildLaunchJump,
+  floating_islands: buildFloatingIslandsSP, burn_chain: buildBurnChain, gate_run: buildGateRun,
+  bumper_canyon: buildBumperCanyon, speed_chain: buildSpeedChain, tunnel_guided: buildTunnelGuided,
+};
+
+/** Which signature set-pieces each biome needs (mirrors world_design_docs.json). */
+const BIOME_CUSTOM_TAGS = {
+  void: ['drift_curve', 'launch_jump'],
+  ridge: ['tiered_hill', 'launch_jump'],
+  thrill: ['speed_chain', 'launch_jump'],
+  core: ['gate_run'],
+  glitch: ['floating_islands'],
+  tundra: ['drift_curve', 'bumper_canyon', 'launch_jump'],
+  furnace: ['burn_chain'],
+  shallows: ['tunnel_guided'],
+  spire: ['floating_islands', 'launch_jump'],
+  pulse: ['gate_run'],
+};
+
+/** Derive the {width,lanes,height,center} interface of a row (pool schema). */
+function computeInterface(row) {
+  const lanes = [];
+  for (let l = 0; l < ROAD_WIDTH_LANES; l++) if (row[l]) lanes.push(l);
+  if (lanes.length === 0) return { width: 0, lanes: [], height: 0, center: 3 };
+  const center = Math.round(lanes.reduce((a, b) => a + b, 0) / lanes.length);
+  // Riding-surface height: prefer non-obstacle road/ramp tiles; ignore pure
+  // wall cells (guardrails/gates) so segments stitch to runways without spurious adapters.
+  let height = 0;
+  for (const l of lanes) {
+    const t = row[l];
+    const isPureWall = (t.full || t.half) && t.startY === undefined;
+    if (isPureWall) continue;
+    height = (t.startY !== undefined) ? t.startY : 0;
+    break;
+  }
+  return { width: lanes.length, lanes, height, center };
+}
+
+/** Validate a custom segment is solvable by wrapping it in start/end runways. */
+function _segmentSolvable(rows, gravity) {
+  const lvl = { rows: [], gravity, fuel: 500, oxygen: 400 };
+  for (let i = 0; i < 14; i++) lvl.rows.push(createRoadRow(3, 5, 1));
+  for (const r of rows) lvl.rows.push(r.map(t => (t ? { ...t } : null)));
+  for (let i = 0; i < 14; i++) lvl.rows.push(createRoadRow(3, 5, 1));
+  normalizeRows(lvl.rows);
+  try { return solveLevel(lvl); } catch (e) { return false; }
+}
+
+/** Wrap built rows into a pool entry matching the segment_library.json schema. */
+function _makePoolEntry(id, biome, tag, difficulty, rows) {
+  const firstNonEmpty = rows.find(r => r.some(t => t)) || rows[0];
+  const lastNonEmpty = [...rows].reverse().find(r => r.some(t => t)) || rows[rows.length - 1];
+  return {
+    id, source: 'custom', biome, category: tag, difficulty, signature: true,
+    length: rows.length,
+    entry: computeInterface(firstNonEmpty),
+    exit: computeInterface(lastNonEmpty),
+    rows,
+  };
+}
+
+/**
+ * Generate all custom signature set-pieces for every biome, validated solvable.
+ * Difficulties 2/3/4 cover the per-biome diff windows; 2 length variants each.
+ * @returns {Array} pool entries (source:'custom')
+ */
+function generateCustomSegments(rng) {
+  const out = [];
+  for (const biome of THEMES) {
+    const tags = BIOME_CUSTOM_TAGS[biome] || [];
+    const gravity = BIOME_GRAVITY[biome] || 8;
+    for (const tag of tags) {
+      const builder = CUSTOM_BUILDERS[tag];
+      if (!builder) continue;
+      for (const difficulty of [2, 3, 4]) {
+        for (let variant = 0; variant < 2; variant++) {
+          const len = 24 + variant * 6 + (difficulty - 2) * 2; // 24..36
+          let rows = null;
+          for (let attempt = 0; attempt < 12; attempt++) {
+            const segRng = createRng((biome.length * 7919) ^ (tag.length * 104729) ^ (difficulty * 1299709) ^ (variant * 131) ^ (attempt * 17));
+            const candidate = builder(segRng, { len, difficulty, biome });
+            if (candidate.length >= 6 && _segmentSolvable(candidate, gravity)) { rows = candidate; break; }
+          }
+          if (rows) out.push(_makePoolEntry(`custom:${biome}:${tag}:${difficulty}:${variant}`, biome, tag, difficulty, rows));
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Bake custom segments into data/segment_library.json. Idempotent: strips any
+ * prior custom entries first, so re-running never bloats the pool.
+ */
+function enrichSegmentPool() {
+  const libPath = path.resolve('data/segment_library.json');
+  let pool = [];
+  try { pool = JSON.parse(fs.readFileSync(libPath, 'utf8')); } catch (e) { /* start fresh */ }
+  pool = pool.filter(s => !(typeof s.id === 'string' && s.id.startsWith('custom:')));
+  const rng = createRng(0xC0FFEE);
+  const custom = generateCustomSegments(rng);
+  pool = pool.concat(custom);
+  fs.writeFileSync(libPath, JSON.stringify(pool, null, 2), 'utf8');
+  _segmentLibraryCache = null; // force reload of the enriched pool during the bake
+  console.log(`Pool enriched: +${custom.length} custom signature segments (pool total ${pool.length}).`);
+  return pool;
+}
+
+// ==========================================================================
 // SECTION 8: WORLD GENERATORS — 10 biome functions, each 8-pass workflow
 // ==========================================================================
 
@@ -1042,6 +1361,47 @@ function addEndRunway(state, width, bottomColor, length = 8) {
   return addRunway(state, length, width, bottomColor);
 }
 
+/** Add a segment from the library, padding with flat runways to targetLength */
+function addLibrarySegment(state, categories, targetLength, defaultWidth, defaultColor) {
+  let fallback = true;
+  try {
+    const allSegments = getSegmentLibrary();
+    const candidates = allSegments.filter(s => 
+      s.length >= 6 && s.length <= targetLength &&
+      s.entry.height === 0 && s.exit.height === 0 &&
+      categories.includes(s.category)
+    );
+    if (candidates.length > 0) {
+      const seg = rngChoice(state.rng, candidates);
+      const paddingStart = Math.floor((targetLength - seg.length) / 2);
+      const paddingEnd = targetLength - seg.length - paddingStart;
+      
+      addRunway(state, paddingStart, defaultWidth, defaultColor);
+      
+      for (const r of seg.rows) {
+        const adaptedRow = r.map(t => {
+          if (!t) return null;
+          return {
+            ...t,
+            startY: 0.0,
+            endY: 0.0,
+            ramp: false
+          };
+        });
+        state.rows.push(adaptedRow);
+      }
+      
+      addRunway(state, paddingEnd, defaultWidth, defaultColor);
+      fallback = false;
+    }
+  } catch (e) {
+    // fallback to runway
+  }
+  if (fallback) {
+    addRunway(state, targetLength, defaultWidth, defaultColor);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // World 0: VOID (levels 61-63) — S-curve path, rhythmic obstacles
 // ---------------------------------------------------------------------------
@@ -1051,381 +1411,418 @@ function generateVoidLevel(levelIndex, difficulty, seed) {
 
   if (levelIndex === 61) {
     // ==========================================================================
-    // GRAND DEMO LEVEL (Level 61) - Showcase of all segments & tile types
+    // VERTICAL TEST LEVEL (Level 61) - Showcase of multi-height paths & slalom walls
     // ==========================================================================
     
-    // 1. Intro Fan-Out (starts at lane 3, width 1, widens to 5)
-    for (let r = 0; r < 3; r++) state.rows.push(createRoadRow(3, 1, 1));
-    state.rows.push(createRoadRow(3, 3, 1));
-    state.rows.push(createRoadRow(3, 3, 1));
-    for (let r = 0; r < 5; r++) state.rows.push(createRoadRow(3, 5, 1));
+    // Helper to build a platform row at a specific height with guide walls on blocked lanes
+    function createPlatformRow(height, openLanes, themeColor = 1) {
+      const row = createEmptyRow();
+      for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
+        if (openLanes.includes(l)) {
+          row[l] = createRampTile(height, height, themeColor);
+        } else {
+          row[l] = { ...createObstacle('full', 2), startY: height, endY: height };
+        }
+      }
+      return row;
+    }
 
-    // 2. High-Speed Narrow Winding Slalom (width 3, outer voids, traps, and turbo boosts)
+    // Helper to build a ramp row from startHeight to endHeight with guide walls on blocked lanes
+    function createRampRow(h1, h2, openLanes, themeColor = 1) {
+      const row = createEmptyRow();
+      for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
+        if (openLanes.includes(l)) {
+          row[l] = createRampTile(h1, h2, themeColor);
+        } else {
+          row[l] = { ...createObstacle('full', 2), startY: h1, endY: h2 };
+        }
+      }
+      return row;
+    }
+
+    // SECTION 1: Intro runway (rows 0-14)
+    addStartRunway(state, 5, 1, 15);
+    // Introductory jump pad on lane 3 at row 13, pointing to the upcoming upper platforms on lane 3 starting at row 17
+    state.rows[13][3] = { ...state.rows[13][3], top_color: 14, bottom_color: 10 };
+
+    // SECTION 2: Curved Slalom with Guardrails, Boosts, & Jump Pads (rows 15-44)
     for (let i = 0; i < 30; i++) {
-      const sineVal = Math.sin((i / 29) * 2 * Math.PI * 2); // 2 full cycles, starts/ends exactly at 0
-      const sineOffset = sineVal * 2.2; // Sweeping curve
-      state.lane = clamp(Math.round(3 + sineOffset), 1, 5);
-      
-      const row = createEmptyRow();
-      const leftActive = state.lane - 1;
-      const rightActive = state.lane + 1;
-      
-      // Fill active 3 lanes, others are void
-      for (let l = leftActive; l <= rightActive; l++) {
-        if (l >= 0 && l < ROAD_WIDTH_LANES) {
-          row[l] = createRampTile(0.0, 0.0, 1);
-        }
+      // 1. Calculate centerLane with multi-sine wave and noise, damped at the end for smooth runway alignment
+      const progress = i / 29.0;
+      const damping = 1.0 - progress;
+      const curve1 = Math.sin(i / 4.0) * 1.2;
+      const curve2 = Math.sin(i / 1.5) * 0.4;
+      const noise = (rng() - 0.5) * 0.3;
+      const centerLane = clamp(Math.round(3.0 + (curve1 + curve2 + noise) * damping), 1, 5);
+      const row = createRoadRow(centerLane, 5, 1);
+
+      // 2. Guardrails follow the outer edges of the sweeping track
+      const leftGuard = centerLane - 2;
+      const rightGuard = centerLane + 2;
+      row[leftGuard] = createObstacle('half', 2);
+      row[rightGuard] = createObstacle('half', 2);
+
+      // 3. Slalom walls placed on timing gate rows, alternating left and right lanes relative to center
+      const isWallRow = (i % 4 === 0);
+      if (isWallRow) {
+        const offset = (i % 8 === 0) ? -1 : 1;
+        const wallLane = centerLane + offset;
+        row[wallLane] = createObstacle('full', 2);
       }
-      
-      // Enforce preferred line with outer-bend obstacles
-      if (i % 3 === 0 && i > 0 && i < 29) {
-        if (sineVal > 0.2) {
-          const obsLane = leftActive;
-          if (obsLane >= 0 && obsLane < ROAD_WIDTH_LANES && row[obsLane]) {
-            row[obsLane] = createObstacle('half', 2);
+
+      // 4. Branching Path: Upper Platform Hop Path (height 4.0, lane 3) interleaved with wall rows
+      const isPlatformRow = (i % 4 === 2);
+      if (isPlatformRow) {
+        // Platform tile at height 4.0
+        row[3] = createRampTile(4.0, 4.0, 1);
+        
+        // Rhythmic jump pads & boost pads on the high pillars to help hop above the walls
+        if (i % 8 === 2) {
+          row[3] = { ...row[3], top_color: 14, bottom_color: 10 }; // Jump pad
+        } else {
+          row[3] = { ...row[3], top_color: 11, bottom_color: 10 }; // Boost pad
+        }
+      } else {
+        // Gaps between platforms on the upper deck: lane 3 is empty
+        row[3] = null;
+      }
+
+      state.rows.push(row);
+    }
+    state.lane = 3;
+
+    // Transition runway (15 rows) blending custom S-curve to Section 3 using segment library
+    addLibrarySegment(state, ['mixed', 'slalom', 'obstacle_course'], 15, 5, 1);
+
+    // SECTION 3: Special Behavior Showcase (rows 60-109)
+    // 3a. Slippery Section (15 rows)
+    for (let i = 0; i < 15; i++) {
+      state.rows.push(createRoadRow(3, 5, 9)); // bottom color 9 (slippery)
+    }
+
+    // 3b. Sticky Section with Timing Gate (15 rows)
+    for (let i = 0; i < 15; i++) {
+      const row = createRoadRow(3, 5, 1);
+      for (let l = 1; l <= 5; l++) {
+        row[l] = { ...row[l], top_color: 3, bottom_color: 3 }; // sticky
+      }
+      if (i === 12) {
+        for (let l = 1; l <= 5; l++) {
+          if (l !== 3) {
+            row[l] = createObstacle('full', 2);
           }
-        } else if (sineVal < -0.2) {
-          const obsLane = rightActive;
-          if (obsLane >= 0 && obsLane < ROAD_WIDTH_LANES && row[obsLane]) {
-            row[obsLane] = createObstacle('half', 2);
-          }
         }
       }
-      
-      // Inject turbo boosts on the center lane to speed up the slalom
-      if (i % 5 === 2) {
-        if (row[state.lane]) {
-          row[state.lane].top_color = 11;
-          row[state.lane].bottom_color = 10;
-        }
+      // Hidden Boost directly behind the timing gate at i = 13
+      if (i === 13) {
+        row[3] = { ...row[3], top_color: 11, bottom_color: 10 }; // Boost overrides sticky
       }
       state.rows.push(row);
     }
-    state.lane = 3;
 
-    // 3. Winding Climber Ramps (smooth climb to 2.0 over 10 rows, snaking left/right)
-    addFlatRunwayAtHeight(state, 3, 3, 0.0, 1);
-    for (let i = 0; i < 10; i++) {
-      const rStart = 0.0 + (i / 10) * 2.0;
-      const rEnd = 0.0 + ((i + 1) / 10) * 2.0;
-      
-      const sineVal = Math.sin((i / 9) * 2 * Math.PI); // 1 full cycle, starts/ends exactly at 0
-      state.lane = clamp(Math.round(3 + sineVal * 1.2), 1, 5);
-      
+    // 3c. High Jump Section (20 rows)
+    // Ramp up to launcher
+    for (let i = 0; i < 5; i++) {
       const row = createEmptyRow();
-      const leftActive = state.lane - 1;
-      const rightActive = state.lane + 1;
-      
-      for (let l = leftActive; l <= rightActive; l++) {
-        if (l >= 0 && l < ROAD_WIDTH_LANES) {
-          row[l] = createRampTile(rStart, rEnd, 1);
-        }
-      }
-      
-      // Boost pad in the middle of the climb
-      if (i === 4) {
-        if (row[state.lane]) {
-          row[state.lane].top_color = 11;
-          row[state.lane].bottom_color = 10;
-        }
-      }
-      // Obstacle trap on the ramp
-      if (i === 7) {
-        const obsLane = sineVal > 0 ? leftActive : rightActive;
-        if (obsLane >= 0 && obsLane < ROAD_WIDTH_LANES && row[obsLane]) {
-          row[obsLane] = createObstacle('half', 2);
-        }
+      const h1 = (i / 5) * 1.5;
+      const h2 = ((i + 1) / 5) * 1.5;
+      for (let l = 1; l <= 5; l++) {
+        row[l] = createRampTile(h1, h2, 1);
       }
       state.rows.push(row);
     }
-    state.height = 2.0;
-    state.lane = 3;
-    // Flat runway at 2.0
-    addFlatRunwayAtHeight(state, 4, 3, 2.0, 1);
-
-    // 4. Winding Elevated Tunnel (height 2.0, tunnel, narrow 3 lanes, snaking)
-    for (let i = 0; i < 12; i++) {
-      const sineVal = Math.sin((i / 11) * 2 * Math.PI); // 1 full cycle, starts/ends exactly at 0
-      state.lane = clamp(Math.round(3 + sineVal * 1.2), 1, 5);
-      
+    // Launcher platform with High Jump pad
+    for (let i = 0; i < 5; i++) {
       const row = createEmptyRow();
-      const leftActive = state.lane - 1;
-      const rightActive = state.lane + 1;
-      
-      for (let l = leftActive; l <= rightActive; l++) {
-        if (l >= 0 && l < ROAD_WIDTH_LANES) {
-          row[l] = {
-            val: 0, ramp: true, startY: 2.0, endY: 2.0, tunnel: true,
-            top_color: 0, bottom_color: 1, low3: 1
-          };
-        }
+      for (let l = 1; l <= 5; l++) {
+        row[l] = createRampTile(1.5, 1.5, 1);
       }
-      
-      // Turbo boost inside the tunnel
-      if (i === 4) {
-        if (row[state.lane]) {
-          row[state.lane].top_color = 11;
-          row[state.lane].bottom_color = 10;
-        }
-      }
-      
-      // Obstacle inside the tunnel
-      if (i === 8) {
-        const obsLane = sineVal > 0 ? leftActive : rightActive;
-        if (obsLane >= 0 && obsLane < ROAD_WIDTH_LANES && row[obsLane]) {
-          row[obsLane] = createObstacle('half', 2);
-        }
-      }
-      state.rows.push(row);
-    }
-    state.lane = 3;
-
-    // 5. Winding Drop Ramps (smooth descent to 0.0 over 10 rows, snaking)
-    for (let i = 0; i < 10; i++) {
-      const rStart = 2.0 + (i / 10) * (-2.0);
-      const rEnd = 2.0 + ((i + 1) / 10) * (-2.0);
-      
-      const sineVal = Math.sin((i / 9) * 2 * Math.PI); // 1 full cycle, starts/ends exactly at 0
-      state.lane = clamp(Math.round(3 + sineVal * 1.2), 1, 5);
-      
-      const row = createEmptyRow();
-      const leftActive = state.lane - 1;
-      const rightActive = state.lane + 1;
-      
-      for (let l = leftActive; l <= rightActive; l++) {
-        if (l >= 0 && l < ROAD_WIDTH_LANES) {
-          row[l] = createRampTile(rStart, rEnd, 1);
-        }
-      }
-      
-      // Turbo boost pad on the descent slope (Super Boost!)
       if (i === 3) {
-        if (row[state.lane]) {
-          row[state.lane].top_color = 12;
-          row[state.lane].bottom_color = 11;
-        }
-      }
-      // Obstacle trap on the descending slope
-      if (i === 7) {
-        const obsLane = sineVal > 0 ? leftActive : rightActive;
-        if (obsLane >= 0 && obsLane < ROAD_WIDTH_LANES && row[obsLane]) {
-          row[obsLane] = createObstacle('half', 2);
-        }
+        row[3] = { ...row[3], top_color: 14, bottom_color: 10 }; // High Jump
       }
       state.rows.push(row);
     }
-    state.height = 0.0;
-    state.lane = 3;
-    addFlatRunwayAtHeight(state, 5, 3, 0.0, 1);
-
-    // 6. Timing Gates & Sticky Brakes (speed controls)
-    for (let g = 0; g < 2; g++) {
-      addFlatRunwayAtHeight(state, 4, 5, 0.0, 1);
-      // Sticky brakes 3 rows before gate
-      for (let s = 0; s < 3; s++) {
-        const stickyRow = createEmptyRow();
-        const halfW = Math.floor(5 / 2);
-        const left = Math.max(0, state.lane - halfW);
-        const right = Math.min(ROAD_WIDTH_LANES - 1, state.lane + halfW);
-        for (let l = left; l <= right; l++) {
-          stickyRow[l] = createRampTile(0.0, 0.0, 3); // sticky
-        }
-        state.rows.push(stickyRow);
-      }
-      addFlatRunwayAtHeight(state, 1, 5, 0.0, 1);
-      const openLane = g === 0 ? 3 : 2;
-      addTimingGate(state, openLane, 5, 1);
-      // Boost after gate
-      const boostRow = createRoadRow(state.lane, 5, 1);
-      if (boostRow[openLane]) {
-        boostRow[openLane].top_color = 11;
-        boostRow[openLane].bottom_color = 10;
-      }
-      state.rows.push(boostRow);
-      addFlatRunwayAtHeight(state, 3, 5, 0.0, 1);
+    // Gap
+    for (let i = 0; i < 5; i++) {
+      state.rows.push(createEmptyRow());
     }
-
-    // 7. Canyon Drop & High Jump (low bounce platform for long jump)
-    // Drop down to -2.0 canyon floor
-    addRampDown(state, -2.0, 5, 1, 4); // Steep drop to -2.0 over 4 rows
-    // Canyon floor at -2.0 with high-jump tiles (magenta color 13, behavior 14)
-    addFlatRunwayAtHeight(state, 3, 3, -2.0, 1);
-    for (let i = 0; i < 2; i++) {
-      const row = createEmptyRow();
-      const left = Math.max(0, state.lane - 1);
-      const right = Math.min(ROAD_WIDTH_LANES - 1, state.lane + 1);
-      for (let l = left; l <= right; l++) {
-        row[l] = {
-          val: 0, ramp: true, startY: -2.0, endY: -2.0,
-          top_color: 14, bottom_color: 14, low3: 14
-        };
-      }
-      state.rows.push(row);
-    }
-    // Launch gap (4-row void gap)
-    addGap(state, 4);
-    // Landing zone at -2.0 with refill
-    const landingRow = createEmptyRow();
-    const lLeft = Math.max(0, state.lane - 1);
-    const lRight = Math.min(ROAD_WIDTH_LANES - 1, state.lane + 1);
-    for (let l = lLeft; l <= lRight; l++) {
-      landingRow[l] = {
-        val: 0, ramp: true, startY: -2.0, endY: -2.0,
-        top_color: 10, bottom_color: 10, low3: 10
-      };
-    }
-    state.rows.push(landingRow);
-    addFlatRunwayAtHeight(state, 3, 3, -2.0, 1);
-    // Ramp back up to 0.0
-    addRampUp(state, 0.0, 5, 1, 4);
-
-    // 8. Split-Level Overhead Tunnel Path
-    // Lanes 0-2: ramp down to -4.0, lower tunnel, ramp back up to 0.0
-    // Lane 3: gap
-    // Lanes 4-6: upper road at 0.0
-    addFlatRunwayAtHeight(state, 4, 7, 0.0, 1);
-    
-    // Transition lower path to -4.0 (over 4 rows) while upper path stays at 0.0
-    for (let i = 0; i < 4; i++) {
-      const row = createEmptyRow();
-      // Lower path (Lanes 0-2) ramping down
-      const hStart = 0.0 + (i / 4) * (-4.0);
-      const hEnd = 0.0 + ((i + 1) / 4) * (-4.0);
-      for (let l = 0; l <= 2; l++) {
-        row[l] = createRampTile(hStart, hEnd, 1);
-      }
-      // Upper path (Lanes 4-6) flat at 0.0
-      for (let l = 4; l <= 6; l++) {
-        row[l] = createRampTile(0.0, 0.0, 1);
+    // Landing runway with refill
+    for (let i = 0; i < 5; i++) {
+      const row = createRoadRow(3, 5, 1);
+      if (i === 1) {
+        row[3] = { ...row[3], top_color: 10, bottom_color: 10 }; // Refill
       }
       state.rows.push(row);
     }
 
-    // Tunnel corridor at -4.0 (lower path) while upper path stays flat at 0.0 (over 10 rows)
+    // SECTION 4: Three-Tier Incline Hill (rows 110-174)
+    // Tier 1 Ramp: Ramp up from 0.0 to 2.0 (10 rows)
     for (let i = 0; i < 10; i++) {
-      const row = createEmptyRow();
-      // Lower tunnel (Lanes 0-2)
-      for (let l = 0; l <= 2; l++) {
-        row[l] = {
-          val: 0, ramp: true, startY: -4.0, endY: -4.0, tunnel: true,
-          top_color: 0, bottom_color: 1, low3: 1
-        };
-      }
-      // Put a cyan super boost tile on the center lane of the lower tunnel
-      if (i === 4) {
-        row[1].top_color = 12;
-        row[1].bottom_color = 11;
-      }
-      // Upper road (Lanes 4-6)
-      for (let l = 4; l <= 6; l++) {
-        row[l] = createRampTile(0.0, 0.0, 1);
-      }
+      const h1 = (i / 10) * 2.0;
+      const h2 = ((i + 1) / 10) * 2.0;
+      state.rows.push(createRampRow(h1, h2, [5]));
+    }
+
+    // Tier 1 Platform: Platform at 2.0 (10 rows)
+    for (let i = 0; i < 10; i++) {
+      const row = createPlatformRow(2.0, [1, 2, 3, 4, 5]);
+      if (i === 2) row[2] = { ...createObstacle('full', 2), startY: 2.0, endY: 2.0 };
+      if (i === 5) row[4] = { ...createObstacle('full', 2), startY: 2.0, endY: 2.0 };
+      if (i === 8) row[3] = { ...createObstacle('full', 2), startY: 2.0, endY: 2.0 };
+      // Hidden boosts directly behind obstacles
+      if (i === 3) row[2] = { ...row[2], top_color: 11, bottom_color: 10 };
+      if (i === 6) row[4] = { ...row[4], top_color: 11, bottom_color: 10 };
+      if (i === 9) row[3] = { ...row[3], top_color: 11, bottom_color: 10 };
       state.rows.push(row);
     }
 
-    // Transition lower path back up to 0.0 (over 4 rows) while upper path stays flat at 0.0
+    // Tier 2 Ramp: Ramp up from 2.0 to 4.0 (10 rows)
+    const tier2OpenLanes = [
+      [1, 2, 3, 4, 5], [1, 2, 3, 4, 5],
+      [2, 3, 4, 5], [2, 3, 4, 5],
+      [2, 3, 4, 5], [2, 3, 4, 5],
+      [3, 4, 5], [3, 4, 5],
+      [3, 4, 5], [3, 4, 5]
+    ];
+    for (let i = 0; i < 10; i++) {
+      const h1 = 2.0 + (i / 10) * 2.0;
+      const h2 = 2.0 + ((i + 1) / 10) * 2.0;
+      state.rows.push(createRampRow(h1, h2, tier2OpenLanes[i]));
+    }
+
+    // Tier 2 Platform: Platform at 4.0 (10 rows)
+    for (let i = 0; i < 10; i++) {
+      const row = createPlatformRow(4.0, [3, 4, 5]);
+      if (i === 3) row[3] = { ...createObstacle('full', 2), startY: 4.0, endY: 4.0 };
+      if (i === 7) row[5] = { ...createObstacle('full', 2), startY: 4.0, endY: 4.0 };
+      // Hidden boosts directly behind obstacles
+      if (i === 4) row[3] = { ...row[3], top_color: 11, bottom_color: 10 };
+      if (i === 8) row[5] = { ...row[5], top_color: 11, bottom_color: 10 };
+      state.rows.push(row);
+    }
+
+    // Tier 3 Ramp: Ramp up from 4.0 to 6.0 (10 rows)
+    const tier3OpenLanes = [
+      [3, 4, 5], [3, 4, 5],
+      [2, 3, 4], [2, 3, 4],
+      [2, 3, 4], [2, 3, 4],
+      [1, 2, 3], [1, 2, 3],
+      [1, 2, 3], [1, 2, 3]
+    ];
+    for (let i = 0; i < 10; i++) {
+      const h1 = 4.0 + (i / 10) * 2.0;
+      const h2 = 4.0 + ((i + 1) / 10) * 2.0;
+      state.rows.push(createRampRow(h1, h2, tier3OpenLanes[i]));
+    }
+
+    // Tier 3 Platform: Platform at 6.0 (10 rows)
+    for (let i = 0; i < 10; i++) {
+      const row = createPlatformRow(6.0, [1, 2, 3]);
+      if (i === 3) row[1] = { ...createObstacle('full', 2), startY: 6.0, endY: 6.0 };
+      if (i === 7) row[2] = { ...createObstacle('full', 2), startY: 6.0, endY: 6.0 };
+      // Hidden boosts directly behind obstacles
+      if (i === 4) row[1] = { ...row[1], top_color: 11, bottom_color: 10 };
+      if (i === 8) row[2] = { ...row[2], top_color: 11, bottom_color: 10 };
+      state.rows.push(row);
+    }
+
+    // Ramp/Bridge to Center (5 rows)
+    const bridgeOpenLanes = [
+      [1, 2, 3], [1, 2, 3],
+      [2, 3, 4], [2, 3, 4], [2, 3, 4]
+    ];
+    for (let i = 0; i < 5; i++) {
+      state.rows.push(createPlatformRow(6.0, bridgeOpenLanes[i]));
+    }
+
+    // SECTION 5: Sunken Trench & Tunnel (rows 175-224)
+    // 5a. Ramp down from 6.0 to -2.0 (10 rows)
+    for (let i = 0; i < 10; i++) {
+      const h1 = 6.0 - (i / 10) * 8.0;
+      const h2 = 6.0 - ((i + 1) / 10) * 8.0;
+      state.rows.push(createRampRow(h1, h2, [1, 2, 3, 4, 5]));
+    }
+    // 5b. Sunken Tunnel at -2.0 with dynamic snaking hazards (30 rows)
+    for (let i = 0; i < 30; i++) {
+      const progress = i / 29.0;
+      const damping = Math.sin(progress * Math.PI); // double-ended damping
+      const curve1 = Math.sin(i / 4.0) * 1.2;
+      const curve2 = Math.sin(i / 1.5) * 0.4;
+      const noise = (rng() - 0.5) * 0.3;
+      const centerLane = clamp(Math.round(3.0 + (curve1 + curve2 + noise) * damping), 1, 5);
+      
+      const row = createEmptyRow();
+      const safeLanes = [centerLane - 1, centerLane, centerLane + 1];
+      
+      for (let l = 1; l <= 5; l++) {
+        if (safeLanes.includes(l)) {
+          row[l] = { ...createTunnelTile(1), ramp: true, startY: -2.0, endY: -2.0 };
+        } else {
+          row[l] = { ...createTunnelTile(13), ramp: true, startY: -2.0, endY: -2.0, top_color: 13, bottom_color: 13 }; // burning hazard
+        }
+      }
+      
+      // Place half-obstacles directly on the racing line (centerLane) at i = 5, 12, 18, 24
+      if (i === 5) row[centerLane] = { ...createObstacle('half', 2), tunnel: true, startY: -2.0, endY: -2.0 };
+      if (i === 12) row[centerLane] = { ...createObstacle('half', 2), tunnel: true, startY: -2.0, endY: -2.0 };
+      if (i === 18) row[centerLane] = { ...createObstacle('half', 2), tunnel: true, startY: -2.0, endY: -2.0 };
+      if (i === 24) row[centerLane] = { ...createObstacle('half', 2), tunnel: true, startY: -2.0, endY: -2.0 };
+      
+      // Place boosts on the racing line (centerLane) 2 rows later at i = 7, 14, 20, 26
+      if (i === 7 || i === 14 || i === 20 || i === 26) {
+        row[centerLane] = { ...row[centerLane], top_color: 11, bottom_color: 10 };
+      }
+      
+      state.rows.push(row);
+    }
+    // 5c. Ramp up from -2.0 to 0.0 (10 rows)
+    for (let i = 0; i < 10; i++) {
+      const h1 = -2.0 + (i / 10) * 2.0;
+      const h2 = -2.0 + ((i + 1) / 10) * 2.0;
+      state.rows.push(createRampRow(h1, h2, [1, 2, 3, 4, 5]));
+    }
+
+    // SECTION 6: Burning Hazards & Boost Chain (rows 225-284)
+    // 6a. Burn Zone (19 rows)
+    for (let i = 0; i < 19; i++) {
+      const row = createEmptyRow();
+      for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
+        if (l >= 2 && l <= 4) {
+          row[l] = createTile(1);
+        } else {
+          row[l] = { ...createTile(13, 13) }; // Burning
+        }
+      }
+      if (i === 5) row[2] = createObstacle('half', 2);
+      if (i === 10) row[4] = createObstacle('half', 2);
+      if (i === 15) row[3] = createObstacle('half', 2);
+      state.rows.push(row);
+    }
+    // 6b. Checkpoint Flat Runway (10 rows)
+    for (let i = 0; i < 10; i++) {
+      state.rows.push(createRoadRow(3, 5, 1));
+    }
+    // 6c. High-Speed Timing Gates with Spaced Boosts (20 rows) - library segment
+    addLibrarySegment(state, ['obstacle_course', 'narrow_passage', 'speed_section'], 20, 5, 1);
+    
+    // 6d. Ultimate Boost Runway (15 rows)
+    for (let i = 0; i < 15; i++) {
+      const row = createRoadRow(3, 5, 1);
+      if (i === 2) row[3] = { ...row[3], top_color: 11, bottom_color: 10 }; // Boost
+      if (i === 6) row[2] = { ...row[2], top_color: 11, bottom_color: 10 };
+      if (i === 6) row[4] = { ...row[4], top_color: 11, bottom_color: 10 };
+      if (i === 11) row[3] = { ...row[3], top_color: 12, bottom_color: 10 }; // Super Boost
+      if (i === 13) row[3] = { ...row[3], top_color: 12, bottom_color: 10 }; // Super Boost
+      state.rows.push(row);
+    }
+
+    // SECTION 7: Ultimate Void Jump (rows 285-350)
+    // 7a. Ramp up from 0.0 to 6.0 (15 rows)
+    for (let i = 0; i < 15; i++) {
+      const h1 = (i / 15) * 6.0;
+      const h2 = ((i + 1) / 15) * 6.0;
+      state.rows.push(createRampRow(h1, h2, [1, 2, 3, 4, 5]));
+    }
+    // 7b. Launch Peak at 6.0 with Boost (10 rows)
+    for (let i = 0; i < 10; i++) {
+      const row = createPlatformRow(6.0, [1, 2, 3, 4, 5]);
+      if (i === 2) {
+        row[3] = { ...row[3], top_color: 11, bottom_color: 10 }; // Boost pad at row 302
+      }
+      if (i === 6) {
+        row[3] = { ...row[3], top_color: 11, bottom_color: 10 }; // Boost pad at row 306
+      }
+      if (i === 9) {
+        for (let l of [2, 3, 4]) {
+          row[l] = { ...createRampTile(6.0, 6.0, 1), top_color: 12, bottom_color: 10 }; // Super Boost pad at row 309
+        }
+      }
+      state.rows.push(row);
+    }
+    // 7c. Huge Void Gap (9 rows)
+    for (let i = 0; i < 9; i++) {
+      state.rows.push(createEmptyRow());
+    }
+    // 7d. Landing Platform at 2.0 with Refill (10 rows)
+    for (let i = 0; i < 10; i++) {
+      const row = createPlatformRow(2.0, [1, 2, 3, 4, 5]);
+      if (i === 2) {
+        for (let l of [2, 3, 4]) {
+          row[l] = { ...createRampTile(2.0, 2.0, 1), top_color: 10, bottom_color: 10 }; // Refill pad at row 321
+        }
+      }
+      state.rows.push(row);
+    }
+    // 7e. Ramp down from 2.0 to 0.0 (12 rows)
+    for (let i = 0; i < 12; i++) {
+      const h1 = 2.0 - (i / 12) * 2.0;
+      const h2 = 2.0 - ((i + 1) / 12) * 2.0;
+      state.rows.push(createRampRow(h1, h2, [1, 2, 3, 4, 5]));
+    }
+    // 7f. Recovery Runway (10 rows)
+    for (let i = 0; i < 10; i++) {
+      state.rows.push(createRoadRow(3, 5, 1));
+    }
+
+    // SECTION 8: Outro & Finish (rows 351-415)
+    // 8a. High-Speed Slalom with Boosts (15 rows) -> library segment
+    addLibrarySegment(state, ['slalom', 'speed_section'], 15, 5, 1);
+
+    // 8b. Final Mini Void Jump (15 rows)
+    // Approach runway (4 rows)
     for (let i = 0; i < 4; i++) {
-      const row = createEmptyRow();
-      // Lower path ramping up
-      const hStart = -4.0 + (i / 4) * (4.0);
-      const hEnd = -4.0 + ((i + 1) / 4) * (4.0);
-      for (let l = 0; l <= 2; l++) {
-        row[l] = createRampTile(hStart, hEnd, 1);
-      }
-      // Upper path flat at 0.0
-      for (let l = 4; l <= 6; l++) {
-        row[l] = createRampTile(0.0, 0.0, 1);
+      const row = createRoadRow(3, 5, 1);
+      if (i === 2) row[3] = { ...row[3], top_color: 11, bottom_color: 10 }; // Boost
+      state.rows.push(row);
+    }
+    // Ramp up from 0.0 to 2.0 (4 rows)
+    for (let i = 0; i < 4; i++) {
+      const h1 = (i / 4) * 2.0;
+      const h2 = ((i + 1) / 4) * 2.0;
+      state.rows.push(createRampRow(h1, h2, [1, 2, 3, 4, 5]));
+    }
+    // Launch Peak at 2.0 with boost (1 row)
+    {
+      const row = createPlatformRow(2.0, [2, 3, 4]);
+      row[3] = { ...row[3], top_color: 11, bottom_color: 10 }; // Boost
+      state.rows.push(row);
+    }
+    // Mini Void Gap (3 rows)
+    for (let i = 0; i < 3; i++) {
+      state.rows.push(createEmptyRow());
+    }
+    // Landing platform at height 0.0 (3 rows)
+    for (let i = 0; i < 3; i++) {
+      const row = createRoadRow(3, 3, 1); // lanes 2-4
+      if (i === 0) {
+        row[3] = { ...row[3], top_color: 10, bottom_color: 10 }; // Refill
       }
       state.rows.push(row);
     }
 
-    // Merge lanes back to center lane 3, width 5
-    state.lane = 3;
-    addFlatRunwayAtHeight(state, 5, 5, 0.0, 1);
-
-    // 9. Stereo Split Channels (lanes 1 and 5 only, gap in middle)
-    for (let i = 0; i < 8; i++) {
-      const row = createEmptyRow();
-      row[1] = createRampTile(0.0, 0.0, 1); // Left Channel
-      row[5] = createRampTile(0.0, 0.0, 1); // Right Channel
+    // 8c. Finish Approach (15 rows)
+    for (let i = 0; i < 15; i++) {
+      const row = createRoadRow(3, 5, 1);
+      if (i === 4) {
+        row[1] = createObstacle('half', 2);
+        row[5] = createObstacle('half', 2);
+      }
+      if (i === 10) {
+        row[1] = createObstacle('full', 2);
+        row[5] = createObstacle('full', 2);
+      }
       state.rows.push(row);
     }
-    addFlatRunwayAtHeight(state, 4, 5, 0.0, 1);
 
-    // 10. Supernova Burn Zone (burning edges, safe center lanes 2-4)
-    addBurnZone(state, 12, 5, 3, 1);
-
-    // 11. Guide Rails & Slick (slippery floor, bumper walls)
-    addGuideRails(state, 12, 5, 1);
-    const grStart = state.rows.length - 12;
-    for (let r = grStart; r < state.rows.length; r++) {
-      for (let l = 2; l <= 4; l++) {
-        if (state.rows[r][l] && state.rows[r][l].top_color === 0) {
-          state.rows[r][l].bottom_color = 9; // slippery
-        }
-      }
-    }
-
-    // 12. Outro & Tunnel Finish
-    addFlatRunwayAtHeight(state, 5, 5, 0.0, 1);
-    let sideOut = -1;
+    // 8d. Finish Runway (12 rows)
     for (let i = 0; i < 12; i++) {
-      const sineVal = Math.sin((i / 11) * 2 * Math.PI); // starts and ends exactly at 0
-      state.lane = clamp(Math.round(3 + sineVal * 1.0), 2, 4);
-      const row = createRoadRow(state.lane, 3, 1);
-      if (i % 3 === 0 && i > 0 && i < 11) {
-        const obsLane = clamp(state.lane + sideOut, 0, ROAD_WIDTH_LANES - 1);
-        if (row[obsLane]) {
-          row[obsLane] = createObstacle('half', 2);
-        }
-        sideOut = -sideOut;
-      }
-      // Super boost in the outro slalom (Cyan super boost!)
-      if (i === 2 || i === 5 || i === 8) {
-        if (row[state.lane]) {
-          row[state.lane].top_color = 12;
-          row[state.lane].bottom_color = 11;
-        }
-      }
-      state.rows.push(row);
+      state.rows.push(createRoadRow(3, 5, 1));
     }
-    // Winding Outro Tunnel Finish (length 12, width 3, winding, boosts, and obstacles)
-    for (let i = 0; i < 12; i++) {
-      const sineVal = Math.sin((i / 11) * 2 * Math.PI); // starts and ends exactly at 0
-      state.lane = clamp(Math.round(3 + sineVal * 1.5), 1, 5);
-      
-      const row = createEmptyRow();
-      const leftActive = state.lane - 1;
-      const rightActive = state.lane + 1;
-      
-      for (let l = leftActive; l <= rightActive; l++) {
-        if (l >= 0 && l < ROAD_WIDTH_LANES) {
-          row[l] = createTunnelTile(1);
-        }
-      }
-      
-      // Turbo boost inside outro tunnel (Super Boost!)
-      if (i === 3 || i === 7) {
-        if (row[state.lane]) {
-          row[state.lane].top_color = 12;
-          row[state.lane].bottom_color = 11;
-        }
-      }
-      
-      // Obstacle inside outro tunnel
-      if (i === 8) {
-        const obsLane = sineVal > 0 ? leftActive : rightActive;
-        if (obsLane >= 0 && obsLane < ROAD_WIDTH_LANES && row[obsLane]) {
-          row[obsLane] = createObstacle('half', 2);
-        }
-      }
-      state.rows.push(row);
-    }
-    state.lane = 3;
+
+    // 8e. End Runway (8 rows)
     addEndRunway(state, 5, 1, 8);
 
     normalizeRows(state.rows);
-
     return {
       level_index: levelIndex,
       name: "DEMO LEVEL",
@@ -1436,19 +1833,8 @@ function generateVoidLevel(levelIndex, difficulty, seed) {
       rows: state.rows
     };
   } else {
-    // Void levels 62 & 63 — assembled from segment library
-    return assembleFromSegments({
-      levelIndex, difficulty, seed,
-      biome: 'void',
-      name: `VOID ${difficulty === 0 ? 'I' : difficulty === 1 ? 'II' : 'III'}`,
-      gravity: 8,
-      fuel:       [360, 300, 260][difficulty],
-      oxygen:     [240, 200, 160][difficulty],
-      targetRows: [300, 340, 380][difficulty],
-      diffRange:  [[1, 3], [2, 4], [3, 5]][difficulty],
-      categoryPrefs: ['slalom', 'jump', 'narrow_passage', 'tunnel', 'obstacle_course', 'mixed', 'hazard_zone', 'speed_section'],
-      refillSpacing: 30,
-    });
+    // Void levels 62 & 63 — design-doc blueprint driven (level 61 stays bespoke above).
+    return generateFromDesignDoc(levelIndex, difficulty, seed, 'void');
   }
 }
 
@@ -1625,29 +2011,249 @@ function assembleFromSegments(config) {
   return { level_index: levelIndex, name, gravity, fuel, oxygen, palette: PALETTES[biome], rows: state.rows };
 }
 
-// ---------------------------------------------------------------------------
-// World 1: RIDGE — elevation changes, heavy gravity, jump-focused
-// ---------------------------------------------------------------------------
-function generateRidgeLevel(levelIndex, difficulty, seed) {
-  const d = difficulty;
-  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'ridge',
-    name: ['RIDGE I','RIDGE II','RIDGE III'][d], gravity: 14,
-    fuel: [300,260,220][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
-    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 25,
-    categoryPrefs: ['jump','narrow_passage','obstacle_course','tunnel','slalom','mixed'],
-  });
+// ==========================================================================
+// SECTION 7D: BLUEPRINT-DRIVEN GENERATION
+// The design document (data/world_design_docs.json) emits a per-level blueprint
+// of ordered, tagged slots. buildLevelFromBlueprint fills each slot by PICKING
+// from the enriched pool — signature slots prefer biome-matched custom segments,
+// filler slots use real extracted chunks (detail-fill). One uniform job: pick.
+// ==========================================================================
+
+let _designDocsCache = null;
+function getDesignDocs() {
+  if (!_designDocsCache) {
+    _designDocsCache = JSON.parse(fs.readFileSync(path.resolve('data/world_design_docs.json'), 'utf8'));
+  }
+  return _designDocsCache;
 }
 
-// ---------------------------------------------------------------------------
-// World 2: THRILL — wide tracks, boost chains, speed focus
-// ---------------------------------------------------------------------------
-function generateThrillLevel(levelIndex, difficulty, seed) {
-  const d = difficulty;
-  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'thrill',
-    name: ['THRILL I','THRILL II','THRILL III'][d], gravity: 8,
-    fuel: [400,350,300][d], oxygen: [240,210,180][d], targetRows: [280,320,360][d],
-    diffRange: [[1,3],[1,4],[2,4]][d], refillSpacing: 35,
-    categoryPrefs: ['speed_section','slalom','jump','mixed','tunnel','narrow_passage'],
+/** Look up the authored blueprint (level entry) for a biome + level index. */
+function buildBlueprint(biome, levelIndex) {
+  const world = getDesignDocs().worlds.find(w => w.biome === biome);
+  if (!world) return null;
+  const level = (world.levels || []).find(l => l.levelIndex === levelIndex);
+  return level ? { ...level, worldTitle: world.title } : null;
+}
+
+/** Interface mismatch cost between a previous exit and a candidate entry. */
+function slotInterfaceDistance(exitIface, entryIface) {
+  return Math.abs((exitIface.width || 4) - (entryIface.width || 4)) +
+         Math.abs((exitIface.center || 3) - (entryIface.center || 3)) * 2 +
+         Math.abs((exitIface.height || 0) - (entryIface.height || 0)) * 10;
+}
+
+/** Build a short road transition that morphs width/center between interfaces. */
+function slotBuildAdapter(exitIface, entryIface, roadColor) {
+  const adapterRows = [];
+  const exitW = exitIface.width || 4, entryW = entryIface.width || 4;
+  const exitC = exitIface.center, entryC = entryIface.center;
+  const totalLen = Math.max(2, Math.abs(exitW - entryW), Math.abs(exitC - entryC));
+  for (let i = 0; i < totalLen; i++) {
+    const t = (i + 1) / totalLen;
+    const w = Math.max(1, Math.round(exitW + (entryW - exitW) * t));
+    const c = Math.round(exitC + (entryC - exitC) * t);
+    adapterRows.push(createRoadRow(clamp(c, 1, 5), w, roadColor));
+  }
+  return adapterRows;
+}
+
+/** Pick the best pool segment for a blueprint slot (uniform pick step). */
+function pickSegmentForSlot(pool, slot, biome, diffRange, lastExit, usedIds, rng) {
+  const [minDiff, maxDiff] = diffRange;
+  let cands = pool.filter(s =>
+    s.category === slot.tag && s.rows && s.length >= 4 &&
+    s.difficulty >= minDiff - 1 && s.difficulty <= maxDiff + 1 &&
+    !usedIds.has(s.id));
+
+  if (slot.signature) {
+    // Signature slots: prefer biome-matched custom set-pieces, then any custom.
+    let pref = cands.filter(s => s.source === 'custom' && s.biome === biome);
+    if (pref.length === 0) pref = cands.filter(s => s.source === 'custom');
+    if (pref.length > 0) cands = pref;
+  } else {
+    // Filler slots: detail-fill from real extracted chunks where possible.
+    const real = cands.filter(s => s.source !== 'custom');
+    if (real.length > 0) cands = real;
+  }
+  if (cands.length === 0) return null;
+
+  const target = slot.rows || 24;
+  const scored = cands
+    .map(s => ({ s, d: slotInterfaceDistance(lastExit, s.entry) + Math.abs(s.length - target) * 0.5 }))
+    .sort((a, b) => a.d - b.d);
+  const topN = scored.slice(0, Math.min(5, scored.length));
+  return rngChoice(rng, topN).s;
+}
+
+/**
+ * Enforce the safety-critical subset of the 27 design constraints as a final
+ * pass. By design this ONLY removes hazards/walls (never adds), so a level that
+ * the solver already accepted stays solvable.
+ *  - #12 Safe Landing Zones: the first 3 road rows after any gap are cleared of
+ *        obstacles and burn tiles (boosts/refills/ramps are preserved).
+ *  - #10 Hazard Grouping: isolated single burn tiles (no burn neighbour) are
+ *        reverted to plain road, so burns read as deliberate barriers.
+ */
+function enforceConstraints(rows, biome, blueprint, rng) {
+  const n = rows.length;
+
+  for (let r = 1; r < n; r++) {
+    const prevGap = rows[r - 1] && rows[r - 1].every(t => t === null);
+    const isRoad = rows[r] && rows[r].some(t => t);
+    if (!(prevGap && isRoad)) continue;
+    for (let k = r; k < Math.min(n, r + 3); k++) {
+      const row = rows[k];
+      if (!row) continue;
+      for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
+        const t = row[l];
+        if (!t || t.ramp) continue;
+        if (t.full || t.half) row[l] = createTile(t.bottom_color === 2 ? 1 : t.bottom_color);
+        else if (t.top_color === 13 || t.bottom_color === 13) row[l] = createTile(1);
+      }
+    }
+  }
+
+  for (let r = 0; r < n; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
+      const t = row[l];
+      if (!t || !(t.top_color === 13 || t.bottom_color === 13)) continue;
+      const hasBurnNeighbour = [[r, l - 1], [r, l + 1], [r - 1, l], [r + 1, l]].some(([rr, ll]) => {
+        if (rr < 0 || rr >= n || ll < 0 || ll >= ROAD_WIDTH_LANES) return false;
+        const tt = rows[rr] && rows[rr][ll];
+        return tt && (tt.top_color === 13 || tt.bottom_color === 13);
+      });
+      if (!hasBurnNeighbour) row[l] = createTile(1);
+    }
+  }
+}
+
+const FULL_EXIT = { width: 5, lanes: [1, 2, 3, 4, 5], height: 0, center: 3 };
+
+/**
+ * Build a level by filling an authored blueprint's ordered slots from the pool.
+ * @param {object} cfg level config + blueprint
+ */
+function buildLevelFromBlueprint(cfg) {
+  const {
+    levelIndex, difficulty, seed, biome, name, gravity, fuel, oxygen,
+    blueprint, diffRange = [1, 5], roadColor = 1, refillSpacing = 30, postProcess = null,
+    targetRows = 0,
+  } = cfg;
+
+  const rng = createRng(seed);
+  const state = makeState(rng, biome, levelIndex);
+  const pool = getSegmentLibrary();
+  const usedIds = new Set();
+  let lastExit = { ...FULL_EXIT };
+
+  // Lay down a single blueprint slot (uniform pick step).
+  const placeSlot = (slot) => {
+    if (slot.tag === 'runway') {
+      addRunway(state, slot.rows || 10, 5, roadColor);
+      lastExit = { ...FULL_EXIT };
+      return;
+    }
+    const seg = pickSegmentForSlot(pool, slot, biome, diffRange, lastExit, usedIds, rng);
+    if (!seg) {
+      // No pool match — keep the arc intact with a runway of the slot's length.
+      addRunway(state, Math.max(6, slot.rows || 12), 5, roadColor);
+      lastExit = { ...FULL_EXIT };
+      return;
+    }
+    if (slotInterfaceDistance(lastExit, seg.entry) > 2) {
+      for (const row of slotBuildAdapter(lastExit, seg.entry, roadColor)) state.rows.push(row);
+    }
+    addRunway(state, rngInt(rng, 2, 4), Math.max(3, seg.entry.width || 4), roadColor);
+    for (const row of seg.rows) state.rows.push(row.map(t => (t ? { ...t } : null)));
+    usedIds.add(seg.id);
+    lastExit = seg.exit || { ...FULL_EXIT };
+  };
+
+  // Drop the trailing outro runway (a single short end runway is the finish)
+  // and pull out the climax so the level ENDS on its hardest beat — no long
+  // flat tail. Length top-up is inserted right before the climax.
+  const slots = blueprint.slots;
+  let bodySlots = slots;
+  if (slots.length > 1 && slots[slots.length - 1].tag === 'runway') bodySlots = slots.slice(0, -1);
+
+  let climaxIdx = -1;
+  for (let i = bodySlots.length - 1; i >= 0; i--) { if (bodySlots[i].role === 'climax') { climaxIdx = i; break; } }
+  if (climaxIdx < 0) climaxIdx = bodySlots.length - 1;
+  const climaxSlot = bodySlots[climaxIdx];
+  const preClimax = bodySlots.filter((_, i) => i !== climaxIdx);
+
+  // Filler categories for length top-up: reuse the blueprint's own filler tags
+  // (real extracted chunks; never the signature set-pieces).
+  const fillerTags = [...new Set(bodySlots.filter(s => !s.signature && s.tag !== 'runway').map(s => s.tag))];
+  const fillerPool = fillerTags.length ? fillerTags : ['slalom', 'jump', 'narrow_passage', 'mixed'];
+
+  for (const slot of preClimax) placeSlot(slot);
+
+  if (targetRows > 0) {
+    const reserve = 48; // room for the climax segment + the short safe finish
+    let guard = 0;
+    while (state.rows.length < targetRows - reserve && guard++ < 40) {
+      const before = state.rows.length;
+      placeSlot({ tag: rngChoice(rng, fillerPool), role: 'filler', rows: rngInt(rng, 20, 30) });
+      if (state.rows.length <= before) break;
+    }
+  }
+
+  if (climaxSlot) placeSlot(climaxSlot);
+
+  // Short safe finish only — the climax is the last real challenge.
+  state.lane = 3;
+  addEndRunway(state, 5, roadColor, rngInt(rng, 6, 8));
+
+  // Biome audit/refine ensures signature elements are present.
+  const audit = auditLevel(state.rows, biome, BIOME_RULES[biome] || {});
+  refineLevel(state.rows, audit, biome, rng);
+
+  // Refill economy: spawn a refill at most every refillSpacing rows of road.
+  let lastRefill = 0;
+  for (let r = 20; r < state.rows.length - 10; r++) {
+    const row = state.rows[r];
+    if (!row) continue;
+    if (r - lastRefill >= refillSpacing) {
+      const cL = _findRoadLane(row, 3);
+      if (cL >= 0 && row[cL] && row[cL].top_color === 0 && !row[cL].ramp) {
+        row[cL] = { ...row[cL], top_color: 10, bottom_color: 10 };
+        lastRefill = r;
+      }
+    }
+    for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
+      if (row[l] && row[l].top_color === 10) { lastRefill = r; break; }
+    }
+  }
+
+  if (postProcess) postProcess(state, rng, difficulty);
+
+  // Final 27-constraint safety pass: safe landings after gaps + hazard grouping.
+  // Only removes hazards/walls, so the solver guarantee is preserved.
+  enforceConstraints(state.rows, biome, blueprint, rng);
+
+  // Recolor default road tiles to the biome road color.
+  for (let r = 0; r < state.rows.length; r++) {
+    for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
+      const tile = state.rows[r][l];
+      if (tile && !tile.ramp && tile.bottom_color === 1 && roadColor !== 1) {
+        tile.bottom_color = roadColor;
+        tile.low3 = roadColor;
+      }
+    }
+  }
+
+  normalizeRows(state.rows);
+  return { level_index: levelIndex, name, gravity, fuel, oxygen, palette: PALETTES[biome], rows: state.rows };
+}
+
+/** Per-biome build config: road color, refill cadence, difficulty windows, flavor pass. */
+const BIOME_BUILD_CFG = {
+  void:     { roadColor: 1, refillSpacing: 30, diffRange: [[1, 3], [2, 4], [3, 5]] },
+  ridge:    { roadColor: 1, refillSpacing: 25, diffRange: [[1, 3], [2, 4], [3, 5]] },
+  thrill:   { roadColor: 1, refillSpacing: 35, diffRange: [[1, 3], [1, 4], [2, 4]],
     postProcess: (state, rng) => {
       for (let r = 20; r < state.rows.length - 15; r += 3) {
         if (rng() < 0.25) {
@@ -1657,33 +2263,9 @@ function generateThrillLevel(levelIndex, difficulty, seed) {
             row[cL] = { ...row[cL], top_color: 11, bottom_color: 11, low3: 11 };
         }
       }
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// World 3: CORE — circuit board precision, narrow dodging
-// ---------------------------------------------------------------------------
-function generateCoreLevel(levelIndex, difficulty, seed) {
-  const d = difficulty;
-  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'core',
-    name: ['CORE I','CORE II','CORE III'][d], gravity: 8,
-    fuel: [300,260,220][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
-    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 28, roadColor: 2,
-    categoryPrefs: ['obstacle_course','narrow_passage','tunnel','mixed','slalom','hazard_zone'],
-  });
-}
-
-// ---------------------------------------------------------------------------
-// World 4: GLITCH — phasing terrain, sticky hazards
-// ---------------------------------------------------------------------------
-function generateGlitchLevel(levelIndex, difficulty, seed) {
-  const d = difficulty;
-  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'glitch',
-    name: ['GLITCH I','GLITCH II','GLITCH III'][d], gravity: 8,
-    fuel: [320,280,240][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
-    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 25,
-    categoryPrefs: ['jump','hazard_zone','narrow_passage','obstacle_course','slalom','mixed'],
+    } },
+  core:     { roadColor: 2, refillSpacing: 28, diffRange: [[1, 3], [2, 4], [3, 5]] },
+  glitch:   { roadColor: 1, refillSpacing: 25, diffRange: [[1, 3], [2, 4], [3, 5]],
     postProcess: (state, rng) => {
       for (let r = 30; r < state.rows.length - 20; r++) {
         if (rng() < 0.08) { const row = state.rows[r]; if (!row) continue;
@@ -1692,20 +2274,8 @@ function generateGlitchLevel(levelIndex, difficulty, seed) {
               row[l] = { ...row[l], top_color: 3, bottom_color: 3, low3: 3 };
         }
       }
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// World 5: TUNDRA — ice physics, wide frictionless drift
-// ---------------------------------------------------------------------------
-function generateTundraLevel(levelIndex, difficulty, seed) {
-  const d = difficulty;
-  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'tundra',
-    name: ['TUNDRA I','TUNDRA II','TUNDRA III'][d], gravity: 8,
-    fuel: [320,280,240][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
-    diffRange: [[1,3],[1,4],[2,4]][d], refillSpacing: 30,
-    categoryPrefs: ['slalom','speed_section','jump','mixed','narrow_passage','tunnel'],
+    } },
+  tundra:   { roadColor: 1, refillSpacing: 30, diffRange: [[1, 3], [1, 4], [2, 4]],
     postProcess: (state, rng) => {
       for (let r = 15; r < state.rows.length - 10; r++) {
         const row = state.rows[r]; if (!row) continue;
@@ -1713,21 +2283,9 @@ function generateTundraLevel(levelIndex, difficulty, seed) {
           if (row[l] && row[l].top_color === 0 && !row[l].ramp && !row[l].full && !row[l].half && rng() < 0.40)
             row[l] = { ...row[l], top_color: 9, bottom_color: 9, low3: 9 };
       }
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// World 6: FURNACE — resource starvation, burn tiles everywhere
-// ---------------------------------------------------------------------------
-function generateFurnaceLevel(levelIndex, difficulty, seed) {
-  const d = difficulty;
-  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'furnace',
-    name: ['FURNACE I','FURNACE II','FURNACE III'][d], gravity: 8,
-    fuel: [200,170,140][d], oxygen: [100,80,60][d], targetRows: [260,300,340][d],
-    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 20,
-    categoryPrefs: ['hazard_zone','obstacle_course','narrow_passage','jump','mixed','tunnel'],
-    postProcess: (state, rng) => {
+    } },
+  furnace:  { roadColor: 1, refillSpacing: 20, diffRange: [[1, 3], [2, 4], [3, 5]],
+    postProcess: (state, rng, d) => {
       const burnChance = [0.15, 0.25, 0.35][d];
       for (let r = 20; r < state.rows.length - 15; r++) {
         const row = state.rows[r]; if (!row) continue;
@@ -1735,46 +2293,10 @@ function generateFurnaceLevel(levelIndex, difficulty, seed) {
           if (row[l] && row[l].top_color === 0 && !row[l].ramp && !row[l].full && !row[l].half && rng() < burnChance)
             row[l] = { ...row[l], top_color: 13, bottom_color: 13, low3: 13 };
       }
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// World 7: SHALLOWS — fog, tunnel-heavy, reduced visibility
-// ---------------------------------------------------------------------------
-function generateShallowsLevel(levelIndex, difficulty, seed) {
-  const d = difficulty;
-  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'shallows',
-    name: ['SHALLOWS I','SHALLOWS II','SHALLOWS III'][d], gravity: 8,
-    fuel: [300,260,220][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
-    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 25,
-    categoryPrefs: ['tunnel','narrow_passage','slalom','mixed','jump','obstacle_course'],
-  });
-}
-
-// ---------------------------------------------------------------------------
-// World 8: SPIRE — low gravity, island hopping, floaty jumps
-// ---------------------------------------------------------------------------
-function generateSpireLevel(levelIndex, difficulty, seed) {
-  const d = difficulty;
-  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'spire',
-    name: ['SPIRE I','SPIRE II','SPIRE III'][d], gravity: 4,
-    fuel: [360,310,260][d], oxygen: [240,200,160][d], targetRows: [260,300,340][d],
-    diffRange: [[1,3],[2,4],[3,5]][d], refillSpacing: 30,
-    categoryPrefs: ['jump','narrow_passage','slalom','obstacle_course','mixed','hazard_zone'],
-  });
-}
-
-// ---------------------------------------------------------------------------
-// World 9: PULSE — timing gates, momentum, mechanical precision
-// ---------------------------------------------------------------------------
-function generatePulseLevel(levelIndex, difficulty, seed) {
-  const d = difficulty;
-  return assembleFromSegments({ levelIndex, difficulty, seed, biome: 'pulse',
-    name: ['PULSE I','PULSE II','PULSE III'][d], gravity: 8,
-    fuel: [300,260,220][d], oxygen: [200,170,140][d], targetRows: [260,300,340][d],
-    diffRange: [[2,4],[3,5],[3,5]][d], refillSpacing: 28,
-    categoryPrefs: ['obstacle_course','tunnel','narrow_passage','hazard_zone','slalom','jump','mixed'],
+    } },
+  shallows: { roadColor: 1, refillSpacing: 25, diffRange: [[1, 3], [2, 4], [3, 5]] },
+  spire:    { roadColor: 1, refillSpacing: 30, diffRange: [[1, 3], [2, 4], [3, 5]] },
+  pulse:    { roadColor: 1, refillSpacing: 28, diffRange: [[2, 4], [3, 5], [3, 5]],
     postProcess: (state, rng) => {
       for (let r = 25; r < state.rows.length - 15; r += 8) {
         if (rng() < 0.30) {
@@ -1784,9 +2306,44 @@ function generatePulseLevel(levelIndex, difficulty, seed) {
             row[cL] = { ...row[cL], top_color: 3, bottom_color: 3, low3: 3 };
         }
       }
-    },
+    } },
+};
+
+/** Generic generator: design-doc blueprint -> uniform pool picking. */
+function generateFromDesignDoc(levelIndex, difficulty, seed, biome) {
+  const blueprint = buildBlueprint(biome, levelIndex);
+  if (!blueprint || !blueprint.slots) {
+    throw new Error(`No blueprint slots for ${biome} level ${levelIndex} in world_design_docs.json`);
+  }
+  const cfg = BIOME_BUILD_CFG[biome] || {};
+  // Per-tier target length (I/II/III): keep levels substantial with a ramp.
+  const tierTarget = [220, 280, 330][difficulty] || 260;
+  return buildLevelFromBlueprint({
+    levelIndex, difficulty, seed, biome,
+    name: `${biome.toUpperCase()} ${blueprint.tier || ''}`.trim(),
+    gravity: blueprint.gravity, fuel: blueprint.fuel, oxygen: blueprint.oxygen,
+    blueprint,
+    targetRows: blueprint.targetRows || tierTarget,
+    diffRange: (cfg.diffRange && cfg.diffRange[difficulty]) || [1, 5],
+    roadColor: cfg.roadColor || 1,
+    refillSpacing: cfg.refillSpacing || 30,
+    postProcess: cfg.postProcess || null,
   });
 }
+
+// ---------------------------------------------------------------------------
+// World 1-9: thin biome wrappers (design-doc driven). World 0/void keeps its
+// bespoke Level 61 showcase inside generateVoidLevel.
+// ---------------------------------------------------------------------------
+function generateRidgeLevel(levelIndex, difficulty, seed)   { return generateFromDesignDoc(levelIndex, difficulty, seed, 'ridge'); }
+function generateThrillLevel(levelIndex, difficulty, seed)  { return generateFromDesignDoc(levelIndex, difficulty, seed, 'thrill'); }
+function generateCoreLevel(levelIndex, difficulty, seed)    { return generateFromDesignDoc(levelIndex, difficulty, seed, 'core'); }
+function generateGlitchLevel(levelIndex, difficulty, seed)  { return generateFromDesignDoc(levelIndex, difficulty, seed, 'glitch'); }
+function generateTundraLevel(levelIndex, difficulty, seed)  { return generateFromDesignDoc(levelIndex, difficulty, seed, 'tundra'); }
+function generateFurnaceLevel(levelIndex, difficulty, seed) { return generateFromDesignDoc(levelIndex, difficulty, seed, 'furnace'); }
+function generateShallowsLevel(levelIndex, difficulty, seed){ return generateFromDesignDoc(levelIndex, difficulty, seed, 'shallows'); }
+function generateSpireLevel(levelIndex, difficulty, seed)   { return generateFromDesignDoc(levelIndex, difficulty, seed, 'spire'); }
+function generatePulseLevel(levelIndex, difficulty, seed)   { return generateFromDesignDoc(levelIndex, difficulty, seed, 'pulse'); }
 
 
 // ---------------------------------------------------------------------------
@@ -1819,19 +2376,213 @@ const WORLD_GENERATORS = [
   generatePulseLevel,   // World 9: 88-90
 ];
 
+function injectCheckpoints(levelData) {
+  const numRows = levelData.rows.length;
+  if (numRows < 40) return; // level too short for 2 checkpoints
+  
+  // Decide target rows: r1 around 1/3, r2 around 2/3
+  const target1 = Math.floor(numRows * 0.33);
+  const target2 = Math.floor(numRows * 0.66);
+  
+  // Search ranges: +/- 10% of track length
+  const range1Start = Math.max(10, target1 - 15);
+  const range1End = Math.min(numRows - 20, target1 + 15);
+  const range2Start = Math.max(range1End + 15, target2 - 15);
+  const range2End = Math.min(numRows - 10, target2 + 15);
+  
+  function findBestRow(target) {
+    let bestRow = -1;
+    let minDistance = Infinity;
+
+    // Search the entire level (excluding start and end runways)
+    for (let r = 15; r < numRows - 15; r++) {
+      let valid = true;
+      for (let rowIdx = r; rowIdx < r + 6; rowIdx++) {
+        const row = levelData.rows[rowIdx];
+        if (!row) { valid = false; break; }
+        
+        // Checkpoints need solid ground in the main center lanes
+        if (!row[2] || !row[3] || !row[4]) {
+          valid = false;
+          break;
+        }
+
+        for (let colIdx = 0; colIdx < 7; colIdx++) {
+          const tile = row[colIdx];
+          if (tile) {
+            // No sloped ramps, tunnels, obstacles, or special tiles in the first pass
+            const isSlopedRamp = tile.ramp && tile.startY !== tile.endY;
+            if (isSlopedRamp || tile.tunnel || tile.full || tile.half ||
+                tile.top_color === 11 || tile.top_color === 12 || 
+                tile.top_color === 14 || tile.top_color === 10 || 
+                tile.top_color === 3 || tile.bottom_color === 3 ||
+                tile.bottom_color === 9 || tile.top_color === 13 || 
+                tile.bottom_color === 13) {
+              valid = false;
+              break;
+            }
+          }
+        }
+        if (!valid) break;
+      }
+
+      if (valid) {
+        const dist = Math.abs(r - target);
+        if (dist < minDistance) {
+          minDistance = dist;
+          bestRow = r;
+        }
+      }
+    }
+
+    // Fallback: allow obstacles/special tiles, but strictly forbid sloped ramps and tunnels
+    if (bestRow === -1) {
+      minDistance = Infinity;
+      for (let r = 15; r < numRows - 15; r++) {
+        let valid = true;
+        for (let rowIdx = r; rowIdx < r + 6; rowIdx++) {
+          const row = levelData.rows[rowIdx];
+          if (!row) { valid = false; break; }
+          if (!row[2] || !row[3] || !row[4]) {
+            valid = false;
+            break;
+          }
+          for (let colIdx = 0; colIdx < 7; colIdx++) {
+            const tile = row[colIdx];
+            if (tile) {
+              const isSlopedRamp = tile.ramp && tile.startY !== tile.endY;
+              if (isSlopedRamp || tile.tunnel) {
+                valid = false;
+                break;
+              }
+            }
+          }
+          if (!valid) break;
+        }
+
+        if (valid) {
+          const dist = Math.abs(r - target);
+          if (dist < minDistance) {
+            minDistance = dist;
+            bestRow = r;
+          }
+        }
+      }
+    }
+
+    // Ultimate fallback: just return target row
+    return bestRow !== -1 ? bestRow : target;
+  }
+  
+  const r1 = findBestRow(target1);
+  const r2 = findBestRow(target2);
+  
+  const checkpoints = [r1, r2];
+  levelData.checkpoints = [];
+  
+  checkpoints.forEach((r, idx) => {
+    // 1. Determine baseY from the row
+    let baseY = 0.0;
+    let foundTile = false;
+    for (let c = 0; c < 7; c++) {
+      const tile = levelData.rows[r][c];
+      if (tile) {
+        if (tile.startY !== undefined) {
+          baseY = tile.startY;
+          foundTile = true;
+          break;
+        }
+      }
+    }
+    if (!foundTile && r > 0) {
+      for (let c = 0; c < 7; c++) {
+        const tile = levelData.rows[r - 1][c];
+        if (tile) {
+          if (tile.startY !== undefined) {
+            baseY = tile.startY;
+            break;
+          }
+        }
+      }
+    }
+    
+    // 2. Force convert rows r to r + 5 into flat road tiles at height baseY
+    for (let rowIdx = r; rowIdx < r + 6; rowIdx++) {
+      for (let colIdx = 0; colIdx < 7; colIdx++) {
+        levelData.rows[rowIdx][colIdx] = {
+          val: 0,
+          full: false,
+          half: false,
+          tunnel: false,
+          ramp: baseY !== 0.0,
+          startY: baseY,
+          endY: baseY,
+          top_color: 1,
+          bottom_color: 1
+        };
+      }
+    }
+    
+    // 3. Mark the row itself as a checkpoint row
+    levelData.rows[r].checkpoint = true;
+    
+    // 4. Save checkpoint metadata
+    levelData.checkpoints.push({
+      row: r,
+      z: -r * 4.0,
+      baseY: baseY
+    });
+  });
+}
+
 function bakeAllWorlds() {
-const generatedLevels = [];
+  const args = process.argv.slice(2);
+  const targetLevelIndexArg = args.includes('--level') ? parseInt(args[args.indexOf('--level') + 1], 10) : null;
 
-console.log("Starting Build-Time Seeded Level Generation & Solver...");
+  const OUT_PATH = path.resolve('data/generated_levels.json');
+  let generatedLevels = [];
 
-for (let w = 0; w < 10; w++) {
-  const biome = THEMES[w];
-  const generator = WORLD_GENERATORS[w];
-  console.log(`\nBaking World ${w} (Theme: ${biome})...`);
+  // Always load existing levels so we can upsert in place. This preserves any
+  // out-of-range entries (e.g. the audio-generated level 91) across a full bake.
+  if (fs.existsSync(OUT_PATH)) {
+    try {
+      generatedLevels = JSON.parse(fs.readFileSync(OUT_PATH, 'utf8'));
+    } catch (e) {
+      console.warn("Could not read existing generated levels, generating from scratch instead.");
+    }
+  }
 
-  for (let l = 0; l < 3; l++) {
-    const levelIndex = 61 + w * 3 + l;
-    const difficulty = l; // 0=easy, 1=medium, 2=hard
+  console.log("Starting Build-Time Seeded Level Generation & Solver...");
+
+  // Step 0: enrich the segment pool with custom signature set-pieces so the
+  // build step has one uniform job — pick. Idempotent (strips prior custom).
+  enrichSegmentPool();
+
+  const levelsToGenerate = [];
+  if (targetLevelIndexArg !== null) {
+    if (targetLevelIndexArg < 61 || targetLevelIndexArg > 90) {
+      console.error(`Invalid level index for baking: ${targetLevelIndexArg}. Must be in range 61-90.`);
+      process.exit(1);
+    }
+    levelsToGenerate.push(targetLevelIndexArg);
+    console.log(`Baking ONLY Level ${targetLevelIndexArg}...`);
+  } else {
+    for (let w = 0; w < 10; w++) {
+      for (let l = 0; l < 3; l++) {
+        levelsToGenerate.push(61 + w * 3 + l);
+      }
+    }
+  }
+
+  for (const levelIndex of levelsToGenerate) {
+    const relativeIdx = levelIndex - 61;
+    const w = Math.floor(relativeIdx / 3);
+    const l = relativeIdx % 3;
+    const biome = THEMES[w];
+    const generator = WORLD_GENERATORS[w];
+
+    console.log(`\nBaking Level ${levelIndex} (World ${w}, Theme: ${biome})...`);
+    
     let seed = levelIndex * 1337;
     let attempts = 0;
     let success = false;
@@ -1839,7 +2590,10 @@ for (let w = 0; w < 10; w++) {
 
     while (!success && attempts < 1000) {
       try {
-        levelData = generator(levelIndex, difficulty, seed);
+        levelData = generator(levelIndex, l, seed);
+        
+        // Inject checkpoints
+        injectCheckpoints(levelData);
 
         // Run the static solver to verify complete traversability
         if (solveLevel(levelData)) {
@@ -1855,23 +2609,26 @@ for (let w = 0; w < 10; w++) {
     }
 
     if (success) {
-      generatedLevels.push(levelData);
+      // Upsert by index: replace in place if present, otherwise insert. Keeps
+      // unrelated entries (e.g. audio level 91) intact for both bake modes.
+      const existingIdx = generatedLevels.findIndex(lvl => lvl.level_index === levelIndex);
+      if (existingIdx >= 0) generatedLevels[existingIdx] = levelData;
+      else generatedLevels.push(levelData);
       console.log(`  Level ${levelIndex} (Attempt ${attempts + 1}): PLAYABLE. Seed = ${seed}`);
     } else {
       console.error(`  Level ${levelIndex} Failed to solve playability after 1000 iterations!`);
       process.exit(1);
     }
   }
-}
 
-// Write the output file
-const OUT_PATH = path.resolve('data/generated_levels.json');
-const outDir = path.dirname(OUT_PATH);
-if (!fs.existsSync(outDir)) {
-  fs.mkdirSync(outDir, { recursive: true });
-}
-fs.writeFileSync(OUT_PATH, JSON.stringify(generatedLevels, null, 2), 'utf8');
-console.log(`\nSuccessfully baked ${generatedLevels.length} playable levels and saved to ${OUT_PATH}!`);
+  // Write the output file (sorted by index so the pack stays ordered).
+  generatedLevels.sort((a, b) => a.level_index - b.level_index);
+  const outDir = path.dirname(OUT_PATH);
+  if (!fs.existsSync(outDir)) {
+    fs.mkdirSync(outDir, { recursive: true });
+  }
+  fs.writeFileSync(OUT_PATH, JSON.stringify(generatedLevels, null, 2), 'utf8');
+  console.log(`\nSuccessfully baked levels and saved to ${OUT_PATH}!`);
 }
 
 // Only bake when run directly (`node worldBuilder.js`); allow importing the
@@ -1882,5 +2639,6 @@ if (isMain) bakeAllWorlds();
 export {
   solveLevel, getSegmentLibrary, assembleFromSegments,
   createRoadRow, createRampTile, createTile, createObstacle, createTunnelTile,
-  createEmptyRow, createFullRow, clamp, normalizeRows
+  createEmptyRow, createFullRow, clamp, normalizeRows, injectCheckpoints,
+  generateCustomSegments, enrichSegmentPool, computeInterface
 };

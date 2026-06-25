@@ -66,28 +66,56 @@ body, html {
   background: radial-gradient(circle at center, transparent 30%, rgba(5, 2, 10, 0.4) 100%);
 }
 
+/* XMB-style: each menu fills the whole screen and blurs the game behind it
+   (like the PS3 home menu), rather than sitting in a rounded glass window. */
 .overlay-screen {
-  pointer-events: auto;
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 90%;
-  max-width: 600px;
-  max-height: 85%;
-  overflow-y: auto;
-  opacity: 0;
-  transform: scale(0.95);
-  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: none;
+  justify-content: center;
   position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .overlay-screen.active {
   opacity: 1;
-  transform: scale(1);
   pointer-events: auto;
-  position: relative;
   z-index: 12;
+  /* Full-screen blur of whatever is behind the menu (the live game scene). */
+  background: rgba(8, 10, 22, 0.55);
+  backdrop-filter: blur(26px);
+  -webkit-backdrop-filter: blur(26px);
+}
+
+/* The Webamp (Winamp-skinned) player docks in the top info-panel zone. Its
+   windows are a fixed pixel size and don't reflow, so on small/short viewports
+   they cover the screen title and overlap the focused XMB item. Hide it below
+   a usable breakpoint — playback (Web Audio) continues regardless, and it stays
+   toggleable from Settings → VISUALIZER on larger screens. */
+@media (max-width: 900px), (max-height: 720px) {
+  #webamp-container,
+  #webamp {
+    display: none !important;
+  }
+}
+
+/* Inside an overlay, the glass-card window chrome is removed — the menu floats
+   directly on the full-screen blur. (Physics calibrator is NOT an overlay-screen
+   so it keeps its panel look.) */
+.overlay-screen.glass-card {
+  background: rgba(8, 10, 22, 0.55);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 40px;
 }
 
 .hidden {
@@ -153,7 +181,7 @@ body, html {
 
 .btn-icon {
   position: absolute;
-  left: 0;
+  left: 76px; /* clear the fixed top-left gear/physics icon column (ends ~66px) */
   top: 0;
   background: transparent;
   border: none;
@@ -178,6 +206,225 @@ body, html {
   width: 100%;
   max-width: 350px;
   margin-bottom: 30px;
+}
+
+/* XMB-style crossbar: horizontal category row + vertical item list.
+   Fixed-focal-point behavior — scale/opacity/label visibility are driven
+   per-frame by CrossbarController (xmbMenu.js) as inline styles; the rules
+   here only carry static layout + the focus glow (reusing existing neon vars). */
+/* Real XMB cross: the active category/item is pinned to a fixed focal point
+   left-of-centre; the horizontal category row and vertical item column
+   translate through it (the engine writes the per-frame translate). The
+   crossbar is a zero-size anchor at the focal point; the two tracks hang off it. */
+.xmb-crossbar {
+  position: static;          /* NOT the tracks' containing block — they anchor to
+                                the full-screen .overlay-screen instead, so the
+                                focal point is the true viewport centre regardless
+                                of how tall the title above the crossbar is (a
+                                title-offset crossbar box used to push the focal
+                                point below centre and clip items on short windows) */
+  width: 100%;
+  flex: 1 1 auto;            /* take all available height between title and edges */
+  min-height: 70vh;
+  margin: 0;
+  overflow: visible;         /* full-screen draw area — items are never clipped
+                                (no fixed bottom chrome remains to overlap) */
+}
+
+/* The Success and How-To screens are bespoke: each pairs a tall content block
+   (telemetry columns / instructional rows) with a single-button crossbar that
+   must sit BELOW that content, not at the screen-centre focal point the other
+   XMB screens use. So they opt back into being their tracks' containing block
+   (same exception as the garage panel) and drop the 70vh reservation that would
+   otherwise push their own content off the top/bottom of the viewport. */
+#success-xmb-crossbar,
+#how-to-xmb-crossbar {
+  position: relative;
+  min-height: 0;
+}
+
+/* Now that the full-screen blur fills the whole viewport (the stale inline
+   max-width that used to box this screen in is gone), keep the telemetry
+   columns from stretching across an ultrawide screen — centre them instead. */
+.success-dashboard .success-columns-container {
+  max-width: 720px;
+}
+
+/* Focal point = 30% across the screen, ~128px down inside the crossbar block.
+   The category bar sits on that row; the item column hangs just below it.
+   Both translate through this fixed anchor — it itself never moves. */
+.xmb-category-track {
+  position: absolute;
+  left: 50%;               /* active category is centred on this line (engine
+                              applies the half-slot + scroll offset) */
+  top: calc(50% - 70px);   /* category bar sits just above the focal item row */
+  display: flex;
+  align-items: flex-end;
+  white-space: nowrap;
+  transition: none; /* transform is written per-frame by the controller, not CSS */
+  pointer-events: none; /* only the category cells capture clicks, not the gaps */
+}
+
+.xmb-category {
+  flex: 0 0 200px; /* CATEGORY_SLOT_PX in xmbMenu.js */
+  width: 200px;
+  min-height: 1.2em; /* keeps the row from collapsing to 0 height when a
+                         category has no baked text and is momentarily
+                         label-less (label-on-focus only adds text to the
+                         active category) — see level-select categories */
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 3px;
+  font-size: 1rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  pointer-events: auto; /* clickable to jump to this category */
+  transform-origin: center bottom;
+}
+
+/* ── Authentic PS3 focal point (left-of-centre, upper-middle) ──────────────
+   The full-screen crossbar menus (main / settings / level select) carry
+   .xmb-focal-ps3 to move the cross off dead-centre to where the real PS3 XMB
+   sits: the active category ~1/4 from the left, the rail ~35% down, and the
+   item list hanging DOWN and left-aligned under it. Dialogs (.xmb-crossbar-
+   single) and the garage panel don't carry the class, so they stay centred.
+   Position is driven by two vars so it can be tuned in one place. The matching
+   controllers pass leftAlignItems:true (see xmbMenu.js) so the column's left
+   edge — not its centre — lands on --xmb-focal-x. */
+.xmb-focal-ps3 {
+  --xmb-focal-x: 27%;
+  --xmb-item-y: 42%;
+}
+.xmb-focal-ps3 .xmb-category-track {
+  left: var(--xmb-focal-x);
+  top: calc(var(--xmb-item-y) - 70px);
+}
+.xmb-focal-ps3 .xmb-item-track {
+  left: var(--xmb-focal-x);
+  top: var(--xmb-item-y);
+  align-items: flex-start;
+  text-align: left;
+}
+
+/* Single-category screens (pause/death/success/how-to/gamepad): no horizontal
+   bar — just the vertical item column hanging from the focal point. */
+.xmb-crossbar-single .xmb-category-track {
+  display: none;
+}
+
+/* The engine appends a label span to the focused category/item. Categories
+   and most items already carry baked text, so the appended span is hidden to
+   avoid duplication — it still drives the focus glow via :has() below. */
+.xmb-category .xmb-category-label {
+  display: none;
+}
+
+/* Level Select's decade-group categories now bake their label text directly
+   (see showLevelSelection() in app.js) so every group is always visible in the
+   bar, same as the main-menu / settings categories. */
+
+.xmb-item-track {
+  position: absolute;
+  left: 50%;     /* column is centred on screen (engine applies translate(-50%)) */
+  top: 50%;      /* active item is vertically centred on the focal row (engine
+                    applies the half-item + scroll offset) so items show above
+                    AND below it, full-screen, nothing clipped */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: none;
+  pointer-events: none; /* empty track area never blocks clicks behind it */
+}
+
+/* Single-category screens use the same vertical centring (no category bar). */
+.xmb-crossbar-single .xmb-item-track {
+  top: 50%;
+}
+
+.xmb-item-track.hidden {
+  display: none;
+}
+
+.xmb-item {
+  height: 56px; /* ITEM_SLOT_PX in xmbMenu.js — fixed so one step = one slot */
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  margin: 0;
+  transform-origin: left center;
+  position: relative;
+  pointer-events: auto; /* the actual rows are clickable */
+}
+
+/* The active item gets the focus glow. Since the label span is only ever
+   inserted into the currently-focused item (see _updateLabels in xmbMenu.js),
+   :has() lets us key the glow off the same "am I focused" signal without
+   re-deriving index state in CSS. Reuses the existing neon shadow tokens. */
+.xmb-item:has(.xmb-item-label) {
+  box-shadow: var(--shadow-neon);
+}
+
+.xmb-category:has(.xmb-category-label) {
+  color: var(--color-text);
+}
+
+.xmb-item-label {
+  display: none; /* baked-text items: hide the duplicate appended span (see above) */
+}
+
+/* Garage items are icon-only (ship thumbnails), so DO show the appended label
+   to reveal the ship/skin name on focus. */
+.garage-item .xmb-item-label {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 1px;
+  color: var(--color-text);
+  text-shadow: var(--shadow-neon-sec);
+}
+
+/* Gamepad Config screen: each row shows action name + its live-bound
+   key/button side by side, full-width within the item track. */
+#gamepad-config-screen .xmb-item-track {
+  max-width: 340px;
+  margin: 0 auto;
+}
+
+#gamepad-config-screen .xmb-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#gamepad-config-screen .xmb-item-name {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #8c8f99;
+}
+
+#gamepad-config-screen .xmb-item-binding {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+#gamepad-config-screen .xmb-item.xmb-listening {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 14px rgba(255, 50, 50, 0.4);
+}
+
+#gamepad-config-screen .xmb-item.xmb-listening .xmb-item-binding {
+  color: var(--color-danger);
 }
 
 .btn {
@@ -224,6 +471,20 @@ body, html {
   transform: translateY(-2px);
 }
 
+/* Destructive action (e.g. pause-menu "RESET LEVEL EDITS"): a restrained
+   red-toned pill — visually distinct from primary/secondary but not garish,
+   per the XMB standard (destructive options must be distinct, not loud). */
+.btn.btn-danger {
+  background: linear-gradient(135deg, var(--color-danger) 0%, hsl(345, 90%, 42%) 100%);
+  color: #fff;
+  box-shadow: 0 5px 15px rgba(255, 0, 50, 0.25);
+}
+
+.btn.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 0, 50, 0.45), 0 0 20px rgba(255, 0, 50, 0.3);
+}
+
 .btn-synthwave {
   background: linear-gradient(135deg, #6b00cc 0%, #cc00aa 100%);
   box-shadow: 0 5px 15px rgba(180, 0, 200, 0.4);
@@ -235,13 +496,213 @@ body, html {
   box-shadow: 0 8px 25px rgba(180, 0, 200, 0.65), 0 0 22px rgba(200, 0, 255, 0.4);
 }
 
+/* ── Layout debug panel (dev tool, layoutDebugPanel.js) ─────────────────────
+   Bottom-right toggle + panel for live-dragging UI elements to find values
+   to hardcode. Not part of normal gameplay UI — always topmost. */
+#layout-debug-toggle {
+  position: fixed;
+  bottom: 8px;
+  right: 8px;
+  z-index: 20000;
+  font-family: 'Orbitron', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #00ffcc;
+  background: rgba(10, 12, 20, 0.85);
+  border: 1px solid rgba(0, 255, 204, 0.4);
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+#layout-debug-panel {
+  position: fixed;
+  bottom: 44px;
+  right: 8px;
+  z-index: 20000;
+  width: 320px;
+  max-height: 70vh;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(10, 12, 20, 0.92);
+  border: 1px solid rgba(0, 255, 204, 0.4);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: 'Orbitron', monospace;
+  color: #e8e8e8;
+}
+
+#layout-debug-panel.open {
+  display: flex;
+}
+
+.layout-debug-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: #00ffcc;
+  letter-spacing: 0.05em;
+}
+
+.layout-debug-hint {
+  font-size: 10px;
+  line-height: 1.4;
+  color: #aaa;
+}
+
+#layout-debug-panel button {
+  font-family: 'Orbitron', monospace;
+  font-size: 10px;
+  background: rgba(0, 255, 204, 0.1);
+  border: 1px solid rgba(0, 255, 204, 0.4);
+  color: #00ffcc;
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+#layout-debug-json {
+  width: 100%;
+  height: 220px;
+  resize: vertical;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: #00ffcc;
+  font-family: monospace;
+  font-size: 10px;
+  padding: 6px;
+}
+
+.layout-debug-actions {
+  display: flex;
+  gap: 8px;
+}
+
+#layout-debug-handles {
+  position: fixed;
+  inset: 0;
+  z-index: 19999;
+  pointer-events: none;
+}
+
+.layout-debug-handle {
+  position: absolute;
+  pointer-events: auto;
+  cursor: move;
+  border: 2px dashed #ff00ff;
+  background: rgba(255, 0, 255, 0.08);
+  box-sizing: border-box;
+}
+
+.layout-debug-handle.dragging {
+  border-color: #00ffcc;
+  background: rgba(0, 255, 204, 0.12);
+}
+
+.layout-debug-handle-label {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  font-family: 'Orbitron', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: #ff00ff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
 /* Level Grid Styling */
+/* Full-screen like every other overlay so the 30% focal point resolves against
+   the viewport (was max-width:680px, which shrank the box and shoved the focal
+   point to screen-centre, mis-aligning level select vs every other screen). */
 #level-screen {
-  max-width: 680px !important;
-  max-height: 90vh !important;
-  padding: 25px 35px !important;
-  overflow-x: hidden !important; /* Prevent horizontal scrollbar bugs */
-  overflow-y: auto !important;
+  overflow: hidden !important;
+}
+
+/* Level Select moves the whole crossbar up and further left compared to the
+   other XMB screens, so the (now much bigger) title card has room to sit
+   right beside the list instead of stranded in the far corner. Scoped to
+   #level-screen only — main menu / settings keep the original focal point. */
+#level-crossbar.xmb-focal-ps3 {
+  --xmb-focal-x: 8%;
+  --xmb-item-y: 10%;
+}
+
+/* ── Live title card ──────────────────────────────────────────────────────
+   Sits immediately right of the level list and updates as you browse.
+   pointer-events:none so it never steals clicks from the list; mouse/
+   keyboard navigation stays on the crossbar. */
+#level-title-card.ltc {
+  position: absolute;
+  left: 22%;
+  top: 16%;
+  width: min(64%, 900px);
+  max-height: 69%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px;
+  background: rgba(10, 12, 20, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  z-index: 2;
+}
+#level-title-card.hidden { display: none; }
+
+.ltc-name {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  letter-spacing: 1px;
+  color: #fff;
+  text-shadow: 0 0 12px rgba(0, 255, 204, 0.35);
+}
+.ltc-shot-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #05070d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ltc-shot { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ltc-shot-wrap.no-shot .ltc-shot { display: none; }
+.ltc-shot-fallback {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: #5a6172;
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+}
+.ltc-shot-wrap.no-shot .ltc-shot-fallback { display: flex; }
+
+.ltc-times-title {
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  color: var(--color-secondary);
+}
+.ltc-times { width: 100%; border-collapse: collapse; font-size: 0.78rem; color: #cfd3dd; }
+.ltc-times td { padding: 5px 6px; }
+.ltc-times .ltc-rank { color: #8c8f99; width: 1.6em; }
+.ltc-times .ltc-ini { font-weight: bold; color: #fff; }
+.ltc-times .ltc-time { text-align: right; font-weight: bold; color: var(--color-secondary); }
+.ltc-times .ltc-score { text-align: right; color: #8c8f99; }
+.ltc-empty { color: #8c8f99; text-align: center; padding: 14px 6px; font-size: 0.72rem; }
+
+/* Narrow screens: the focal list needs the full width, so hide the card. */
+@media (max-width: 900px) {
+  #level-title-card.ltc { display: none !important; }
 }
 
 .level-grid-container {
@@ -272,6 +733,22 @@ body, html {
   transform: translateY(-3px);
 }
 
+/* Infinite Road — first item under Levels 1-10 (not a numbered level box). */
+.level-item-infinite {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 22px;
+  background: linear-gradient(135deg, rgba(255,0,127,0.18), rgba(0,229,255,0.18));
+  border: 1px solid var(--color-secondary);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.level-item-infinite:hover { box-shadow: var(--shadow-neon-sec); }
+
 .level-num {
   font-family: var(--font-display);
   font-size: 1.4rem;
@@ -289,6 +766,10 @@ body, html {
   white-space: nowrap;
   width: 100%;
 }
+
+/* (Removed duplicate .xmb-* block that redefined item-tracks as a 5-col grid
+   and overrode the flex-column list globally — the shared skeleton above now
+   governs every screen, including level-screen.) */
 
 /* Status Cards (Win / Lose) */
 .status-card {
@@ -1120,10 +1601,12 @@ body, html {
 
 .ship-picker-container {
   display: grid;
-  grid-template-columns: 1.25fr 1fr; /* Expand sidebar horizontal budget and give preview maximum space */
+  grid-template-columns: 1.25fr 1fr; /* preview gets the wider column, list the right */
   gap: 24px;
   width: 100%;
-  height: 560px; /* Expanded from 380px to accommodate texture presets and prevent squishing */
+  /* Fit the viewport so the header/title never overflow off the top on short
+     screens (was a fixed 560px that pushed the title above y=0). */
+  height: min(560px, calc(100vh - 170px));
   margin-bottom: 25px;
 }
 
@@ -1240,8 +1723,9 @@ body, html {
 @media (max-width: 768px) {
   .ship-picker-container {
     grid-template-columns: 1fr;
-    grid-template-rows: 200px 180px;
-    height: 380px;
+    grid-template-rows: 200px 1fr; /* preview on top, list panel fills the rest */
+    height: calc(100vh - 150px);
+    max-height: 620px;
     gap: 15px;
   }
 }
@@ -1513,6 +1997,177 @@ body, html {
   box-shadow: 0 0 10px var(--color-primary);
 }
 
+/* The native <input type="color"> is opened programmatically by the PAINT
+   category's "Custom Color" xmb-item (CrossbarController onConfirm calls
+   .click() on this element) — it has no visual presence of its own anymore,
+   but must stay focusable/clickable, so it's offscreen rather than display:none. */
+.xmb-native-color-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+  padding: 0;
+}
+
+/* ── Ship Garage XMB crossbar ──────────────────────────────────────────────
+   Scoped under #ship-picker-screen / .garage-* classes (not the bare
+   .xmb-crossbar/.xmb-item selectors) because two other in-flight screen
+   ports (How-To Play's single-category list, Level Select's decade grid)
+   already define conflicting global .xmb-crossbar/.xmb-category-track/
+   .xmb-item rules with different layouts (flex column vs. grid). Scoping
+   here avoids depending on CSS source order between those parallel edits;
+   see Task J for the eventual de-duplication pass. */
+#ship-picker-screen .garage-xmb-crossbar {
+  position: relative;        /* keeps the garage's own tracks anchored to this
+                                right-hand panel (next to the 3D preview), not the
+                                full screen — overrides the global static crossbar */
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#ship-picker-screen .garage-category-track {
+  display: flex;
+  gap: 28px;
+  flex: 0 0 auto;
+  transition: none; /* transform written per-frame by CrossbarController */
+}
+
+#ship-picker-screen .garage-category-track .xmb-category {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 2px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  padding: 6px 4px;
+  transform-origin: center;
+}
+
+/* Categories already carry baked text (HULL/SKIN/PAINT) — hide the engine's
+   appended label span here too, same convention as the main/settings tracks,
+   to avoid rendering it twice (e.g. "HULL HULL") on focus. */
+#ship-picker-screen .garage-category-track .xmb-category .xmb-category-label {
+  display: none;
+}
+
+/* Vertical single-column list (thumb + name per row) — same focal/translate
+   model the rest of the XMB uses, so Up/Down moves one row and the active row
+   centres on the focal point. (Was a 4-col grid that the 1-D engine couldn't
+   navigate.) Row 50px + 6px gap = 56px = ITEM_SLOT_PX in xmbMenu.js. */
+#ship-picker-screen .garage-item-track {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 300px;
+  transition: none;
+}
+
+#ship-picker-screen .garage-item-track.hidden {
+  display: none;
+}
+
+#ship-picker-screen .garage-item {
+  position: relative;
+  width: 100%; /* override legacy .color-preset-option { width:32px } on PAINT rows */
+  height: 50px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transform-origin: left center;
+  box-sizing: border-box;
+}
+
+/* Focused state is keyed off the label span CrossbarController inserts into
+   the active item only (see _updateLabels in xmbMenu.js) — same :has() hook
+   the other XMB screens use, kept consistent on purpose. */
+#ship-picker-screen .garage-item:has(.xmb-item-label) {
+  border-color: var(--color-secondary);
+  box-shadow: var(--shadow-neon-sec);
+  background: rgba(0, 255, 204, 0.06);
+}
+
+#ship-picker-screen .garage-item-thumb {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+#ship-picker-screen .model-thumb {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-text-muted);
+  font-size: 1rem;
+}
+
+#ship-picker-screen .garage-item:has(.xmb-item-label) .model-thumb {
+  color: var(--color-secondary);
+  text-shadow: 0 0 6px rgba(0, 255, 204, 0.5);
+}
+
+#ship-picker-screen .garage-item .texture-preview {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-size: cover;
+  background-position: center;
+}
+
+#ship-picker-screen .color-swatch-x {
+  background: #ffffff;
+  border: 2px dashed #ff007f;
+  color: #ff0055;
+  font-weight: bold;
+  font-size: 14px;
+  line-height: 1;
+}
+
+#ship-picker-screen .color-swatch-custom {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed var(--color-secondary);
+  color: var(--color-secondary);
+  font-size: 1rem;
+}
+
+/* Persistent row name — always visible (injected by setupGarageCrossbar, like
+   Level Select bakes its decade labels). The engine's appended .xmb-item-label
+   stays present (drives the :has() focus glow) but hidden to avoid duplication. */
+#ship-picker-screen .garage-item-name {
+  flex: 1 1 auto;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#ship-picker-screen .garage-item:has(.xmb-item-label) .garage-item-name {
+  color: var(--color-text);
+}
+
+#ship-picker-screen .garage-item .xmb-item-label {
+  display: none;
+}
+
 /* First-Person Cockpit Cabin Overlay Styles */
 .cockpit-overlay {
   position: absolute;
@@ -1567,51 +2222,8 @@ body, html {
 }
 
 
-/* In-Game Top-Left Pause Trigger Button styling */
-.btn-pause-trigger {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  width: 46px;
-  height: 46px;
-  z-index: 100;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.btn-pause-trigger span {
-  width: 4px;
-  height: 18px;
-  background-color: var(--color-secondary);
-  border-radius: 2px;
-  transition: background-color 0.2s ease;
-  box-shadow: 0 0 8px var(--color-secondary-glow);
-}
-
-.btn-pause-trigger:hover {
-  background: rgba(255, 255, 255, 0.16);
-  transform: scale(1.05);
-  border-color: var(--color-secondary);
-}
-
-.btn-pause-trigger:hover span {
-  background-color: var(--color-primary);
-  box-shadow: 0 0 8px var(--color-primary-glow);
-}
-
-.btn-pause-trigger:active {
-  transform: scale(0.92);
-}
+/* (In-game pause trigger button removed — pausing is handled by the Settings
+   gear, whose menu offers Resume / Retry / Quit while playing, and by Esc.) */
 
 /* Top-Right Fullscreen Trigger Button styling */
 .btn-fullscreen-trigger {
@@ -2565,12 +3177,13 @@ body, html {
     font-size: 0.68rem !important;
   }
 
-  /* Ship Garage container stacks preview on top and selectors at the bottom */
+  /* Ship Garage container stacks preview on top and the list panel below
+     (1fr so the absolutely-centred list panel gets a real height). */
   .ship-picker-container {
     grid-template-columns: 1fr !important;
-    grid-template-rows: 180px auto !important;
-    height: auto !important;
-    max-height: 80vh !important;
+    grid-template-rows: 170px 1fr !important;
+    height: calc(100vh - 130px) !important;
+    max-height: 560px !important;
     gap: 12px !important;
   }
 
@@ -2595,9 +3208,9 @@ body, html {
 
   .ship-picker-container {
     grid-template-columns: 1fr !important;
-    grid-template-rows: 240px auto !important;
-    height: auto !important;
-    max-height: 90vh !important;
+    grid-template-rows: 220px 1fr !important;
+    height: calc(100vh - 140px) !important;
+    max-height: 600px !important;
     gap: 15px !important;
     padding: 10px 0 !important;
   }
@@ -2619,9 +3232,35 @@ body, html {
     border-radius: 12px !important;
   }
 
+  /* Shrunk on phones so the centred title clears the top-left gear/physics
+     icon column (left edge ~66px) and the top-right fullscreen icon. */
   .logo-text {
-    font-size: 2.2rem !important;
-    letter-spacing: 3px !important;
+    font-size: 1.6rem !important;
+    letter-spacing: 2px !important;
+  }
+
+  /* Level Select pack title / Garage / How-To headers — same shrink so the
+     centred title clears the corner icons (it's a distinct class from
+     .logo-text and .status-title). */
+  .screen-title {
+    font-size: 1.25rem !important;
+    letter-spacing: 1px !important;
+  }
+
+  /* Stack the header on phones: the BACK button on its own row above the title,
+     so a long centred title (e.g. "HOVERCRAFT GARAGE") can't overlap it. The
+     button returns to flow with a left indent so it clears the fixed gear icon;
+     the title stays full-width centred on its own row. */
+  .overlay-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+  }
+  .overlay-header .btn-icon {
+    position: static !important;
+    left: auto !important;
+    align-self: flex-start !important;
+    margin-left: 76px !important;
   }
 
   .subtitle-text {
@@ -2667,7 +3306,8 @@ body, html {
 /* 4. Status Cards (Pause, Death, Success, Loading) Optimizations */
 @media (max-width: 480px), (max-height: 600px) {
   .status-title {
-    font-size: 1.6rem !important;
+    font-size: 1.2rem !important; /* narrower so "SYSTEM SETTINGS" clears the corner icons */
+    letter-spacing: 1px !important;
     margin-bottom: 10px !important;
   }
 
@@ -2681,7 +3321,8 @@ body, html {
     max-height: 95% !important;
   }
 
-  .overlay-screen.status-card .menu-buttons {
+  .overlay-screen.status-card .menu-buttons,
+  .overlay-screen.status-card .xmb-crossbar {
     gap: 10px !important;
     margin-bottom: 15px !important;
   }
@@ -2697,7 +3338,7 @@ body, html {
 .btn-settings-gear-trigger {
   position: fixed;
   top: 20px;
-  left: 80px; /* Aligned next to the Pause button which is at 20px */
+  left: 20px; /* leftmost — the removed pause button used to sit here */
   width: 46px;
   height: 46px;
   border-radius: 12px;
@@ -2748,7 +3389,7 @@ body, html {
 .btn-settings-physics-trigger {
   position: fixed;
   top: 20px;
-  left: 140px; /* Aligned next to the Gear button which is at 80px */
+  left: 80px; /* next to the gear (now at 20px) */
   width: 46px;
   height: 46px;
   border-radius: 12px;
@@ -2792,7 +3433,10 @@ body, html {
   left: 20px;
   width: 290px;
   height: calc(100vh - 120px);
-  max-height: 800px;
+  min-width: 240px;
+  min-height: 280px;
+  max-width: 90vw;
+  max-height: 90vh;
   background: rgba(10, 10, 18, 0.45);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -2804,16 +3448,26 @@ body, html {
   display: flex;
   flex-direction: column;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.1);
-  transform: translateX(-340px); /* Fully off screen to the left */
+  /* Movable + resizable window (drag by the title bar — see app.js). Show/hide
+     is opacity/visibility so a dragged position isn't reset by a transform. */
+  resize: both;
+  overflow: hidden;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 .physics-floating-calibrator.active {
-  transform: translateX(0);
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
+}
+
+/* Title bar doubles as the drag handle. */
+.physics-floating-calibrator .status-title {
+  cursor: move;
+  user-select: none;
 }
 
 .physics-floating-calibrator .status-title {
@@ -3071,18 +3725,27 @@ body, html {
 
 /* Mobile viewport layout fixes: stack control triggers vertically and scale physics calibrator */
 @media (max-width: 600px) {
+  /* Keep the PS3 focal at the desktop 27% on phones — pulling it further left
+     pushed the 200px centred category box (and its longest label, e.g.
+     "Levels 1-10") off the left edge. 27% leaves the active label fully on
+     screen even on a 390px-wide viewport; only nudge the active row up a touch
+     for vertical room on short screens. */
+  .xmb-focal-ps3 {
+    --xmb-item-y: 38%;
+  }
+
   .btn-settings-gear-trigger {
+    top: 20px !important;
+    left: 20px !important;
+  }
+
+  .btn-settings-physics-trigger {
     top: 80px !important;
     left: 20px !important;
   }
-  
-  .btn-settings-physics-trigger {
-    top: 140px !important;
-    left: 20px !important;
-  }
-  
+
   .btn-settings-edit-trigger {
-    top: 200px !important;
+    top: 140px !important;
     left: 20px !important;
   }
   
@@ -3288,7 +3951,7 @@ body, html {
 .btn-settings-edit-trigger {
   position: fixed;
   top: 20px;
-  left: 200px; /* Aligned next to the Physics button which is at 140px */
+  left: 140px; /* next to the physics button (now at 80px) */
   width: 46px;
   height: 46px;
   border-radius: 12px;
@@ -3615,3 +4278,112 @@ body, html {
   box-shadow: var(--shadow-neon-sec);
 }
 
+
+/* Settings XMB sliders: visible bar/fill (native <input>s are hidden offscreen
+   by the shared .xmb-native-color-input rule above). */
+.settings-xmb-slider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px;
+}
+.settings-xmb-slider-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #c8cad2;
+  min-width: 110px;
+  text-align: left;
+}
+.settings-xmb-slider-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.settings-xmb-slider-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 4px;
+  background: var(--color-primary, #00e5ff);
+  box-shadow: 0 0 8px var(--color-primary, #00e5ff);
+}
+.settings-xmb-slider-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.75rem;
+  color: #fff;
+  min-width: 44px;
+  text-align: right;
+}
+
+/* Top-Right HUD Overlay (Level Name + Score) */
+.top-right-hud {
+  position: fixed;
+  top: 95px;
+  right: 8px;
+  background: rgba(10, 10, 20, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 255, 204, 0.35);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: 'Orbitron', sans-serif;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 9999;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0, 255, 204, 0.05);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.top-right-hud.hidden {
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+}
+
+.top-right-level {
+  font-size: 14px;
+  font-weight: 900;
+  color: #ff00ff;
+  text-shadow: 0 0 8px rgba(255, 0, 255, 0.8);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.top-right-score {
+  font-size: 11px;
+  font-weight: 700;
+  color: #00ffcc;
+  text-shadow: 0 0 6px rgba(0, 255, 204, 0.7);
+  letter-spacing: 0.1em;
+}
+
+/* Centered Checkpoint Notification */
+.checkpoint-notify {
+  position: fixed;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.7);
+  color: #39ff14; /* Electric Lime Green */
+  font-family: 'Orbitron', sans-serif;
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-shadow: 0 0 20px rgba(57, 255, 20, 0.9), 0 0 40px rgba(57, 255, 20, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 10000;
+  text-align: center;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+}
+
+.checkpoint-notify.active {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.1);
+}

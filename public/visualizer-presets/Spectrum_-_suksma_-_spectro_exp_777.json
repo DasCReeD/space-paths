@@ -1,0 +1,211 @@
+{
+  "shapes": [
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    }
+  ],
+  "waves": [
+    {
+      "baseVals": {
+        "enabled": 1,
+        "sep": 256,
+        "spectrum": 1,
+        "thick": 1,
+        "additive": 1,
+        "smoothing": 0,
+        "r": 0.5,
+        "g": 0.3
+      },
+      "init_eqs_str": "a['z'] = 0; a['v'] = 0; a['c'] = 0; a['q31'] = 0; a['q32'] = 0; ",
+      "frame_eqs_str": "",
+      "point_eqs_str": "a['z']=((Math.abs(mod(Math.floor(randint(2)),2))>0.00001)?(-1):(1)); a['v']=((a['value1']+a['value2'])*a['z']); a['a']=((div(1,Math.abs((a['value1']-a['value2'])))*0.01)*a['v']); a['c']=((a['value1']-a['value2'])+a['v']); a['x']=(0.5-a['c']); a['y']=a['sample']; a['x']=(div(((a['x']-0.5)*a['q31']),a['q32'])+0.5); a['y']=(div(((a['y']-0.5)*a['q32']),a['q31'])+0.5);"
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    }
+  ],
+  "init_eqs_str": "a['q31'] = 0; a['q32'] = 0; a['dv']=0; a['ddv']=0; a['dddv']=0; a['ddddv']=0;",
+  "frame_eqs_str": "a['q31']=a['pixelsx']; a['q32']=a['pixelsy'];",
+  "pixel_eqs_str": "",
+  "baseVals": {
+    "rating": 5,
+    "gammaadj": 1,
+    "decay": 0,
+    "echo_zoom": 0.997,
+    "echo_orient": 1,
+    "wave_mode": 7,
+    "wave_dots": 1,
+    "wave_brighten": 0,
+    "wrap": 0,
+    "wave_a": 0.001,
+    "wave_scale": 1.002,
+    "wave_smoothing": 0,
+    "wave_mystery": 0.5,
+    "modwavealphastart": 0.4,
+    "modwavealphaend": 2,
+    "warpanimspeed": 0.998,
+    "warpscale": 0.998,
+    "zoomexp": 0.01,
+    "fshader": 10,
+    "zoom": 0.99943,
+    "warp": 1.00182,
+    "sy": 0.99998,
+    "wave_r": 0,
+    "wave_g": 0,
+    "wave_b": 0,
+    "wave_x": 0,
+    "wave_y": 0,
+    "ob_size": 0.005,
+    "ob_r": 0.01,
+    "ob_b": 0.1,
+    "ob_a": 0.05,
+    "ib_size": 0.5,
+    "ib_r": 0,
+    "ib_g": 0,
+    "ib_b": 0,
+    "mv_x": 28,
+    "mv_y": 7.08,
+    "mv_l": 1.5,
+    "mv_r": 0.9,
+    "mv_g": 0.3,
+    "mv_b": 0,
+    "mv_a": 0.1
+  },
+  "warp": "",
+  "comp": "",
+  "presetParts": {
+    "presetVersion": 1,
+    "baseVals": {
+      "rating": 5,
+      "gammaadj": 1,
+      "decay": 0,
+      "echo_zoom": 0.997,
+      "echo_orient": 1,
+      "wave_mode": 7,
+      "wave_dots": 1,
+      "wave_brighten": 0,
+      "wrap": 0,
+      "wave_a": 0.001,
+      "wave_scale": 1.002,
+      "wave_smoothing": 0,
+      "wave_mystery": 0.5,
+      "modwavealphastart": 0.4,
+      "modwavealphaend": 2,
+      "warpanimspeed": 0.998,
+      "warpscale": 0.998,
+      "zoomexp": 0.01,
+      "fshader": 10,
+      "zoom": 0.99943,
+      "warp": 1.00182,
+      "sy": 0.99998,
+      "wave_r": 0,
+      "wave_g": 0,
+      "wave_b": 0,
+      "wave_x": 0,
+      "wave_y": 0,
+      "ob_size": 0.005,
+      "ob_r": 0.01,
+      "ob_b": 0.1,
+      "ob_a": 0.05,
+      "ib_size": 0.5,
+      "ib_r": 0,
+      "ib_g": 0,
+      "ib_b": 0,
+      "mv_x": 28,
+      "mv_y": 7.08,
+      "mv_l": 1.5,
+      "mv_r": 0.9,
+      "mv_g": 0.3,
+      "mv_b": 0,
+      "mv_a": 0.1
+    },
+    "presetInit": "dv=0;\nddv=0;\ndddv=0;\nddddv=0;\n",
+    "perFrame": "//v=abs(v-(abs(bass_att-bass)+abs(treb_att-treb)+abs(mid_att-mid))*100);\n//dv=v*1.1;\n//dv=dv-v;\n//ddv=dv*1.1;\n//ddv=ddv-dv;\n//dddv=ddv*1.1;\n//dddv=dddv-ddv;\n//ddddv=dddv*5;\n//ddddv=ddddv-dddv;\n\n//q1=ddddv*10;\n//monitor=ddddv;\n\nq31=pixelsx;\nq32=pixelsy;",
+    "perVertex": "",
+    "waves": [
+      {
+        "baseVals": {
+          "enabled": 1,
+          "sep": 256,
+          "spectrum": 1,
+          "thick": 1,
+          "additive": 1,
+          "smoothing": 0,
+          "r": 0.5,
+          "g": 0.3
+        },
+        "init_eqs_str": "",
+        "frame_eqs_str": "",
+        "point_eqs_str": "z=if(int(rand(2))%2,-1,1);\nv=(value1+value2)*z;\na=1/abs(value1-value2)*.01*v;\nc=((value1-value2)+v);//*q1;\nx=.5-c;\ny=sample;\nx=(x-.5)*q31/q32+.5;\ny=(y-.5)*q32/q31+.5;"
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      }
+    ],
+    "shapes": [
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      }
+    ],
+    "warp": "",
+    "comp": ""
+  }
+}

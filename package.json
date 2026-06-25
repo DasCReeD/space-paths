@@ -10,7 +10,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "three": "^0.160.0"
+    "butterchurn": "^3.0.0-beta.5",
+    "three": "^0.160.0",
+    "webamp": "^2.2.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",

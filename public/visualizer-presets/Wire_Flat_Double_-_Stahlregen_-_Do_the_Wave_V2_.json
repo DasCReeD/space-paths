@@ -1,0 +1,143 @@
+{
+  "shapes": [
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    }
+  ],
+  "waves": [
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    },
+    {
+      "baseVals": {
+        "enabled": 0
+      }
+    }
+  ],
+  "init_eqs_str": "a['bbox'] = 0; a['tbox'] = 0;",
+  "frame_eqs_str": "a['wave_r']=(0.5*Math.sin((a['time']*0.5))); a['wave_b']=0.8; a['wave_g']=(0.5+(0.2*Math.sin((a['time']*2)))); a['warp']=0;",
+  "pixel_eqs_str": "a['bbox']=((above(a['x'], (0.4+(0.1*a['bass_att'])))*below(a['x'], (0.4+(0.3*a['bass_att']))))+(above((1-a['x']), (0.4+(0.1*a['bass_att'])))*below((1-a['x']), (0.4+(0.3*a['bass_att']))))); a['tbox']=((above(a['x'], (0.4+(0.1*a['treb_att'])))*below(a['x'], (0.4+(0.3*a['treb_att']))))+(above((1-a['x']), (0.4+(0.1*a['treb_att'])))*below((1-a['x']), (0.4+(0.3*a['treb_att']))))); a['sx']=((1.01-((0.0325*Math.sin((3.75*a['time'])))*a['tbox']))+((0.03*Math.cos((3.75*a['time'])))*(1-a['tbox']))); a['sy']=((1.01+((0.0325*Math.sin((2.5*a['time'])))*a['bbox']))-((0.03*Math.cos((2.5*a['time'])))*(1-a['bbox'])));",
+  "baseVals": {
+    "rating": 5,
+    "echo_zoom": 2.777,
+    "echo_alpha": 0.3,
+    "echo_orient": 1,
+    "wave_mode": 7,
+    "additivewave": 1,
+    "wave_thick": 1,
+    "brighten": 1,
+    "darken": 1,
+    "wave_a": 0.268,
+    "wave_scale": 0.547,
+    "wave_smoothing": 0,
+    "warpanimspeed": 8.081,
+    "warpscale": 0.225,
+    "zoomexp": 0.86134,
+    "zoom": 1.0201,
+    "wave_y": 0.28,
+    "mv_a": 0
+  },
+  "warp": "",
+  "comp": "",
+  "presetParts": {
+    "presetVersion": 1,
+    "baseVals": {
+      "rating": 5,
+      "echo_zoom": 2.777,
+      "echo_alpha": 0.3,
+      "echo_orient": 1,
+      "wave_mode": 7,
+      "additivewave": 1,
+      "wave_thick": 1,
+      "brighten": 1,
+      "darken": 1,
+      "wave_a": 0.268,
+      "wave_scale": 0.547,
+      "wave_smoothing": 0,
+      "warpanimspeed": 8.081,
+      "warpscale": 0.225,
+      "zoomexp": 0.86134,
+      "zoom": 1.0201,
+      "wave_y": 0.28,
+      "mv_a": 0
+    },
+    "presetInit": "",
+    "perFrame": "wave_r = .5*sin(time*.5);\nwave_b = .8;\nwave_g = .5+.2*sin(time*2);\nwarp = 0;",
+    "perVertex": "\nbbox = above(x,.4+.1*bass_att)*below(x,.4+.3*bass_att)\n+ above(1-x,.4+.1*bass_att)*below(1-x,.4+.3*bass_att);\n\ntbox = above(x,.4+.1*treb_att)*below(x,.4+.3*treb_att)\n+ above(1-x,.4+.1*treb_att)*below(1-x,.4+.3*treb_att);\n\nsx = 1.01-.0325*sin(3.75*time)*tbox+.03*cos(3.75*time)*(1-tbox);\nsy = 1.01+.0325*sin(2.5*time)*bbox-.03*cos(2.5*time)*(1-bbox);",
+    "waves": [
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      }
+    ],
+    "shapes": [
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      },
+      {
+        "baseVals": {
+          "enabled": 0
+        }
+      }
+    ],
+    "warp": "",
+    "comp": ""
+  }
+}

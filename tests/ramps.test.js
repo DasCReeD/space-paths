@@ -286,4 +286,156 @@ describe('Sloped Ramp Physics Engine Mechanics', () => {
     expect(physics.onGround).toBe(true);
     expect(physics.velocity.x).toBeGreaterThan(4.0);
   });
+
+  it('should dynamically include ramp blocks in deathY calculation when they are below -4.0', () => {
+    // We have a low road ramp going down to -6.0
+    levelInfo.collidables = [
+      {
+        minX: -TILE_WIDTH / 2,
+        maxX: TILE_WIDTH / 2,
+        minZ: -TILE_LENGTH,
+        maxZ: 0.0,
+        startY: 0.0,
+        endY: -6.0,
+        isObstacle: true,
+        isRamp: true,
+        isFlatRoad: false
+      }
+    ];
+
+    // Ship is at y = -5.0 (which is above the expected death threshold of -6.0 - 4.0 = -10.0, but below -4.0)
+    physics.position.set(0.0, -5.0, -2.0);
+    physics.velocity.set(0.0, 0.0, 0.0);
+    physics.onGround = false;
+
+    physics.update(0.016, keyboard, levelInfo);
+
+    // Ship should NOT be dead because threshold should be -10.0, not -4.0
+    expect(physics.isDead).toBe(false);
+  });
+
+  it('should smoothly transition onto a platform block directly in front of the ramp top without side collision or shunting', () => {
+    // Ramp going up to 5.0 from Z = 0 to Z = -4.0 (so minZ = -4.0, maxZ = 0.0)
+    // Platform block of height 5.0 starting at Z = -4.0 (so minZ = -8.0, maxZ = -4.0)
+    levelInfo.collidables = [
+      {
+        minX: -TILE_WIDTH / 2,
+        maxX: TILE_WIDTH / 2,
+        minZ: -TILE_LENGTH, // -4.0
+        maxZ: 0.0,
+        startY: 0.0,
+        endY: 5.0,
+        isObstacle: true,
+        isRamp: true,
+        isFlatRoad: false
+      },
+      {
+        minX: -TILE_WIDTH / 2,
+        maxX: TILE_WIDTH / 2,
+        minZ: -TILE_LENGTH * 2, // -8.0
+        maxZ: -TILE_LENGTH, // -4.0
+        minY: 0.0,
+        maxY: 5.0,
+        isObstacle: true,
+        isFlatRoad: false
+      }
+    ];
+
+    // Ship is transitioning from ramp to platform.
+    // Z is at -4.3 (crossed top of ramp).
+    // Y is at 4.8 (slightly below top height 5.0).
+    physics.position.set(0.0, 4.8, -4.3);
+    physics.velocity.set(0.0, 0.0, -10.0);
+    physics.onGround = true;
+
+    physics.update(0.016, keyboard, levelInfo);
+
+    // Ship should NOT be dead and should snap to 5.0 (the platform top)
+    expect(physics.isDead).toBe(false);
+    expect(physics.position.y).toBeCloseTo(5.0, 3);
+    expect(physics.onGround).toBe(true);
+    expect(physics.velocity.x).toBe(0); // No sideways shunting/force
+  });
+
+  it('should set onRamp to true and calculate correct rampSlope when ship is riding the ramp', () => {
+    physics.position.set(0, 0.5, -1.0);
+    physics.velocity.set(0, 0, 0);
+    physics.onGround = true;
+
+    physics.update(0.016, keyboard, levelInfo);
+
+    expect(physics.onRamp).toBe(true);
+    const expectedSlope = Math.atan2(2.0, 4.0);
+    expect(physics.rampSlope).toBeCloseTo(expectedSlope, 4);
+  });
+
+  it('should set onRamp to false when ship is airborne above the ramp', () => {
+    physics.position.set(0, 3.0, -2.0);
+    physics.velocity.set(0, 5.0, 0);
+    physics.onGround = false;
+
+    physics.update(0.016, keyboard, levelInfo);
+
+    expect(physics.onRamp).toBe(false);
+    expect(physics.rampSlope).toBe(0.0);
+  });
+
+  it('should set onRamp to false when ship has fully transitioned onto standard platform following the ramp', () => {
+    levelInfo.collidables.push({
+      minX: -TILE_WIDTH / 2,
+      maxX: TILE_WIDTH / 2,
+      minZ: -TILE_LENGTH * 2,
+      maxZ: -TILE_LENGTH,
+      minY: 0.0,
+      maxY: 2.0,
+      isObstacle: true,
+      isFlatRoad: false
+    });
+
+    physics.position.set(0.0, 2.0, -5.5);
+    physics.velocity.set(0.0, 0.0, -10.0);
+    physics.onGround = true;
+
+    physics.update(0.016, keyboard, levelInfo);
+
+    expect(physics.onRamp).toBe(false);
+    expect(physics.rampSlope).toBe(0.0);
+  });
+
+  it('should set onRamp to true and interpolate rampSlope during entry transition (when nose is on ramp)', () => {
+    physics.position.set(0.0, 0.0, 0.0);
+    physics.velocity.set(0.0, 0.0, 0.0);
+    physics.onGround = true;
+
+    physics.update(0.016, keyboard, levelInfo);
+
+    expect(physics.onRamp).toBe(true);
+    const fullSlope = Math.atan2(2.0, 4.0);
+    const expectedSlope = 0.5 * fullSlope;
+    expect(physics.rampSlope).toBeCloseTo(expectedSlope, 4);
+  });
+
+  it('should set onRamp to true and interpolate rampSlope during exit transition (when tail is still on ramp)', () => {
+    levelInfo.collidables.push({
+      minX: -TILE_WIDTH / 2,
+      maxX: TILE_WIDTH / 2,
+      minZ: -TILE_LENGTH * 2,
+      maxZ: -TILE_LENGTH,
+      minY: 0.0,
+      maxY: 2.0,
+      isObstacle: true,
+      isFlatRoad: false
+    });
+
+    physics.position.set(0.0, 2.0, -4.5);
+    physics.velocity.set(0.0, 0.0, 0.0);
+    physics.onGround = true;
+
+    physics.update(0.016, keyboard, levelInfo);
+
+    expect(physics.onRamp).toBe(true);
+    const fullSlope = Math.atan2(2.0, 4.0);
+    const expectedSlope = (0.4 / 1.8) * fullSlope;
+    expect(physics.rampSlope).toBeCloseTo(expectedSlope, 4);
+  });
 });

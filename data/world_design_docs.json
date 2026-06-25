@@ -1,0 +1,510 @@
+{
+  "_meta": {
+    "purpose": "Per-world design documents that drive blueprint-based level generation for levels 61-90. Authored first, approved by the designer, then consumed by worldBuilder.js (buildBlueprint -> buildLevelFromBlueprint). This is the 'design document before generating a world' step.",
+    "constraintsRef": "plans/generated_worlds_project_summary.md (27 core design constraints)",
+    "indexMapping": "levelIndex = 61 + world*3 + difficulty;  difficulty 0/1/2 = tier I/II/III",
+    "slotRoles": "intro (safe accel runway), signature (the biome's defining set-piece), filler (transition/variety from real pool chunks = detail-fill), climax (hardest moment, usually before final third), outro (safe finish runway)",
+    "slotTagLegend": {
+      "realPoolTags": ["runway", "slalom", "jump", "narrow_passage", "tunnel", "obstacle_course", "hazard_zone", "mixed"],
+      "customSetPieceTags": {
+        "drift_curve": "sweeping S-curve with guardrails (slalom on slippery for tundra)",
+        "tiered_hill": "multi-tier ramp-up hill with obstacles + hidden boosts behind them",
+        "launch_jump": "ramp to launch peak, boost, void gap, refill landing",
+        "floating_islands": "low-gravity island hops over gaps",
+        "burn_chain": "burn-zone with safe center lane + boost chain",
+        "gate_run": "rhythmic timing gates with one open lane (sticky brakes for pulse)",
+        "bumper_canyon": "wide frictionless lane bounded by half-wall bumpers",
+        "speed_chain": "wide track with chained boost pads, minimal walls",
+        "tunnel_guided": "tunnel run with half-wall guide rails on edges"
+      },
+      "rule": "signature slots are filled from CUSTOM pool segments (source:'custom', biome-matched); filler slots are filled from REAL extracted chunks (detail-fill only)"
+    },
+    "notesKey": "telegraph=slope/marker precedes hazard; safeLanding=>=3 flat clean rows after gap; riskReward=boost on edge/before gap; rhythm=walls snapped to wallSpacing multiples; trap=fire in front of easiest line to refill; altRoute=slow-safe vs fast-dangerous"
+  },
+
+  "worlds": [
+    {
+      "world": 0,
+      "biome": "void",
+      "title": "The Visualizer Void",
+      "signatureMechanic": "90s audio-visualizer motif: sweeping S-curve racing line with rhythmic equalizer-bar slalom walls and jump-pad pillars. Reads like the track is dancing to a beat.",
+      "paletteIntent": "Dark violet road, hot-pink borders, neon-green accents.",
+      "rhythm": { "wallSpacing": 8, "phrase": 16 },
+      "levels": [
+        {
+          "levelIndex": 61, "difficulty": 0, "tier": "I", "bespoke": true,
+          "gravity": 8, "fuel": 220, "oxygen": 150, "targetRows": 415,
+          "theme": "DEMO LEVEL - the hand-built showcase; kept as the gold-standard reference, not regenerated."
+        },
+        {
+          "levelIndex": 62, "difficulty": 1, "tier": "II",
+          "gravity": 8, "fuel": 300, "oxygen": 200, "targetRows": 340,
+          "theme": "Waveform Highway - the visualizer beat builds; one big void jump as the drop.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 12 },
+            { "tag": "drift_curve", "role": "signature", "signature": true, "rows": 30, "notes": "rhythm: slalom walls every 8 rows, guardrails follow the sweep" },
+            { "tag": "slalom", "role": "filler", "rows": 18 },
+            { "tag": "launch_jump", "role": "climax", "signature": true, "rows": 28, "notes": "telegraph+riskReward: boost runway -> gap -> refill landing; safeLanding after" },
+            { "tag": "mixed", "role": "filler", "rows": 16 },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 63, "difficulty": 2, "tier": "III",
+          "gravity": 8, "fuel": 260, "oxygen": 160, "targetRows": 380,
+          "theme": "Quantum Leap - dense beat, two drops, an alt high-line over the walls.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 10 },
+            { "tag": "drift_curve", "role": "signature", "signature": true, "rows": 32, "notes": "rhythm 8; altRoute: upper jump-pad deck over the walls" },
+            { "tag": "jump", "role": "filler", "rows": 16 },
+            { "tag": "drift_curve", "role": "signature", "signature": true, "rows": 26, "notes": "rhythm 8, tighter amplitude" },
+            { "tag": "launch_jump", "role": "climax", "signature": true, "rows": 30, "notes": "riskReward+safeLanding" },
+            { "tag": "slalom", "role": "filler", "rows": 16 },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "world": 1,
+      "biome": "ridge",
+      "title": "Blue Ridge Ascents",
+      "signatureMechanic": "High verticality under heavy gravity (14): tiered ramp-up hills, marker arches at crests, committed drops. Climb-then-plunge cadence.",
+      "paletteIntent": "Deep blue road, cyan accents, dark-blue shadow.",
+      "rhythm": { "wallSpacing": 8, "phrase": 16 },
+      "levels": [
+        {
+          "levelIndex": 64, "difficulty": 0, "tier": "I",
+          "gravity": 14, "fuel": 300, "oxygen": 200, "targetRows": 260,
+          "theme": "First Ascent - one clean climb, one telegraphed drop.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 14 },
+            { "tag": "tiered_hill", "role": "signature", "signature": true, "rows": 30, "notes": "telegraph: ramps precede each tier; hidden boosts behind tier obstacles" },
+            { "tag": "runway", "role": "filler", "rows": 14 },
+            { "tag": "jump", "role": "climax", "rows": 16, "notes": "telegraph+safeLanding: arch marker before the drop" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 65, "difficulty": 1, "tier": "II",
+          "gravity": 14, "fuel": 260, "oxygen": 170, "targetRows": 300,
+          "theme": "Switchback Ridge - climb, narrow shelf, plunge.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 12 },
+            { "tag": "tiered_hill", "role": "signature", "signature": true, "rows": 32, "notes": "two tiers, obstacles staggered L/R" },
+            { "tag": "narrow_passage", "role": "filler", "rows": 18 },
+            { "tag": "jump", "role": "filler", "rows": 16, "notes": "telegraph+safeLanding" },
+            { "tag": "tiered_hill", "role": "climax", "signature": true, "rows": 28, "notes": "steeper; refill on the summit shelf" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 66, "difficulty": 2, "tier": "III",
+          "gravity": 14, "fuel": 220, "oxygen": 140, "targetRows": 340,
+          "theme": "Summit Run - three tiers, a slalom shelf, a big committed plunge.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 10 },
+            { "tag": "tiered_hill", "role": "signature", "signature": true, "rows": 34, "notes": "three tiers; narrowing open lanes per tier" },
+            { "tag": "slalom", "role": "filler", "rows": 16, "notes": "shelf slalom" },
+            { "tag": "tiered_hill", "role": "signature", "signature": true, "rows": 28 },
+            { "tag": "launch_jump", "role": "climax", "signature": true, "rows": 30, "notes": "riskReward: boost before huge plunge; safeLanding" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "world": 2,
+      "biome": "thrill",
+      "title": "Thrill Sector",
+      "signatureMechanic": "Neon rollercoaster: wide tracks, chained boost pads, minimal walls, big air. Pure speed and flow.",
+      "paletteIntent": "Dark grey road, rollercoaster orange, light-yellow highlights.",
+      "rhythm": { "wallSpacing": 16, "phrase": 16 },
+      "levels": [
+        {
+          "levelIndex": 67, "difficulty": 0, "tier": "I",
+          "gravity": 8, "fuel": 400, "oxygen": 240, "targetRows": 280,
+          "theme": "Opening Rush - learn the boost rhythm, one big jump.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 16 },
+            { "tag": "speed_chain", "role": "signature", "signature": true, "rows": 30, "notes": "wide track, boosts chained center; sparse obstacles" },
+            { "tag": "launch_jump", "role": "climax", "signature": true, "rows": 28, "notes": "riskReward: boost before big air; safeLanding" },
+            { "tag": "speed_chain", "role": "filler", "rows": 20 },
+            { "tag": "runway", "role": "outro", "rows": 12 }
+          ]
+        },
+        {
+          "levelIndex": 68, "difficulty": 1, "tier": "II",
+          "gravity": 8, "fuel": 350, "oxygen": 210, "targetRows": 320,
+          "theme": "Loop Sector - boost chain into slalom into double jump.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 14 },
+            { "tag": "speed_chain", "role": "signature", "signature": true, "rows": 32 },
+            { "tag": "slalom", "role": "filler", "rows": 18, "notes": "wide slalom at speed" },
+            { "tag": "launch_jump", "role": "signature", "signature": true, "rows": 26 },
+            { "tag": "launch_jump", "role": "climax", "signature": true, "rows": 26, "notes": "back-to-back jumps; refill between" },
+            { "tag": "runway", "role": "outro", "rows": 12 }
+          ]
+        },
+        {
+          "levelIndex": 69, "difficulty": 2, "tier": "III",
+          "gravity": 8, "fuel": 300, "oxygen": 180, "targetRows": 360,
+          "theme": "Maximum Velocity - relentless boost-jump-boost.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 12 },
+            { "tag": "speed_chain", "role": "signature", "signature": true, "rows": 34 },
+            { "tag": "launch_jump", "role": "signature", "signature": true, "rows": 28 },
+            { "tag": "speed_chain", "role": "filler", "rows": 22 },
+            { "tag": "launch_jump", "role": "climax", "signature": true, "rows": 30, "notes": "super-boost into the longest gap; safeLanding" },
+            { "tag": "runway", "role": "outro", "rows": 12 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "world": 3,
+      "biome": "core",
+      "title": "Hardware Core",
+      "signatureMechanic": "Supercomputer circuit board: tight slalom routes, precise timing gates, narrow navigable width. Precision over speed.",
+      "paletteIntent": "Circuit green road, copper borders, gold accents.",
+      "rhythm": { "wallSpacing": 8, "phrase": 16 },
+      "levels": [
+        {
+          "levelIndex": 70, "difficulty": 0, "tier": "I",
+          "gravity": 8, "fuel": 300, "oxygen": 200, "targetRows": 260,
+          "theme": "Boot Sequence - learn the gates and tight lines.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 14 },
+            { "tag": "gate_run", "role": "signature", "signature": true, "rows": 28, "notes": "rhythm 8: gates with one open lane; sticky brake before each" },
+            { "tag": "slalom", "role": "filler", "rows": 18 },
+            { "tag": "narrow_passage", "role": "climax", "rows": 18, "notes": "tightest line; central sightline protected" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 71, "difficulty": 1, "tier": "II",
+          "gravity": 8, "fuel": 260, "oxygen": 170, "targetRows": 300,
+          "theme": "Data Bus - gates, narrow dodging, a hazard trace.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 12 },
+            { "tag": "gate_run", "role": "signature", "signature": true, "rows": 30 },
+            { "tag": "narrow_passage", "role": "filler", "rows": 18 },
+            { "tag": "hazard_zone", "role": "filler", "rows": 16, "notes": "grouped hazard trace; trap near refill" },
+            { "tag": "gate_run", "role": "climax", "signature": true, "rows": 26 },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 72, "difficulty": 2, "tier": "III",
+          "gravity": 8, "fuel": 220, "oxygen": 140, "targetRows": 340,
+          "theme": "Kernel Panic - dense gates and slalom, no room for error.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 10 },
+            { "tag": "gate_run", "role": "signature", "signature": true, "rows": 32 },
+            { "tag": "slalom", "role": "filler", "rows": 18 },
+            { "tag": "narrow_passage", "role": "filler", "rows": 18 },
+            { "tag": "gate_run", "role": "climax", "signature": true, "rows": 30, "notes": "fastest gate cadence; sticky brakes telegraph" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "world": 4,
+      "biome": "glitch",
+      "title": "Glitch Grid",
+      "signatureMechanic": "Phasing terrain: floating islands separated by void gaps, flickering sticky-hazard tiles. The ground itself is unreliable.",
+      "paletteIntent": "Dark purple road, glitch-pink and glitch-cyan accents.",
+      "rhythm": { "wallSpacing": 8, "phrase": 16 },
+      "levels": [
+        {
+          "levelIndex": 73, "difficulty": 0, "tier": "I",
+          "gravity": 8, "fuel": 320, "oxygen": 200, "targetRows": 260,
+          "theme": "Fragmented - short island hops, a few sticky patches.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 14 },
+            { "tag": "floating_islands", "role": "signature", "signature": true, "rows": 28, "notes": "telegraph+safeLanding each island; gaps matched to gravity" },
+            { "tag": "mixed", "role": "filler", "rows": 18 },
+            { "tag": "jump", "role": "climax", "rows": 16 },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 74, "difficulty": 1, "tier": "II",
+          "gravity": 8, "fuel": 280, "oxygen": 170, "targetRows": 300,
+          "theme": "Corrupted Path - longer hops, sticky traps before gaps.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 12 },
+            { "tag": "floating_islands", "role": "signature", "signature": true, "rows": 30 },
+            { "tag": "hazard_zone", "role": "filler", "rows": 16, "notes": "sticky patch group; trap before refill" },
+            { "tag": "floating_islands", "role": "signature", "signature": true, "rows": 26 },
+            { "tag": "jump", "role": "climax", "rows": 18 },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 75, "difficulty": 2, "tier": "III",
+          "gravity": 8, "fuel": 240, "oxygen": 140, "targetRows": 340,
+          "theme": "Total Glitch - island chains over wide voids, sticky everywhere.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 10 },
+            { "tag": "floating_islands", "role": "signature", "signature": true, "rows": 34, "notes": "narrow islands, wide gaps" },
+            { "tag": "narrow_passage", "role": "filler", "rows": 16 },
+            { "tag": "floating_islands", "role": "signature", "signature": true, "rows": 28 },
+            { "tag": "jump", "role": "climax", "rows": 20, "notes": "longest gap; safeLanding refill island" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "world": 5,
+      "biome": "tundra",
+      "title": "Cryo-Stasis Tundra",
+      "signatureMechanic": "Frictionless ice: wide frozen sheets for long drifts, bounded by bumper walls so drift never kills you. Read-and-glide.",
+      "paletteIntent": "Snow-white/blue road, ice-cyan accents.",
+      "rhythm": { "wallSpacing": 16, "phrase": 16 },
+      "levels": [
+        {
+          "levelIndex": 76, "difficulty": 0, "tier": "I",
+          "gravity": 8, "fuel": 320, "oxygen": 200, "targetRows": 260,
+          "theme": "First Thaw - learn the drift on a wide bounded sheet.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 14 },
+            { "tag": "drift_curve", "role": "signature", "signature": true, "rows": 30, "notes": "slippery sheet; >=3 wide lanes for drift" },
+            { "tag": "bumper_canyon", "role": "signature", "signature": true, "rows": 22, "notes": "half-wall bumpers contain the drift" },
+            { "tag": "jump", "role": "climax", "rows": 16, "notes": "telegraph+safeLanding (flat after drop)" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 77, "difficulty": 1, "tier": "II",
+          "gravity": 8, "fuel": 280, "oxygen": 170, "targetRows": 300,
+          "theme": "Glacier Run - long drift S-curve into a bumper canyon.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 12 },
+            { "tag": "drift_curve", "role": "signature", "signature": true, "rows": 32, "notes": "ice S-curve, wider amplitude" },
+            { "tag": "bumper_canyon", "role": "signature", "signature": true, "rows": 24 },
+            { "tag": "slalom", "role": "filler", "rows": 16 },
+            { "tag": "jump", "role": "climax", "rows": 18 },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 78, "difficulty": 2, "tier": "III",
+          "gravity": 8, "fuel": 240, "oxygen": 140, "targetRows": 340,
+          "theme": "Whiteout - high-speed drift, tight bumper canyon, jump.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 10 },
+            { "tag": "drift_curve", "role": "signature", "signature": true, "rows": 34, "notes": "fast sweep; sparse obstacles you must drift around" },
+            { "tag": "bumper_canyon", "role": "signature", "signature": true, "rows": 26, "notes": "narrower canyon" },
+            { "tag": "drift_curve", "role": "filler", "rows": 18 },
+            { "tag": "launch_jump", "role": "climax", "signature": true, "rows": 26, "notes": "riskReward; safeLanding" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "world": 6,
+      "biome": "furnace",
+      "title": "Supernova Furnace",
+      "signatureMechanic": "Resource starvation + lava: burn-tile grids with a safe center lane, scarce fuel/oxygen, optimal-line traps (fire guarding the easy refill).",
+      "paletteIntent": "Ash-brown road, magma-red and lava-yellow hazards.",
+      "rhythm": { "wallSpacing": 8, "phrase": 16 },
+      "levels": [
+        {
+          "levelIndex": 79, "difficulty": 0, "tier": "I",
+          "gravity": 8, "fuel": 200, "oxygen": 100, "targetRows": 260,
+          "theme": "Ember Fields - learn the safe lane through burn grids.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 14 },
+            { "tag": "burn_chain", "role": "signature", "signature": true, "rows": 28, "notes": "hazardGrouping: burn edges, safe center; boost chain center" },
+            { "tag": "narrow_passage", "role": "filler", "rows": 16 },
+            { "tag": "burn_chain", "role": "climax", "signature": true, "rows": 22, "notes": "trap: fire before the refill" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 80, "difficulty": 1, "tier": "II",
+          "gravity": 8, "fuel": 170, "oxygen": 80, "targetRows": 300,
+          "theme": "Magma Channels - tighter safe lane, fuel is precious.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 12 },
+            { "tag": "burn_chain", "role": "signature", "signature": true, "rows": 30 },
+            { "tag": "obstacle_course", "role": "filler", "rows": 16, "notes": "obstacles inside the safe lane" },
+            { "tag": "burn_chain", "role": "signature", "signature": true, "rows": 24 },
+            { "tag": "jump", "role": "climax", "rows": 18, "notes": "jump over a lava gap; safeLanding refill" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 81, "difficulty": 2, "tier": "III",
+          "gravity": 8, "fuel": 140, "oxygen": 60, "targetRows": 340,
+          "theme": "Core Meltdown - relentless burn grids, brutal fuel math.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 10 },
+            { "tag": "burn_chain", "role": "signature", "signature": true, "rows": 34, "notes": "narrowest safe lane; refills are off the easy line (trap)" },
+            { "tag": "narrow_passage", "role": "filler", "rows": 16 },
+            { "tag": "burn_chain", "role": "signature", "signature": true, "rows": 26 },
+            { "tag": "burn_chain", "role": "climax", "signature": true, "rows": 24, "notes": "final gauntlet; boost to outrun depletion" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "world": 7,
+      "biome": "shallows",
+      "title": "Nebula Shallows",
+      "signatureMechanic": "Cosmic fog + tunnels: low visibility, frequent tunnel runs with half-wall guide rails leading you through blind sections. Trust the rails.",
+      "paletteIntent": "Space-indigo road, nebular-lilac and cosmic-violet accents.",
+      "rhythm": { "wallSpacing": 8, "phrase": 16 },
+      "levels": [
+        {
+          "levelIndex": 82, "difficulty": 0, "tier": "I",
+          "gravity": 8, "fuel": 300, "oxygen": 200, "targetRows": 260,
+          "theme": "Into the Fog - first guided tunnels, gentle turns.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 14 },
+            { "tag": "tunnel_guided", "role": "signature", "signature": true, "rows": 28, "notes": "guide rails on edges; oxygen recovers in tunnel" },
+            { "tag": "slalom", "role": "filler", "rows": 16 },
+            { "tag": "tunnel_guided", "role": "climax", "signature": true, "rows": 22, "notes": "blind crest mitigation: rails warn of turn" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 83, "difficulty": 1, "tier": "II",
+          "gravity": 8, "fuel": 260, "oxygen": 170, "targetRows": 300,
+          "theme": "Deep Nebula - longer tunnels, narrow fog passages.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 12 },
+            { "tag": "tunnel_guided", "role": "signature", "signature": true, "rows": 30 },
+            { "tag": "narrow_passage", "role": "filler", "rows": 18 },
+            { "tag": "tunnel_guided", "role": "signature", "signature": true, "rows": 26 },
+            { "tag": "jump", "role": "climax", "rows": 16, "notes": "telegraph: rail marker before a drop into fog" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 84, "difficulty": 2, "tier": "III",
+          "gravity": 8, "fuel": 220, "oxygen": 140, "targetRows": 340,
+          "theme": "Event Horizon - tunnel-dense, minimal sightline.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 10 },
+            { "tag": "tunnel_guided", "role": "signature", "signature": true, "rows": 34 },
+            { "tag": "tunnel", "role": "filler", "rows": 18 },
+            { "tag": "tunnel_guided", "role": "signature", "signature": true, "rows": 28 },
+            { "tag": "narrow_passage", "role": "climax", "rows": 18 },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "world": 8,
+      "biome": "spire",
+      "title": "Quantum Spire",
+      "signatureMechanic": "Low gravity (4): floating geometric sky-islands with long, floaty jumps between narrow platforms. Hang time is the puzzle.",
+      "paletteIntent": "Off-white spire stone, slate borders, gold accents.",
+      "rhythm": { "wallSpacing": 16, "phrase": 16 },
+      "levels": [
+        {
+          "levelIndex": 85, "difficulty": 0, "tier": "I",
+          "gravity": 4, "fuel": 360, "oxygen": 240, "targetRows": 260,
+          "theme": "First Float - gentle long hops between wide islands.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 14 },
+            { "tag": "floating_islands", "role": "signature", "signature": true, "rows": 30, "notes": "low-g long gaps; wide islands; safeLanding" },
+            { "tag": "slalom", "role": "filler", "rows": 16 },
+            { "tag": "launch_jump", "role": "climax", "signature": true, "rows": 24, "notes": "floaty big jump; refill landing" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 86, "difficulty": 1, "tier": "II",
+          "gravity": 4, "fuel": 310, "oxygen": 200, "targetRows": 300,
+          "theme": "Skybridge - narrower platforms, precise floaty timing.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 12 },
+            { "tag": "floating_islands", "role": "signature", "signature": true, "rows": 32 },
+            { "tag": "narrow_passage", "role": "filler", "rows": 16 },
+            { "tag": "floating_islands", "role": "signature", "signature": true, "rows": 26 },
+            { "tag": "launch_jump", "role": "climax", "signature": true, "rows": 24 },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 87, "difficulty": 2, "tier": "III",
+          "gravity": 4, "fuel": 260, "oxygen": 160, "targetRows": 340,
+          "theme": "Apex - tiny islands, longest hangs, no margin.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 10 },
+            { "tag": "floating_islands", "role": "signature", "signature": true, "rows": 34, "notes": "smallest islands, widest low-g gaps" },
+            { "tag": "slalom", "role": "filler", "rows": 16 },
+            { "tag": "floating_islands", "role": "signature", "signature": true, "rows": 28 },
+            { "tag": "launch_jump", "role": "climax", "signature": true, "rows": 26, "notes": "riskReward boost; safeLanding" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        }
+      ]
+    },
+
+    {
+      "world": 9,
+      "biome": "pulse",
+      "title": "Kinetic Pulse",
+      "signatureMechanic": "Mechanical precision: speed-restricting timing gates and braking sticky tiles. Manage momentum - brake into the gate, accelerate out.",
+      "paletteIntent": "Mechanical grey road, steel accents, neon-yellow indicators.",
+      "rhythm": { "wallSpacing": 8, "phrase": 16 },
+      "levels": [
+        {
+          "levelIndex": 88, "difficulty": 0, "tier": "I",
+          "gravity": 8, "fuel": 300, "oxygen": 200, "targetRows": 260,
+          "theme": "First Gear - learn brake-into-gate cadence.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 14 },
+            { "tag": "gate_run", "role": "signature", "signature": true, "rows": 28, "notes": "rhythm 8: sticky brake telegraphs each gate" },
+            { "tag": "obstacle_course", "role": "filler", "rows": 16 },
+            { "tag": "gate_run", "role": "climax", "signature": true, "rows": 22 },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 89, "difficulty": 1, "tier": "II",
+          "gravity": 8, "fuel": 260, "oxygen": 170, "targetRows": 300,
+          "theme": "Clockwork - tighter gate spacing, hazard between gates.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 12 },
+            { "tag": "gate_run", "role": "signature", "signature": true, "rows": 30 },
+            { "tag": "hazard_zone", "role": "filler", "rows": 16, "notes": "grouped hazard between gates" },
+            { "tag": "gate_run", "role": "signature", "signature": true, "rows": 26 },
+            { "tag": "narrow_passage", "role": "climax", "rows": 16 },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        },
+        {
+          "levelIndex": 90, "difficulty": 2, "tier": "III",
+          "gravity": 8, "fuel": 220, "oxygen": 140, "targetRows": 340,
+          "theme": "Overdrive - fastest gate cadence, momentum gauntlet.",
+          "slots": [
+            { "tag": "runway", "role": "intro", "rows": 10 },
+            { "tag": "gate_run", "role": "signature", "signature": true, "rows": 34, "notes": "shortest gate spacing; brake-accel rhythm" },
+            { "tag": "obstacle_course", "role": "filler", "rows": 16 },
+            { "tag": "gate_run", "role": "signature", "signature": true, "rows": 28 },
+            { "tag": "gate_run", "role": "climax", "signature": true, "rows": 24, "notes": "final gauntlet; refill before it" },
+            { "tag": "runway", "role": "outro", "rows": 10 }
+          ]
+        }
+      ]
+    }
+  ]
+}

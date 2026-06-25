@@ -5,12 +5,19 @@ import './userSettings.js';
 import * as THREE from 'three';
 import { loadLevelPack, getCachedPack, registerCustomPack } from './levels.js';
 import { GraphicsEngine } from './graphics.js';
-import { PhysicsEngine, KeyboardController, SHIP_LENGTH } from './physics.js';
+import { PhysicsEngine, KeyboardController, SHIP_LENGTH, LEGACY_MODEL_ALIASES } from './physics.js';
 import { buildLevelAsync, disposeUnusedThemes, getActiveThemeIndex, THEMES, curvatureUniforms } from './levelLoader.js';
-import { gameAudio } from './audio.js';
+import { gameAudio, SYNTHWAVE_TRACK_URLS, SYNTHWAVE_TRACK_NAMES } from './audio.js';
 import { ShipPreviewEngine } from './preview.js';
 import { TouchControlManager } from './touchControls.js';
 import { InGameEditor } from './inGameEditor.js';
+import { initVisualizer } from './visualizer/index.js';
+import { Autopilot, Ghost } from './autoplay.js';
+import { CrossbarController } from './xmbMenu.js';
+import { mainMenuConfig, garageConfig, gamepadConfigConfig, settingsConfig, buildLevelSelectConfig } from './menuConfig.js';
+import { presets } from './visualizer/presets.js';
+import { initLayoutDebugPanel } from './layoutDebugPanel.js';
+
 
 const SKIN_DETAILS = {
   default: { name: "DEFAULT", desc: "Standard spaceforce combat livery" },
@@ -61,20 +68,38 @@ class GameManager {
     this.gameState = 'menu'; // 'menu', 'loading', 'level_select', 'playing', 'death', 'success'
     this.lastTime = 0;
     this.animationFrameId = null;
+    this._webampStarted = false;
 
-    // Road names in original order for display polish
-    this.standardRoadNames = [
-      "DEMO ROAD", "RED HEAT", "ROAD 2", "ROAD 3", "ROAD 4", "ROAD 5", "ROAD 6", "ROAD 7", "ROAD 8", "ROAD 9",
-      "ROAD 10", "ROAD 11", "ROAD 12", "ROAD 13", "ROAD 14", "ROAD 15", "ROAD 16", "ROAD 17", "ROAD 18", "ROAD 19",
-      "ROAD 20", "ROAD 21", "ROAD 22", "ROAD 23", "ROAD 24", "ROAD 25", "ROAD 26", "ROAD 27", "ROAD 28", "ROAD 29",
-      "ROAD 30"
-    ];
-    this.xmasRoadNames = [
-      "XMAS DEMO", "ROAD 1", "ROAD 2", "ROAD 3", "ROAD 4", "ROAD 5", "ROAD 6", "ROAD 7", "ROAD 8", "ROAD 9",
-      "ROAD 10", "ROAD 11", "ROAD 12", "ROAD 13", "ROAD 14", "ROAD 15", "ROAD 16", "ROAD 17", "ROAD 18", "ROAD 19",
-      "ROAD 20", "ROAD 21", "ROAD 22", "ROAD 23", "ROAD 24", "ROAD 25", "ROAD 26", "ROAD 27", "ROAD 28", "ROAD 29",
-      "ROAD 30"
-    ];
+    // Idle attract mode: bot drives after inactivity, loops until real input cancels it.
+    this.autopilot = new Autopilot();
+    this._botActive = false;
+    this._idleSeconds = 0;
+    this.ghost = null;
+    this.loadedGhost = null;
+    this.ghostElapsed = 0;
+    this._ghostSampleAccum = 0;
+
+    // Road names in original order for display polish.
+    // The original game groups its 30 roads into 10 worlds of 3 roads each
+    // (see the original level-select screenshots: world heading + Road 1/2/3).
+    this.standardRoadNames = (() => {
+      const worlds = [
+        'RED HEAT', 'INTO THE SUN', 'BLUE PLANET', 'SATELLITE', 'MISTY',
+        'ASTEROID BELT', 'CRAB NEBULA', 'OVER THE BASE', 'THE EARTH', 'DRUIDIA',
+      ];
+      const names = ['DEMO ROAD'];
+      worlds.forEach((world) => { for (let r = 1; r <= 3; r++) names.push(`${world} — ROAD ${r}`); });
+      return names;
+    })();
+    this.xmasRoadNames = (() => {
+      const worlds = [
+        'SNOWBOUND', 'AT THE OUTER RIM', 'TWILIGHT ZONE', 'THE GUIDING STAR', 'METEOR STORM',
+        'MYSTERIOUS PLANET', 'NORTHERN LIGHTS', 'OVER THE POLE', 'UNDER THE ICE', 'THE EVE',
+      ];
+      const names = ['XMAS DEMO'];
+      worlds.forEach((world) => { for (let r = 1; r <= 3; r++) names.push(`${world} — ROAD ${r}`); });
+      return names;
+    })();
     this.generatedRoadNames = [
       "DEMO LEVEL", "VECTOR PULSE", "RESONANCE STREAM",
       "BLUE CREST", "SKY ALPINE", "VERTICAL REACH",
@@ -112,31 +137,14 @@ class GameManager {
     this.rewindBudgetMax = Infinity;
     this.rewindOverlay = null;
     this.collisionViewEnabled = false;
+
+    // XMB crossbar controllers, one per ported screen. Keyed by screen id so
+    // the keyboard/gamepad dispatch can look up "the controller for whichever
+    // screen is currently active" in one place (see getActiveCrossbarController()).
+    this.crossbarControllers = {};
   }
 
   init() {
-    const LEGACY_MODEL_ALIASES = {
-      corvette1: 'fighter',
-      ship1: 'fighter',
-      ship2: 'fighter',
-      
-      corvette2: 'scout',
-      corvette4: 'scout',
-      frigate4: 'scout',
-      
-      corvette3: 'cruiser',
-      frigate2: 'cruiser',
-      frigate3: 'cruiser',
-      ship3: 'cruiser',
-      
-      corvette5: 'hauler',
-      frigate1: 'hauler',
-      ship4: 'hauler',
-      
-      frigate5: 'dreadnought',
-      ship5: 'dreadnought'
-    };
-    
     let savedModel = localStorage.getItem('skyroads_selected_model') || 'original';
     if (LEGACY_MODEL_ALIASES[savedModel]) {
       savedModel = LEGACY_MODEL_ALIASES[savedModel];
@@ -174,6 +182,60 @@ class GameManager {
     const container = document.getElementById('canvas-container');
     this.graphics.init(container);
 
+    // Load persisted starfield settings from localStorage
+    this.starfieldEnabled = localStorage.getItem('skyroads_starfield_enabled') !== 'false';
+    if (this.graphics.starField) this.graphics.starField.visible = this.starfieldEnabled;
+    const savedStarSize = localStorage.getItem('skyroads_star_size');
+    this.graphics.setStarSize(savedStarSize !== null ? parseFloat(savedStarSize) : 1.0);
+    const savedStarDensity = localStorage.getItem('skyroads_star_density');
+    if (savedStarDensity !== null) this.graphics.setStarDensity(parseFloat(savedStarDensity));
+    this.updateStarfieldToggleBtn();
+
+    // Load persisted speed-FOV setting
+    this.speedFovEnabled = localStorage.getItem('skyroads_speed_fov_enabled') === 'true';
+    this.graphics.setSpeedFovEnabled(this.speedFovEnabled);
+    this.updateSpeedFovToggleBtn();
+
+    // Load persisted ghost racer setting
+    this.ghostEnabled = localStorage.getItem('skyroads_ghost_enabled') !== 'false';
+    this.updateGhostToggleBtn();
+    const sliderStarSize = document.getElementById('slider-settings-star-size');
+    if (sliderStarSize) sliderStarSize.value = Math.round(this.graphics.starSizeMultiplier * 100);
+    const sliderStarDensity = document.getElementById('slider-settings-star-density');
+    if (sliderStarDensity) sliderStarDensity.value = this.graphics.starCount;
+
+    // Visualizer skybox layer — Webamp owns all music playback/control from here on.
+    const webampContainer = document.getElementById('webamp-container');
+    if (webampContainer) {
+      const initialTracks = SYNTHWAVE_TRACK_URLS.map((url, i) => ({
+        url,
+        defaultName: SYNTHWAVE_TRACK_NAMES[i]
+      }));
+      initVisualizer({ initialTracks }).then(({ webamp, canvas, controls }) => {
+        this.webampInstance = webamp;
+        this.visualizerControls = controls; // consumed by the Settings VISUALIZER category
+        this.graphics.setVisualizerCanvas(canvas);
+        this.graphics.setVisualizerWallMode(this.visualizerWallMode);
+        const savedAngle = localStorage.getItem('skyroads_wall_angle');
+        const savedSpread = localStorage.getItem('skyroads_wall_spread');
+        const savedHeight = localStorage.getItem('skyroads_wall_height');
+        const wallParams = {};
+        if (savedAngle !== null) wallParams.angleDeg = parseFloat(savedAngle);
+        if (savedSpread !== null) wallParams.halfTrack = parseFloat(savedSpread);
+        if (savedHeight !== null) wallParams.height = parseFloat(savedHeight);
+        if (Object.keys(wallParams).length) this.graphics.setVisualizerWallParams(wallParams);
+        if (savedAngle !== null) document.getElementById('slider-settings-wall-angle').value = savedAngle;
+        if (savedSpread !== null) document.getElementById('slider-settings-wall-spread').value = savedSpread;
+        if (savedHeight !== null) document.getElementById('slider-settings-wall-height').value = savedHeight;
+      }).catch((err) => {
+        console.error('[Visualizer] Failed to initialize:', err);
+      });
+    }
+
+    // Load persisted visualizer display mode (applied above once the visualizer loads)
+    this.visualizerWallMode = localStorage.getItem('skyroads_visualizer_wall_mode') === 'true';
+    this.updateVisualizerModeBtn();
+
     // Load persisted mouse setting from localStorage
     const savedMousePlay = localStorage.getItem('skyroads_mouse_play') === 'true';
     this.keyboard.mouseControlsEnabled = savedMousePlay;
@@ -202,22 +264,7 @@ class GameManager {
     this.physics.difficulty = savedDifficulty;
     this.updateDifficultyToggleBtn();
 
-    // Load persisted background music setting from localStorage
-    const savedMusic = localStorage.getItem('skyroads_music_play') !== 'false';
-    gameAudio.setMusicEnabled(savedMusic);
-    this.updateMusicToggleBtn();
-
-    // Load persisted sound mode setting from localStorage
-    const savedSoundMode = localStorage.getItem('skyroads_sound_mode') || 'synth';
-    gameAudio.setSoundMode(savedSoundMode);
-    this.updateSoundModeToggleBtn();
-    this.updateNextTrackBtnText();
-
-    // Load persisted music and SFX volume levels
-    const savedMusicVolume = localStorage.getItem('skyroads_music_volume');
-    const musicVol = savedMusicVolume !== null ? parseFloat(savedMusicVolume) : 0.7;
-    gameAudio.setMusicVolume(musicVol);
-
+    // Load persisted SFX volume level
     const savedSfxVolume = localStorage.getItem('skyroads_sfx_volume');
     const sfxVol = savedSfxVolume !== null ? parseFloat(savedSfxVolume) : 0.8;
     gameAudio.setSfxVolume(sfxVol);
@@ -243,11 +290,7 @@ class GameManager {
     this.collisionViewEnabled = localStorage.getItem('skyroads_collision_view') === 'true';
     this.updateCollisionViewToggleBtn();
 
-    // Sync sliders values with loaded volumes
-    const sliderMusicVolume = document.getElementById('slider-settings-music-volume');
-    if (sliderMusicVolume) {
-      sliderMusicVolume.value = Math.round(musicVol * 100);
-    }
+    // Sync slider value with loaded volume
     const sliderSfxVolume = document.getElementById('slider-settings-sfx-volume');
     if (sliderSfxVolume) {
       sliderSfxVolume.value = Math.round(sfxVol * 100);
@@ -256,7 +299,7 @@ class GameManager {
     // Initialize tunable physics preset profiles by loading from localStorage or falling back to defaults
     this.physicsPresets = { vga: {}, snappy: {}, lunar: {}, custom: {} };
     const basePresets = {
-      vga: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 25, dragSteer: 18, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 },
+      vga: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 12.0, steerAccel: 50.0, dragSteer: 40.0, laneSnapStrength: 4.0, easyCollisionBounceVel: 5.0, easyCollisionBounceDist: 0.8, bounceFactor: 1.0, jumpImpulse: 11.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 },
       snappy: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.25, gravityFactor: 1.45, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 },
       lunar: { maxSpeedNormal: 24, maxSpeedBoost: 50, accelForward: 12, decelBrakes: 25, dragZ: 2, maxSteerSpeed: 8, steerAccel: 15, dragSteer: 8, laneSnapStrength: 4.0, easyCollisionBounceVel: 8, easyCollisionBounceDist: 1.5, bounceFactor: 1.5, jumpImpulse: 7.5, jumpFactor: 1.0, gravityFactor: 0.45, fallGravityMultiplier: 1.15, variableJumpDampening: 0.90, coyoteTimeBuffer: 0.40, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 },
       custom: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 }
@@ -299,6 +342,7 @@ class GameManager {
       if (this.physicsPresets[key].cameraHeight === undefined)    { this.physicsPresets[key].cameraHeight    = -0.5; camMigrated = true; }
       if (this.physicsPresets[key].cameraPitchDeg === undefined)  { this.physicsPresets[key].cameraPitchDeg  = 5;   camMigrated = true; }
       if (this.physicsPresets[key].cameraFOV === undefined)       { this.physicsPresets[key].cameraFOV       = 95;  camMigrated = true; }
+      if (this.physicsPresets[key].cockpitFov === undefined)      { this.physicsPresets[key].cockpitFov      = 95;  camMigrated = true; }
       if (camMigrated) {
         try { localStorage.setItem(`skyroads_physics_preset_${key}`, JSON.stringify(this.physicsPresets[key])); } catch (e) {}
       }
@@ -309,6 +353,8 @@ class GameManager {
 
     // 2. Setup Navigation Listeners
     this.setupUIListeners();
+    this.setupXmbMenus();
+    this._makeCalibratorDraggable();
 
     // 3. Listen to camera controls during play (KeyC toggles modes, [ and ] adjusts zoom, - and = adjusts height)
     window.addEventListener('keydown', (e) => {
@@ -396,8 +442,41 @@ class GameManager {
     // 4. Listen to keyboard menu navigation when not actively playing a level
     window.addEventListener('keydown', (e) => {
       if (this.gameState === 'playing') return;
+      // Screens ported to the XMB engine (see setupXmbMenus) are handled by
+      // their CrossbarController instead of the legacy handleMenuKeyboard()
+      // walk; everything else keeps using the old handler untouched.
+      const crossbar = this.getActiveCrossbarController();
+      if (crossbar) {
+        this.handleCrossbarKeyboard(e, crossbar);
+        return;
+      }
       this.handleMenuKeyboard(e);
     });
+
+    // Crossbar-driven screens need keyup to stop hold-repeat timers (tap vs.
+    // hold is keydown-without-repeat -> startHold, keyup -> stopHold; native
+    // OS key-repeat keydown events are ignored via e.repeat in handleCrossbarKeyboard).
+    window.addEventListener('keyup', (e) => {
+      const crossbar = this.getActiveCrossbarController();
+      if (crossbar) crossbar.stopHold();
+    });
+
+    // Any real input cancels attract mode / resets the idle timer.
+    const cancelIdleAndBot = () => {
+      this._idleSeconds = 0;
+      if (this._botActive) {
+        this._botActive = false;
+        if (this.keyboard && typeof this.keyboard.resetKeys === 'function') {
+          this.keyboard.resetKeys();
+        }
+        if (this.gameState === 'playing') {
+          this.returnToMenu();
+        }
+      }
+    };
+    window.addEventListener('keydown', cancelIdleAndBot);
+    window.addEventListener('click', cancelIdleAndBot);
+    window.addEventListener('touchstart', cancelIdleAndBot);
 
     // 5. Initialize new touch control system
     this.touchManager = new TouchControlManager();
@@ -408,89 +487,69 @@ class GameManager {
     this.animate(this.lastTime);
   }
 
-  updateMouseToggleBtn() {
-    const isEnabled = this.keyboard.mouseControlsEnabled;
-    const btnIds = ['btn-toggle-mouse', 'btn-settings-mouse'];
-    btnIds.forEach(id => {
+  // Shared by every simple on/off toggle button below — sets label + btn-primary/btn-info
+  // class state. `label` can be a string or, for buttons whose text differs per element
+  // id (e.g. boat throttle's compact touch variant), a function(id) => string.
+  _setToggleBtnState(btnIds, isEnabled, label) {
+    const ids = Array.isArray(btnIds) ? btnIds : [btnIds];
+    ids.forEach(id => {
       const btn = document.getElementById(id);
       if (!btn) return;
-      if (isEnabled) {
-        btn.innerText = 'MOUSE PLAY: ON';
-        btn.classList.remove('btn-info');
-        btn.classList.add('btn-primary');
-      } else {
-        btn.innerText = 'MOUSE PLAY: OFF';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-info');
-      }
+      const text = typeof label === 'function' ? label(id) : label;
+      // Preserve the crossbar engine's focus label span (xmbMenu.js appends
+      // it only to the active item) — innerText would otherwise wipe it out
+      // from underneath the engine whenever a toggle item is confirmed.
+      const labelSpan = btn.querySelector('.xmb-item-label');
+      btn.innerText = `${text}: ${isEnabled ? 'ON' : 'OFF'}`;
+      if (labelSpan) btn.appendChild(labelSpan);
+      btn.classList.toggle('btn-primary', isEnabled);
+      btn.classList.toggle('btn-info', !isEnabled);
     });
+  }
+
+  updateMouseToggleBtn() {
+    this._setToggleBtnState(['btn-toggle-mouse', 'btn-settings-mouse'], this.keyboard.mouseControlsEnabled, 'MOUSE PLAY');
+  }
+
+  updateStarfieldToggleBtn() {
+    this._setToggleBtnState('btn-settings-starfield', this.starfieldEnabled, 'STARFIELD');
+  }
+
+  updateSpeedFovToggleBtn() {
+    this._setToggleBtnState('btn-settings-speed-fov', this.speedFovEnabled, 'SPEED FOV');
+  }
+
+  updateGhostToggleBtn() {
+    this._setToggleBtnState('btn-settings-ghost', this.ghostEnabled, 'GHOST RACER');
+  }
+
+  updateVisualizerModeBtn() {
+    const btn = document.getElementById('btn-settings-visualizer-mode');
+    if (!btn) return;
+    btn.innerText = this.visualizerWallMode ? 'VIS MODE: WALLS' : 'VIS MODE: SKY';
+    btn.classList.toggle('btn-primary', this.visualizerWallMode);
+    btn.classList.toggle('btn-info', !this.visualizerWallMode);
   }
 
   updateTouchToggleBtn() {
-    const isEnabled = this.keyboard.touchControlsEnabled;
-    const btnIds = ['btn-toggle-touch', 'btn-settings-touch'];
-    btnIds.forEach(id => {
-      const btn = document.getElementById(id);
-      if (!btn) return;
-      if (isEnabled) {
-        btn.innerText = 'TOUCH CONTROLS: ON';
-        btn.classList.remove('btn-info');
-        btn.classList.add('btn-primary');
-      } else {
-        btn.innerText = 'TOUCH CONTROLS: OFF';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-info');
-      }
-    });
+    this._setToggleBtnState(['btn-toggle-touch', 'btn-settings-touch'], this.keyboard.touchControlsEnabled, 'TOUCH CONTROLS');
   }
 
   updateBoatThrottleToggleBtn() {
-    const isEnabled = this.physics.boatThrottleEnabled;
-    const btnIds = ['btn-toggle-boat-throttle', 'btn-pause-toggle-boat-throttle', 'btn-touch-boat-throttle', 'btn-settings-boat-throttle'];
-    btnIds.forEach(id => {
-      const btn = document.getElementById(id);
-      if (!btn) return;
-      if (isEnabled) {
-        btn.innerText = id === 'btn-touch-boat-throttle' ? 'BOAT: ON' : 'BOAT THROTTLE: ON';
-        btn.classList.remove('btn-info');
-        btn.classList.add('btn-primary');
-      } else {
-        btn.innerText = id === 'btn-touch-boat-throttle' ? 'BOAT: OFF' : 'BOAT THROTTLE: OFF';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-info');
-      }
-    });
+    this._setToggleBtnState(
+      ['btn-toggle-boat-throttle', 'btn-pause-toggle-boat-throttle', 'btn-touch-boat-throttle', 'btn-settings-boat-throttle'],
+      this.physics.boatThrottleEnabled,
+      id => id === 'btn-touch-boat-throttle' ? 'BOAT' : 'BOAT THROTTLE'
+    );
   }
 
   updateDoubleJumpToggleBtn() {
-    const isEnabled = this.physics.doubleJumpEnabled;
-    const btn = document.getElementById('btn-toggle-double-jump');
-    if (!btn) return;
-    if (isEnabled) {
-      btn.innerText = 'DOUBLE JUMP: ON';
-      btn.classList.remove('btn-info');
-      btn.classList.add('btn-primary');
-    } else {
-      btn.innerText = 'DOUBLE JUMP: OFF';
-      btn.classList.remove('btn-primary');
-      btn.classList.add('btn-info');
-    }
+    this._setToggleBtnState('btn-toggle-double-jump', this.physics.doubleJumpEnabled, 'DOUBLE JUMP');
   }
 
   updateBottomHudToggleBtn() {
     const isEnabled = this.bottomHudEnabled;
-    const btn = document.getElementById('btn-settings-bottom-hud');
-    if (btn) {
-      if (isEnabled) {
-        btn.innerText = 'BOTTOM HUD: ON';
-        btn.classList.remove('btn-info');
-        btn.classList.add('btn-primary');
-      } else {
-        btn.innerText = 'BOTTOM HUD: OFF';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-info');
-      }
-    }
+    this._setToggleBtnState('btn-settings-bottom-hud', isEnabled, 'BOTTOM HUD');
 
     // Immediately toggle HTML 2D HUD container visibility if playing or paused
     const hud = document.getElementById('hud');
@@ -504,54 +563,19 @@ class GameManager {
   }
 
   updateStickThrottleToggleBtn() {
-    const isEnabled = this.keyboard.touchJoystickThrottleEnabled;
-    const btn = document.getElementById('btn-settings-stick-throttle');
-    if (btn) {
-      if (isEnabled) {
-        btn.innerText = 'STICK THROTTLE: ON';
-        btn.classList.remove('btn-info');
-        btn.classList.add('btn-primary');
-      } else {
-        btn.innerText = 'STICK THROTTLE: OFF';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-info');
-      }
-    }
+    this._setToggleBtnState('btn-settings-stick-throttle', this.keyboard.touchJoystickThrottleEnabled, 'STICK THROTTLE');
   }
 
   updateLaneSnapToggleBtn() {
     const isEnabled = this.laneSnapEnabled;
-    const btn = document.getElementById('btn-settings-lane-snap');
-    if (btn) {
-      if (isEnabled) {
-        btn.innerText = 'LANE SNAP: ON';
-        btn.classList.remove('btn-info');
-        btn.classList.add('btn-primary');
-      } else {
-        btn.innerText = 'LANE SNAP: OFF';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-info');
-      }
-    }
+    this._setToggleBtnState('btn-settings-lane-snap', isEnabled, 'LANE SNAP');
     if (this.keyboard) {
       this.keyboard.laneSnapEnabled = isEnabled;
     }
   }
 
   updateRewindToggleBtn() {
-    const isEnabled = this.rewindEnabled;
-    const btn = document.getElementById('btn-settings-rewind');
-    if (btn) {
-      if (isEnabled) {
-        btn.innerText = 'REWIND: ON';
-        btn.classList.remove('btn-info');
-        btn.classList.add('btn-primary');
-      } else {
-        btn.innerText = 'REWIND: OFF';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-info');
-      }
-    }
+    this._setToggleBtnState('btn-settings-rewind', this.rewindEnabled, 'REWIND');
   }
 
   updateDifficultyToggleBtn() {
@@ -571,43 +595,434 @@ class GameManager {
     }
   }
 
-  updateMusicToggleBtn() {
-    const isEnabled = gameAudio.musicSequencer ? gameAudio.musicSequencer.musicEnabled : true;
-    const btn = document.getElementById('btn-settings-music');
-    if (!btn) return;
-    if (isEnabled) {
-      btn.innerText = 'MUSIC: ON';
-      btn.classList.remove('btn-secondary');
-      btn.classList.add('btn-info');
+
+
+  // ── Settings mutation methods ───────────────────────────────────────────
+  // Lifted out of the old inline click listener bodies so both the legacy
+  // .btn click path and the XMB crossbar's actionKey lookup (see
+  // buildLiveSettingsConfig) call the exact same logic.
+
+  toggleDifficulty() {
+    const currentDiff = this.physics.difficulty || 'normal';
+    let nextDiff = 'normal';
+    if (currentDiff === 'easy') {
+      nextDiff = 'normal';
+    } else if (currentDiff === 'normal') {
+      nextDiff = 'hard';
     } else {
-      btn.innerText = 'MUSIC: OFF';
-      btn.classList.remove('btn-info');
-      btn.classList.add('btn-secondary');
+      nextDiff = 'easy';
+    }
+    this.physics.difficulty = nextDiff;
+    localStorage.setItem('skyroads_difficulty', nextDiff);
+    this.updateDifficultyToggleBtn();
+
+    if (this.gameState === 'playing' || this.gameState === 'paused' || this.gameState === 'death') {
+      if (nextDiff === 'easy') {
+        this.rewindBudgetMax = Infinity;
+      } else if (nextDiff === 'normal') {
+        this.rewindBudgetMax = 10.0;
+      } else {
+        this.rewindBudgetMax = 0.0;
+      }
+      this.rewindBudget = Math.min(this.rewindBudget, this.rewindBudgetMax);
+      const rewindRow = document.getElementById('hud-rewind-row');
+      if (rewindRow) {
+        rewindRow.classList.toggle('hidden', !this.rewindEnabled || nextDiff === 'hard');
+      }
+      const rewindText = document.getElementById('hud-rewind-text');
+      if (rewindText) {
+        rewindText.innerText = nextDiff === 'easy' ? '∞' : `${this.rewindBudget.toFixed(1)}s`;
+      }
     }
   }
 
-  updateSoundModeToggleBtn() {
-    const btn = document.getElementById('btn-settings-sound-mode');
-    if (!btn) return;
-    const mode = gameAudio.soundMode || 'synth';
-    btn.classList.remove('btn-info', 'btn-secondary', 'btn-synthwave');
-    if (mode === 'synth') {
-      btn.innerText = 'SOUND: SYNTH';
-      btn.classList.add('btn-info');
-    } else if (mode === 'classic') {
-      btn.innerText = 'SOUND: CLASSIC';
-      btn.classList.add('btn-secondary');
-    } else {
-      btn.innerText = 'SOUND: SYNTHWAVE';
-      btn.classList.add('btn-synthwave');
+  toggleRewindOnDeath() {
+    this.rewindEnabled = !this.rewindEnabled;
+    localStorage.setItem('skyroads_rewind_enabled', this.rewindEnabled);
+    this.updateRewindToggleBtn();
+  }
+
+  toggleLaneSnap() {
+    this.laneSnapEnabled = !this.laneSnapEnabled;
+    localStorage.setItem('skyroads_lane_snap', this.laneSnapEnabled);
+    this.updateLaneSnapToggleBtn();
+  }
+
+  adjustSfxVolume(dir) {
+    const step = 0.05;
+    const slider = document.getElementById('slider-settings-sfx-volume');
+    const current = slider ? parseFloat(slider.value) / 100 : 0.8;
+    const next = Math.max(0, Math.min(1, current + dir * step));
+    gameAudio.setSfxVolume(next);
+    localStorage.setItem('skyroads_sfx_volume', next);
+    if (slider) slider.value = String(Math.round(next * 100));
+    return next;
+  }
+
+  toggleStarfield() {
+    this.starfieldEnabled = !this.starfieldEnabled;
+    if (this.graphics.starField) this.graphics.starField.visible = this.starfieldEnabled;
+    localStorage.setItem('skyroads_starfield_enabled', this.starfieldEnabled);
+    this.updateStarfieldToggleBtn();
+  }
+
+  toggleSpeedFov() {
+    this.speedFovEnabled = !this.speedFovEnabled;
+    this.graphics.setSpeedFovEnabled(this.speedFovEnabled);
+    localStorage.setItem('skyroads_speed_fov_enabled', this.speedFovEnabled);
+    this.updateSpeedFovToggleBtn();
+  }
+
+  toggleGhostRacer() {
+    this.ghostEnabled = !this.ghostEnabled;
+    localStorage.setItem('skyroads_ghost_enabled', this.ghostEnabled);
+    if (!this.ghostEnabled) {
+      this.graphics.setGhostVisible(false);
+    } else if (this.loadedGhost) {
+      this.graphics.setGhostVisible(true);
+    }
+    this.updateGhostToggleBtn();
+  }
+
+  toggleVisualizerMode() {
+    this.visualizerWallMode = !this.visualizerWallMode;
+    localStorage.setItem('skyroads_visualizer_wall_mode', this.visualizerWallMode);
+    this.graphics.setVisualizerWallMode(this.visualizerWallMode);
+    this.updateVisualizerModeBtn();
+  }
+
+  adjustWallAngle(dir) {
+    const slider = document.getElementById('slider-settings-wall-angle');
+    const step = 1, min = 1, max = 89;
+    const current = slider ? parseFloat(slider.value) : 45;
+    const next = Math.max(min, Math.min(max, current + dir * step));
+    this.graphics.setVisualizerWallParams({ angleDeg: next });
+    localStorage.setItem('skyroads_wall_angle', next);
+    if (slider) slider.value = String(next);
+    return next;
+  }
+
+  adjustWallSpread(dir) {
+    const slider = document.getElementById('slider-settings-wall-spread');
+    const step = 1, min = 5, max = 40;
+    const current = slider ? parseFloat(slider.value) : 9;
+    const next = Math.max(min, Math.min(max, current + dir * step));
+    this.graphics.setVisualizerWallParams({ halfTrack: next });
+    localStorage.setItem('skyroads_wall_spread', next);
+    if (slider) slider.value = String(next);
+    return next;
+  }
+
+  adjustWallHeight(dir) {
+    const slider = document.getElementById('slider-settings-wall-height');
+    const step = 10, min = 50, max = 600;
+    const current = slider ? parseFloat(slider.value) : 300;
+    const next = Math.max(min, Math.min(max, current + dir * step));
+    this.graphics.setVisualizerWallParams({ height: next });
+    localStorage.setItem('skyroads_wall_height', next);
+    if (slider) slider.value = String(next);
+    return next;
+  }
+
+  adjustStarSize(dir) {
+    const slider = document.getElementById('slider-settings-star-size');
+    const step = 10, min = 20, max = 300;
+    const current = slider ? parseFloat(slider.value) : 100;
+    const next = Math.max(min, Math.min(max, current + dir * step));
+    this.graphics.setStarSize(next / 100);
+    localStorage.setItem('skyroads_star_size', next / 100);
+    if (slider) slider.value = String(next);
+    return next;
+  }
+
+  adjustStarDensity(dir) {
+    const slider = document.getElementById('slider-settings-star-density');
+    const step = 100, min = 0, max = 5000;
+    const current = slider ? parseFloat(slider.value) : 1500;
+    const next = Math.max(min, Math.min(max, current + dir * step));
+    this.graphics.setStarDensity(next);
+    localStorage.setItem('skyroads_star_density', next);
+    if (slider) slider.value = String(next);
+    return next;
+  }
+
+  toggleMousePlay() {
+    this.keyboard.mouseControlsEnabled = !this.keyboard.mouseControlsEnabled;
+    localStorage.setItem('skyroads_mouse_play', this.keyboard.mouseControlsEnabled);
+    this.updateMouseToggleBtn();
+  }
+
+  toggleTouchHud() {
+    this.keyboard.touchControlsEnabled = !this.keyboard.touchControlsEnabled;
+    localStorage.setItem('skyroads_touch_controls', this.keyboard.touchControlsEnabled);
+    this.updateTouchToggleBtn();
+  }
+
+  toggleBoatThrottle() {
+    this.physics.boatThrottleEnabled = !this.physics.boatThrottleEnabled;
+    localStorage.setItem('skyroads_boat_throttle', this.physics.boatThrottleEnabled);
+    this.updateBoatThrottleToggleBtn();
+  }
+
+  toggleStickThrottle() {
+    this.keyboard.touchJoystickThrottleEnabled = !this.keyboard.touchJoystickThrottleEnabled;
+    localStorage.setItem('skyroads_stick_throttle', this.keyboard.touchJoystickThrottleEnabled);
+    this.updateStickThrottleToggleBtn();
+  }
+
+  openGamepadConfig() {
+    this.gameState = 'gamepad_config';
+    this.updateGamepadConfigUI();
+    this.showScreen('gamepad-config-screen');
+  }
+
+  toggleBottomHud() {
+    this.bottomHudEnabled = !this.bottomHudEnabled;
+    localStorage.setItem('skyroads_bottom_hud', this.bottomHudEnabled);
+    this.updateBottomHudToggleBtn();
+  }
+
+  toggleCollisionView() {
+    const nextState = !this.collisionViewEnabled;
+    this.toggleSceneCollisionView(nextState);
+    this.updateCollisionViewToggleBtn();
+  }
+
+  /**
+   * Resolves a settingsConfig actionKey string to the live function the XMB
+   * crossbar should call. 'action' items get onConfirm = fn; 'slider' items
+   * get onAdjust = (dir) => fn(dir). Centralizing this lookup here (rather
+   * than scattering switch statements) is what buildLiveSettingsConfig uses
+   * to turn the static menuConfig.js tree into a live, callable one each time
+   * the settings screen opens.
+   */
+  _resolveSettingsAction(actionKey) {
+    const table = {
+      'toggle-difficulty': () => this.toggleDifficulty(),
+      'toggle-rewind-on-death': () => this.toggleRewindOnDeath(),
+      'toggle-lane-snap': () => this.toggleLaneSnap(),
+      'adjust-sfx-volume': (dir) => this.adjustSfxVolume(dir),
+      'toggle-starfield': () => this.toggleStarfield(),
+      'toggle-speed-fov': () => this.toggleSpeedFov(),
+      'toggle-ghost-racer': () => this.toggleGhostRacer(),
+      'toggle-visualizer-mode': () => this.toggleVisualizerMode(),
+      'adjust-wall-angle': (dir) => this.adjustWallAngle(dir),
+      'adjust-wall-spread': (dir) => this.adjustWallSpread(dir),
+      'adjust-wall-height': (dir) => this.adjustWallHeight(dir),
+      'adjust-star-size': (dir) => this.adjustStarSize(dir),
+      'adjust-star-density': (dir) => this.adjustStarDensity(dir),
+      'toggle-mouse-play': () => this.toggleMousePlay(),
+      'toggle-touch-hud': () => this.toggleTouchHud(),
+      'toggle-boat-throttle': () => this.toggleBoatThrottle(),
+      'toggle-stick-throttle': () => this.toggleStickThrottle(),
+      'open-gamepad-config': () => this.openGamepadConfig(),
+      'toggle-bottom-hud': () => this.toggleBottomHud(),
+      'toggle-collision-view': () => this.toggleCollisionView(),
+      'open-ship-picker': () => this.openShipPicker(),
+      'open-physics-calibrator': () => this.togglePhysicsCalibrator(true),
+      'close-settings': () => this.toggleSettingsMenu(),
+      // Visualizer controls (folded in from the old floating panel).
+      'vis-preset': (dir) => { const c = this.visualizerControls; if (c) { dir > 0 ? c.next() : c.prev(); } },
+      'vis-lock': () => { const c = this.visualizerControls; if (c) c.toggleLocked(); },
+      'vis-fav': () => { const c = this.visualizerControls; if (c) c.toggleFavoriteCurrent(); },
+      'vis-mode': () => { const c = this.visualizerControls; if (c) c.toggleTransitionMode(); },
+      'vis-webamp': () => { const c = this.visualizerControls; if (c && c.getPresetInfo) { const showing = this._webampShowing = !this._webampShowing; c.setWebampVisible(showing); } }
+    };
+    return table[actionKey];
+  }
+
+  /** Renders the VISUALIZER settings rows (preset readout + toggle labels) from
+   *  the live visualizer controls. Safe no-op if the visualizer isn't ready. */
+  _renderVisualizerSettings() {
+    const c = this.visualizerControls;
+    const presetEl = document.getElementById('val-settings-vis-preset');
+    if (!c || !c.getPresetInfo) { if (presetEl) presetEl.textContent = '—'; return; }
+    const info = c.getPresetInfo();
+    if (presetEl) presetEl.textContent = `${info.index + 1}/${info.total} — ${info.name}`;
+    const lock = document.getElementById('btn-settings-vis-lock');
+    if (lock) lock.textContent = `LOCK: ${info.isLocked ? 'ON' : 'OFF'}`;
+    const fav = document.getElementById('btn-settings-vis-fav');
+    if (fav) fav.textContent = `FAVORITE: ${info.isFavorite ? '★' : '☆'}`;
+    const mode = document.getElementById('btn-settings-vis-mode');
+    if (mode) mode.textContent = `MODE: ${(info.transitionMode || 'all').toUpperCase()}`;
+    const webamp = document.getElementById('btn-settings-vis-webamp');
+    if (webamp) webamp.textContent = `WEBAMP: ${this._webampShowing ? 'SHOWN' : 'HIDDEN'}`;
+  }
+
+  /**
+   * Turns the live current value of a settings item into the display string
+   * shown in its .xmb-item label (toggles get "ON"/"OFF" or the
+   * difficulty/visualizer-mode tri-state text). Centralized here so
+   * buildLiveSettingsConfig and the renderer agree on formatting.
+   */
+  _settingsItemValueText(id) {
+    switch (id) {
+      case 'difficulty': {
+        const diff = this.physics.difficulty || 'normal';
+        return diff.toUpperCase();
+      }
+      case 'rewind-on-death': return this.rewindEnabled ? 'ON' : 'OFF';
+      case 'lane-snap': return this.laneSnapEnabled ? 'ON' : 'OFF';
+      case 'starfield': return this.starfieldEnabled ? 'ON' : 'OFF';
+      case 'speed-fov': return this.speedFovEnabled ? 'ON' : 'OFF';
+      case 'ghost-racer': return this.ghostEnabled ? 'ON' : 'OFF';
+      case 'visualizer-mode': return this.visualizerWallMode ? 'WALLS' : 'SKY';
+      case 'mouse-play': return this.keyboard.mouseControlsEnabled ? 'ON' : 'OFF';
+      case 'touch-hud': return this.keyboard.touchControlsEnabled ? 'ON' : 'OFF';
+      case 'boat-throttle': return this.physics.boatThrottleEnabled ? 'ON' : 'OFF';
+      case 'stick-throttle': return this.keyboard.touchJoystickThrottleEnabled ? 'ON' : 'OFF';
+      case 'bottom-hud': return this.bottomHudEnabled ? 'ON' : 'OFF';
+      case 'collision-view': return this.collisionViewEnabled ? 'ON' : 'OFF';
+      default: return '';
     }
   }
 
-  updateNextTrackBtnText() {
-    const btn = document.getElementById('btn-settings-next-track');
-    if (!btn) return;
-    const trackName = gameAudio.getCurrentTrackName();
-    btn.innerText = `TRACK: ${trackName} ⏭️`;
+  /**
+   * Builds the "live" settings crossbar config: takes the pure-data
+   * settingsConfig tree from menuConfig.js and returns a copy where every
+   * item's actionKey has been resolved to onConfirm/onAdjust, plus a current
+   * `value` for sliders (read straight off the existing slider's value attr
+   * so persisted localStorage state round-trips correctly). Also splices in
+   * the paused-only action rows (resume/retry/quit) into the 'game' category
+   * when appropriate — rebuilt fresh every time toggleSettingsMenu() opens
+   * the screen, matching the old conditional-visibility behavior exactly.
+   */
+  buildLiveSettingsConfig() {
+    const sliderIdByItemId = {
+      'sfx-volume': 'slider-settings-sfx-volume',
+      'wall-angle': 'slider-settings-wall-angle',
+      'wall-spread': 'slider-settings-wall-spread',
+      'wall-height': 'slider-settings-wall-height',
+      'star-size': 'slider-settings-star-size',
+      'star-density': 'slider-settings-star-density'
+    };
+
+    const categories = settingsConfig.categories.map(cat => {
+      const items = cat.items.map(item => {
+        const live = { ...item };
+        const fn = this._resolveSettingsAction(item.actionKey);
+        if (item.kind === 'slider') {
+          live.onAdjust = (dir) => fn(dir);
+          if (item.id === 'preset') {
+            live.max = presets.length - 1;
+            const c = this.visualizerControls;
+            live.value = c && c.getPresetInfo ? c.getPresetInfo().index : 0;
+          } else {
+            const sliderEl = document.getElementById(sliderIdByItemId[item.id]);
+            if (sliderEl) {
+              const raw = parseFloat(sliderEl.value);
+              live.value = item.id === 'sfx-volume' ? raw / 100 : raw;
+            } else {
+              live.value = item.min;
+            }
+          }
+        } else {
+          live.onConfirm = fn;
+        }
+        return live;
+      });
+      return { ...cat, items };
+    });
+
+    if (this.preSettingsState === 'playing' || this.preSettingsState === 'paused') {
+      const gameCategory = categories.find(c => c.id === 'game');
+      if (gameCategory) {
+        gameCategory.items = [
+          { id: 'resume', label: 'Resume Road', kind: 'action', onConfirm: () => { gameAudio.playClick(); this.toggleSettingsMenu(); } },
+          { id: 'retry', label: 'Retry Road', kind: 'action', onConfirm: () => { gameAudio.playClick(); this.startLevel(this.currentLevelIndex); } },
+          { id: 'quit', label: 'Quit to Menu', kind: 'action', onConfirm: () => { gameAudio.playClick(); this.returnToMenu(); } },
+          ...gameCategory.items
+        ];
+      }
+    }
+
+    return { categories };
+  }
+
+  /** Updates one settings slider's visible fill bar + value readout from its
+   *  hidden native <input>'s current value (the adjust* fns own the value). */
+  _renderSettingsSlider(id) {
+    const input = document.getElementById('slider-settings-' + id);
+    const fill = document.getElementById('fill-settings-' + id);
+    const val = document.getElementById('val-settings-' + id);
+    if (!input) return;
+    const v = parseFloat(input.value);
+    const min = parseFloat(input.min), max = parseFloat(input.max);
+    const pct = max > min ? ((v - min) / (max - min)) * 100 : 0;
+    if (fill) fill.style.width = pct + '%';
+    if (val) val.textContent = id === 'sfx-volume' ? Math.round(v) + '%' : String(v);
+  }
+
+  /** Builds + registers the settings-screen crossbar. Called fresh on each
+   *  open (toggleSettingsMenu) because the paused-only rows vary by state. */
+  mountSettingsCrossbar() {
+    const live = this.buildLiveSettingsConfig();
+    // config item id -> DOM element id (irregular, so explicit)
+    const elId = {
+      difficulty: 'btn-settings-difficulty', 'rewind-on-death': 'btn-settings-rewind', 'lane-snap': 'btn-settings-lane-snap',
+      'sfx-volume': 'item-settings-sfx-volume',
+      starfield: 'btn-settings-starfield', 'speed-fov': 'btn-settings-speed-fov', 'ghost-racer': 'btn-settings-ghost', 'visualizer-mode': 'btn-settings-visualizer-mode',
+      'wall-angle': 'item-settings-wall-angle', 'wall-spread': 'item-settings-wall-spread', 'wall-height': 'item-settings-wall-height', 'star-size': 'item-settings-star-size', 'star-density': 'item-settings-star-density',
+      'mouse-play': 'btn-settings-mouse', 'touch-hud': 'btn-settings-touch', 'boat-throttle': 'btn-settings-boat-throttle', 'stick-throttle': 'btn-settings-stick-throttle', 'gamepad-config': 'btn-settings-gamepad',
+      'bottom-hud': 'btn-settings-bottom-hud', 'collision-view': 'btn-settings-collision-view', 'hovercraft-garage': 'btn-settings-picker',
+      'physics-calibrator': 'btn-settings-calibrator', 'close-settings': 'btn-settings-close',
+      preset: 'item-settings-vis-preset', lock: 'btn-settings-vis-lock', favorite: 'btn-settings-vis-fav', mode: 'btn-settings-vis-mode', webamp: 'btn-settings-vis-webamp'
+    };
+    const sliderIds = ['sfx-volume', 'wall-angle', 'wall-spread', 'wall-height', 'star-size', 'star-density'];
+
+    const pausedHost = document.getElementById('settings-paused-actions');
+    if (pausedHost) pausedHost.innerHTML = ''; // rebuilt per open
+
+    live.categories.forEach(cat => {
+      cat.el = document.getElementById('settings-xmb-cat-' + cat.id);
+      cat.items.forEach(item => {
+        item.label = ''; // buttons carry their own baked text; no duplicate label span
+        if (elId[item.id]) {
+          item.el = document.getElementById(elId[item.id]) || null;
+        } else if (pausedHost && (item.id === 'resume' || item.id === 'retry' || item.id === 'quit')) {
+          // Paused-only rows aren't static markup — create them on the fly.
+          const b = document.createElement('button');
+          b.className = 'xmb-item btn btn-glow ' + (item.id === 'resume' ? 'btn-primary' : 'btn-secondary');
+          b.textContent = item.id === 'resume' ? 'RESUME ROAD' : (item.id === 'retry' ? 'RETRY ROAD' : 'QUIT TO MENU');
+          pausedHost.appendChild(b);
+          item.el = b;
+        }
+        if (item.kind === 'slider') {
+          const base = item.onAdjust;
+          // The visualizer "preset" slider has no native <input>; refresh the
+          // VISUALIZER rows instead of the generic slider fill.
+          const refresh = item.id === 'preset'
+            ? () => this._renderVisualizerSettings()
+            : () => this._renderSettingsSlider(item.id);
+          item.onAdjust = (d) => { base(d); refresh(); };
+        }
+      });
+    });
+
+    const catTrack = document.getElementById('settings-xmb-category-track');
+    const tracks = {};
+    live.categories.forEach(cat => { tracks[cat.id] = document.getElementById('settings-xmb-item-track-' + cat.id); });
+
+    if (this.crossbarControllers['settings-screen']) this.crossbarControllers['settings-screen'].destroy();
+    const ctrl = new CrossbarController(live, { categoryTrackEl: catTrack, itemTrackEl: tracks[live.categories[0].id], leftAlignItems: true });
+    const sync = () => {
+      const active = ctrl.activeCategory;
+      Object.entries(tracks).forEach(([id, el]) => { if (el) el.classList.toggle('hidden', !active || active.id !== id); });
+      ctrl.mount(catTrack, active ? tracks[active.id] : null);
+    };
+    sync();
+    const orig = ctrl.handleDirection.bind(ctrl);
+    ctrl.handleDirection = (axis, dir) => { orig(axis, dir); if (axis === 'horizontal') sync(); };
+    this.wireCategoryClicks(ctrl);
+    ctrl._updateLabels();
+    ctrl.render(performance.now());
+    sliderIds.forEach(id => this._renderSettingsSlider(id));
+    this._renderVisualizerSettings();
+    // Keep the VISUALIZER rows live while settings is open (preset auto-cycles).
+    if (this.visualizerControls && this.visualizerControls.onChange && !this._visUnsub) {
+      this._visUnsub = this.visualizerControls.onChange(() => this._renderVisualizerSettings());
+    }
+    this.crossbarControllers['settings-screen'] = ctrl;
   }
 
   openShipPicker() {
@@ -664,6 +1079,9 @@ class GameManager {
     if (config.cameraFOV !== undefined) {
       this.graphics.setCameraFOV(config.cameraFOV);
     }
+    if (config.cockpitFov !== undefined) {
+      this.graphics.setCockpitFOV(config.cockpitFov);
+    }
   }
 
   togglePhysicsCalibrator(forceState) {
@@ -708,7 +1126,7 @@ class GameManager {
       if (readout) {
         if (param === 'showCockpitBezel') {
           readout.innerText = Number(config[param]) === 1 ? 'ON' : 'OFF';
-        } else if (param === 'cameraPitchDeg' || param === 'cameraFOV') {
+        } else if (param === 'cameraPitchDeg' || param === 'cameraFOV' || param === 'cockpitFov') {
           readout.innerText = `${Math.round(Number(config[param]))}°`;
         } else if (param === 'cameraHeight') {
           readout.innerText = Number(config[param]).toFixed(2);
@@ -742,20 +1160,45 @@ class GameManager {
 
     const mappings = this.keyboard.gamepadMappings;
     const actions = ['forward', 'backward', 'jump', 'left', 'right', 'cycleCamera', 'togglePause'];
-    
+
     actions.forEach(action => {
       const btn = document.getElementById(`btn-map-${action}`);
       if (btn) {
+        const bindingEl = btn.querySelector('.xmb-item-binding');
         const btnIndex = mappings[action];
-        if (btnIndex === undefined || btnIndex === null) {
-          btn.innerText = 'Not Mapped';
+        const text = (btnIndex === undefined || btnIndex === null)
+          ? 'Not Mapped'
+          : (GAMEPAD_BUTTON_NAMES[btnIndex] !== undefined ? GAMEPAD_BUTTON_NAMES[btnIndex] : `Button ${btnIndex}`);
+        if (bindingEl) {
+          bindingEl.textContent = text;
         } else {
-          btn.innerText = GAMEPAD_BUTTON_NAMES[btnIndex] !== undefined ? GAMEPAD_BUTTON_NAMES[btnIndex] : `Button ${btnIndex}`;
+          btn.innerText = text;
         }
-        btn.classList.remove('btn-danger'); // Remove listening visual cue if it was active
+        btn.classList.remove('xmb-listening', 'btn-danger'); // Remove listening visual cue if it was active
         btn.classList.add('btn-glow');
       }
     });
+  }
+
+  // Starts the "press any button now" remap-listen flow for one gamepad
+  // action. Shared by the legacy click handler and the gamepad-config
+  // CrossbarController's onConfirm — both end up calling this exact function
+  // so there's only one remap-capture code path (physics.js's gamepad poll
+  // loop reads `this.keyboard.currentlyMappingAction` and resolves it).
+  startGamepadRemap(action) {
+    gameAudio.playClick();
+    const btn = document.getElementById(`btn-map-${action}`);
+    this.keyboard.currentlyMappingAction = action;
+    if (btn) {
+      const bindingEl = btn.querySelector('.xmb-item-binding');
+      if (bindingEl) {
+        bindingEl.textContent = '[ PRESS ANY BUTTON... ]';
+      } else {
+        btn.innerText = '[ PRESS ANY BUTTON... ]';
+      }
+      btn.classList.remove('btn-glow');
+      btn.classList.add('xmb-listening', 'btn-danger'); // red styling indicating recording
+    }
   }
 
   showCalibratorAlert() {
@@ -869,6 +1312,573 @@ class GameManager {
       this.gameState = 'settings';
     } else {
       this.returnToMenu();
+    }
+  }
+
+  /**
+   * Builds the CrossbarController instances for the screens already ported
+   * to the XMB engine (main menu + how-to-play, Task D of the XMB redesign).
+   * Each controller is configured from menuConfig.js's static data, with
+   * each item's actionKey resolved here to the *same* function the legacy
+   * click listener calls (see setupUIListeners) — no synthetic .click().
+   *
+   * Other screens (level select, ship garage, settings, pause/death/success,
+   * gamepad config) still run on the old handleMenuKeyboard()/highlightMenuButton()
+   * path; this.crossbarControllers only ever contains entries for screens that
+   * have actually been ported, and the keyboard/gamepad dispatch below checks
+   * "is the active screen one of these ids" before routing into the engine.
+   */
+  setupXmbMenus() {
+    const actionHandlers = {
+      'play-standard': () => { gameAudio.playClick(); this.showLevelSelection('standard'); },
+      'play-generated': () => { gameAudio.playClick(); this.showLevelSelection('generated'); },
+      'play-xmas': () => { gameAudio.playClick(); this.showLevelSelection('xmas'); },
+      'load-custom-level': () => {
+        gameAudio.playClick();
+        const loader = document.getElementById('game-custom-level-loader');
+        if (loader) loader.click();
+      },
+      'open-editor': () => { gameAudio.playClick(); window.open('editor.html', '_blank'); },
+      'open-ship-picker': () => { gameAudio.playClick(); this.openShipPicker(); },
+      'open-how-to': () => { gameAudio.playClick(); this.showScreen('how-to-screen'); }
+    };
+
+    const mainMenuItemEls = {
+      standard: document.getElementById('btn-play-standard'),
+      generated: document.getElementById('btn-play-generated'),
+      xmas: document.getElementById('btn-play-xmas'),
+      'load-custom-level': document.getElementById('btn-load-custom-level'),
+      'level-editor': document.getElementById('btn-open-editor'),
+      'hovercraft-garage': document.getElementById('btn-open-picker'),
+      'how-to-play': document.getElementById('btn-how-to')
+    };
+    const mainMenuCategoryEls = {
+      play: document.getElementById('menu-xmb-cat-play'),
+      extras: document.getElementById('menu-xmb-cat-extras')
+    };
+
+    // Clone the static config and attach `el`/`onConfirm` per item — menuConfig.js
+    // stays a pure-data module, so the DOM/function wiring happens here instead.
+    const mainMenuConfigWired = {
+      categories: mainMenuConfig.categories.map(cat => ({
+        ...cat,
+        el: mainMenuCategoryEls[cat.id] || null,
+        // Drop items whose button is hidden (e.g. xmas pack with display:none)
+        // so vertical nav never lands on an invisible row.
+        items: cat.items
+          .map(item => ({
+            ...item,
+            el: mainMenuItemEls[item.id] || null,
+            onConfirm: actionHandlers[item.actionKey]
+          }))
+          .filter(item => item.el && item.el.style.display !== 'none')
+      }))
+    };
+
+    const menuItemTrackPlay = document.getElementById('menu-xmb-item-track-play');
+    const menuItemTrackExtras = document.getElementById('menu-xmb-item-track-extras');
+    const menuCategoryTrack = document.getElementById('menu-xmb-category-track');
+
+    const mainMenuController = new CrossbarController(mainMenuConfigWired, {
+      categoryTrackEl: menuCategoryTrack,
+      itemTrackEl: menuItemTrackPlay,
+      leftAlignItems: true
+    });
+
+    // The two categories use separate item-track elements (PLAY's buttons vs
+    // EXTRAS' buttons are different DOM subtrees), so when the category
+    // changes we swap which track is visible/mounted instead of having one
+    // track contain both lists at once.
+    const menuItemTracksByCategory = { play: menuItemTrackPlay, extras: menuItemTrackExtras };
+    const syncMainMenuItemTrack = () => {
+      const activeCat = mainMenuController.activeCategory;
+      Object.entries(menuItemTracksByCategory).forEach(([catId, trackEl]) => {
+        if (!trackEl) return;
+        trackEl.classList.toggle('hidden', !activeCat || activeCat.id !== catId);
+      });
+      mainMenuController.mount(menuCategoryTrack, activeCat ? menuItemTracksByCategory[activeCat.id] : null);
+    };
+    syncMainMenuItemTrack();
+    // Re-sync the mounted item track every time the category changes by
+    // wrapping handleDirection — keeps the swap-on-category-change logic in
+    // one place without forking the engine's horizontal-input handling.
+    const originalHandleDirection = mainMenuController.handleDirection.bind(mainMenuController);
+    mainMenuController.handleDirection = (axis, dir) => {
+      originalHandleDirection(axis, dir);
+      if (axis === 'horizontal') syncMainMenuItemTrack();
+    };
+    this.wireCategoryClicks(mainMenuController);
+    mainMenuController._updateLabels();
+    mainMenuController.render(performance.now());
+    this.crossbarControllers['menu-screen'] = mainMenuController;
+
+    // How-To Play: single category, single item (Back button) — same engine,
+    // horizontal axis never moves.
+    const howToBackEl = document.getElementById('btn-how-to-back');
+    const howToConfig = {
+      categories: [{
+        id: 'how-to',
+        label: 'HOW TO PLAY',
+        items: [{
+          id: 'back',
+          label: 'UNDERSTOOD',
+          kind: 'action',
+          el: howToBackEl,
+          onConfirm: () => { gameAudio.playClick(); this.showScreen('menu-screen'); }
+        }]
+      }]
+    };
+    const howToController = new CrossbarController(howToConfig, {
+      itemTrackEl: document.getElementById('how-to-xmb-item-track')
+    });
+    howToController._updateLabels();
+    howToController.render(performance.now());
+    this.crossbarControllers['how-to-screen'] = howToController;
+
+    // Gamepad Config (Task G): single category, 7 remap rows + reset.
+    // btn-gamepad-close stays fixed chrome (Cancel target, same as the
+    // gp.menuCancel cancelButtons map below) — not a vertical item.
+    // Each remap item's onConfirm calls startGamepadRemap(action), the exact
+    // same function the legacy btn-map-* click listener now calls too, so
+    // there's only one remap-capture code path (see startGamepadRemap above).
+    // Live binding text is written by updateGamepadConfigUI() into each row's
+    // .xmb-item-binding span — this controller only owns focus/navigation.
+    const gamepadConfigItemEls = {
+      forward: document.getElementById('btn-map-forward'),
+      backward: document.getElementById('btn-map-backward'),
+      jump: document.getElementById('btn-map-jump'),
+      left: document.getElementById('btn-map-left'),
+      right: document.getElementById('btn-map-right'),
+      cycleCamera: document.getElementById('btn-map-cycleCamera'),
+      togglePause: document.getElementById('btn-map-togglePause'),
+      reset: document.getElementById('btn-gamepad-reset')
+    };
+    const gamepadConfigActionHandlers = {
+      'remap-forward': () => this.startGamepadRemap('forward'),
+      'remap-backward': () => this.startGamepadRemap('backward'),
+      'remap-jump': () => this.startGamepadRemap('jump'),
+      'remap-left': () => this.startGamepadRemap('left'),
+      'remap-right': () => this.startGamepadRemap('right'),
+      'remap-cycleCamera': () => this.startGamepadRemap('cycleCamera'),
+      'remap-togglePause': () => this.startGamepadRemap('togglePause'),
+      'reset-gamepad-mappings': () => {
+        gameAudio.playClick();
+        this.keyboard.gamepadMappings = {
+          forward: 7,
+          backward: 6,
+          jump: 0,
+          left: 14,
+          right: 15,
+          cycleCamera: 3,
+          togglePause: 9
+        };
+        this.keyboard.saveGamepadMappings();
+        this.updateGamepadConfigUI();
+      }
+    };
+    const gamepadConfigWired = {
+      categories: gamepadConfigConfig.categories.map(cat => ({
+        ...cat,
+        items: cat.items.map(item => ({
+          ...item,
+          el: gamepadConfigItemEls[item.id] || null,
+          onConfirm: gamepadConfigActionHandlers[item.actionKey]
+        }))
+      }))
+    };
+    const gamepadConfigController = new CrossbarController(gamepadConfigWired, {
+      itemTrackEl: document.querySelector('#gamepad-config-screen .xmb-item-track')
+    });
+    gamepadConfigController._updateLabels();
+    gamepadConfigController.render(performance.now());
+    this.crossbarControllers['gamepad-config-screen'] = gamepadConfigController;
+
+    this.setupGarageCrossbar();
+    this.setupPauseDeathSuccessCrossbars();
+  }
+
+  /**
+   * Ship Garage (Task I): 3 categories — HULL (7 models), SKIN (12 textures),
+   * PAINT (7 presets + a `kind:'focus'` custom-color item). onConfirm reuses
+   * selectModelInPicker/selectTextureInPicker/selectColorInPicker directly —
+   * the same functions the legacy click listeners in setupUIListeners call —
+   * so equipping via mouse/touch and via the crossbar both go through one
+   * code path. Each category has its own item-track DOM subtree
+   * (garage-item-track-hull/-skin/-paint, the options differ in shape: model
+   * name vs texture swatch vs color swatch), so handleDirection is wrapped
+   * the same way setupXmbMenus() does for the main menu's PLAY/EXTRAS tracks,
+   * to swap which track is mounted/visible on horizontal category change.
+   */
+  setupGarageCrossbar() {
+    const garageCategoryEls = {
+      hull: document.querySelector('#garage-category-track [data-category="hull"]'),
+      skin: document.querySelector('#garage-category-track [data-category="skin"]'),
+      paint: document.querySelector('#garage-category-track [data-category="paint"]')
+    };
+
+    const garageItemTracksByCategory = {
+      hull: document.getElementById('garage-item-track-hull'),
+      skin: document.getElementById('garage-item-track-skin'),
+      paint: document.getElementById('garage-item-track-paint')
+    };
+
+    const colorPickerInput = document.getElementById('ship-color-picker');
+    const modelOptionEls = Array.from(document.querySelectorAll('#garage-item-track-hull .model-option'));
+    const textureOptionEls = Array.from(document.querySelectorAll('#garage-item-track-skin .texture-option'));
+    const presetOptionEls = Array.from(document.querySelectorAll('#garage-item-track-paint .color-preset-option'));
+    const paintConfig = garageConfig.categories.find(c => c.id === 'paint');
+
+    // actionKey -> handler, resolved by matching each config item to its DOM
+    // element in array order (both menuConfig.js's HULL_MODELS/SKIN_TEXTURES/
+    // PAINT_PRESETS lists and the index.html markup were authored in the same
+    // order), then reading that element's data-model/data-skin/data-color
+    // attribute — avoids hand-writing 26 one-off id-to-handler entries while
+    // still calling the exact same picker functions the old click listeners use.
+    const garageActionHandlers = {};
+    garageConfig.categories.find(c => c.id === 'hull').items.forEach((item, idx) => {
+      const el = modelOptionEls[idx];
+      if (!el) return;
+      const modelName = el.getAttribute('data-model');
+      garageActionHandlers[item.actionKey] = () => {
+        gameAudio.playClick();
+        this.selectModelInPicker(modelName);
+      };
+    });
+    garageConfig.categories.find(c => c.id === 'skin').items.forEach((item, idx) => {
+      const el = textureOptionEls[idx];
+      if (!el) return;
+      const skinName = el.getAttribute('data-skin');
+      garageActionHandlers[item.actionKey] = () => {
+        gameAudio.playClick();
+        this.selectTextureInPicker(skinName);
+      };
+    });
+    paintConfig.items.forEach((item, idx) => {
+      if (item.kind === 'focus') return; // the trailing "Custom Color" item, handled below
+      const el = presetOptionEls[idx];
+      if (!el) return;
+      const color = el.getAttribute('data-color');
+      garageActionHandlers[item.actionKey] = () => {
+        gameAudio.playClick();
+        this.selectColorInPicker(color);
+      };
+    });
+
+    // Custom color item: delegates focus to the real native <input type=color>
+    // instead of applying a value itself — clicking it opens the OS color
+    // dialog, and that input's own 'input' listener (set up in
+    // setupUIListeners, untouched) still calls selectColorInPicker on every
+    // native color change, exactly as it did before this port.
+    garageActionHandlers['open-custom-color-picker'] = () => {
+      gameAudio.playClick();
+      if (colorPickerInput) colorPickerInput.click();
+    };
+
+    const garageItemEls = { hull: {}, skin: {}, paint: {} };
+    garageConfig.categories.find(c => c.id === 'hull').items.forEach((item, idx) => {
+      garageItemEls.hull[item.id] = modelOptionEls[idx] || null;
+    });
+    garageConfig.categories.find(c => c.id === 'skin').items.forEach((item, idx) => {
+      garageItemEls.skin[item.id] = textureOptionEls[idx] || null;
+    });
+    paintConfig.items.forEach((item, idx) => {
+      garageItemEls.paint[item.id] = item.kind === 'focus'
+        ? document.getElementById('garage-custom-color-item')
+        : (presetOptionEls[idx] || null);
+    });
+
+    const garageConfigWired = {
+      categories: garageConfig.categories.map(cat => ({
+        ...cat,
+        el: garageCategoryEls[cat.id] || null,
+        items: cat.items.map(item => ({
+          ...item,
+          el: garageItemEls[cat.id] ? garageItemEls[cat.id][item.id] : null,
+          onConfirm: garageActionHandlers[item.actionKey]
+        }))
+      }))
+    };
+
+    // Bake a persistent NAME into each garage row (thumb + name), like Level
+    // Select bakes its decade labels, so every option's name is always visible
+    // in the vertical list (not just the focused one). Prefer the element's
+    // descriptive `title` (e.g. skins) over the raw config id.
+    garageConfigWired.categories.forEach(cat => {
+      cat.items.forEach(item => {
+        const el = item.el;
+        if (!el) return;
+        // PAINT presets carry their colour as the ROW's own inline background;
+        // move it into a small swatch thumb so the row reads as [swatch][name]
+        // instead of a full-width colour bar.
+        const dataColor = el.getAttribute('data-color');
+        if (dataColor) {
+          el.style.background = '';
+          el.style.border = '';
+          if (!el.querySelector('.garage-item-thumb')) {
+            const sw = document.createElement('span');
+            sw.className = 'xmb-item-thumb garage-item-thumb';
+            sw.style.background = dataColor;
+            el.insertBefore(sw, el.firstChild);
+          }
+        }
+        if (el.querySelector('.garage-item-name')) return;
+        const name = el.getAttribute('title') || item.label || item.id || '';
+        const span = document.createElement('span');
+        span.className = 'garage-item-name';
+        span.textContent = name;
+        el.appendChild(span);
+      });
+    });
+
+    const garageController = new CrossbarController(garageConfigWired, {
+      categoryTrackEl: document.getElementById('garage-category-track'),
+      itemTrackEl: garageItemTracksByCategory.hull
+      // vertical list now (was a grid) → standard distance-fade applies
+    });
+
+    // Same per-category item-track swap pattern as the main menu's PLAY/EXTRAS
+    // tracks in setupXmbMenus() above.
+    const syncGarageItemTrack = () => {
+      const activeCat = garageController.activeCategory;
+      Object.entries(garageItemTracksByCategory).forEach(([catId, trackEl]) => {
+        if (!trackEl) return;
+        trackEl.classList.toggle('hidden', !activeCat || activeCat.id !== catId);
+      });
+      garageController.mount(
+        document.getElementById('garage-category-track'),
+        activeCat ? garageItemTracksByCategory[activeCat.id] : null
+      );
+    };
+    syncGarageItemTrack();
+    const originalGarageHandleDirection = garageController.handleDirection.bind(garageController);
+    garageController.handleDirection = (axis, dir) => {
+      originalGarageHandleDirection(axis, dir);
+      if (axis === 'horizontal') syncGarageItemTrack();
+    };
+    this.wireCategoryClicks(garageController);
+
+    garageController._updateLabels();
+    garageController.render(performance.now());
+    this.crossbarControllers['ship-picker-screen'] = garageController;
+    this._garageController = garageController;
+  }
+
+  /**
+   * Task E: Pause / Death / Success screens — all three are single-category
+   * vertical lists (horizontal axis never moves), same engine as how-to-screen.
+   * Each onConfirm calls the exact same function the legacy click listener in
+   * setupUIListeners() calls (no synthetic .click()), except where noted.
+   *
+   * Death-screen special case: the rewind mechanic hides the whole vertical
+   * item list for the first few seconds after death (see handleDeath()), which
+   * used to query `.menu-buttons`; that query now targets `.xmb-item-track`
+   * (see handleDeath()'s `deathButtons` lookup).
+   *
+   * Success-screen special case: the initials `<input>` is a native text
+   * field, not a crossbar item. It is intentionally NOT added to the item
+   * list — the existing `document.activeElement.tagName === 'INPUT'` guard
+   * (top of handleCrossbarKeyboard / handleMenuKeyboard) already lets focus
+   * "fall through" to native input behavior, including Enter-to-submit via
+   * btn-score-submit, whether the user reached the input by mouse click or
+   * Tab. No focus-delegation item is needed since nothing in the crossbar
+   * list needs to hand off to it — clicking/tapping the input still works
+   * exactly as before.
+   */
+  setupPauseDeathSuccessCrossbars() {
+    // Pause screen
+    const pauseConfig = {
+      categories: [{
+        id: 'pause',
+        label: 'PAUSED',
+        items: [
+          { id: 'resume', label: 'Resume', kind: 'action', el: document.getElementById('btn-pause-resume'), onConfirm: () => { gameAudio.playClick(); this.resumeGame(); } },
+          { id: 'retry', label: 'Retry', kind: 'action', el: document.getElementById('btn-pause-retry'), onConfirm: () => { gameAudio.playClick(); this.startLevel(this.currentLevelIndex); } },
+          { id: 'boat-throttle', label: 'Boat Throttle', kind: 'action', el: document.getElementById('btn-pause-toggle-boat-throttle'), onConfirm: () => {
+              gameAudio.playClick();
+              this.physics.boatThrottleEnabled = !this.physics.boatThrottleEnabled;
+              localStorage.setItem('skyroads_boat_throttle', this.physics.boatThrottleEnabled);
+              this.updateBoatThrottleToggleBtn();
+            } },
+          { id: 'reset-level', label: 'Reset Level Edits', kind: 'action', el: document.getElementById('btn-pause-reset-level'), onConfirm: () => {
+              gameAudio.playClick();
+              if (confirm("Reset all edits to this level? This cannot be undone.")) {
+                InGameEditor.resetLevelOverrides(this, this.currentPack, this.currentLevelIndex);
+                this.resumeGame();
+                this.startLevel(this.currentLevelIndex);
+              }
+            } },
+          { id: 'quit', label: 'Quit to Main Menu', kind: 'action', el: document.getElementById('btn-pause-quit'), onConfirm: () => { gameAudio.playClick(); this.returnToMenu(); } }
+        ]
+      }]
+    };
+    const pauseController = new CrossbarController(pauseConfig, {
+      itemTrackEl: document.getElementById('pause-xmb-item-track')
+    });
+    pauseController._updateLabels();
+    pauseController.render(performance.now());
+    this.crossbarControllers['pause-screen'] = pauseController;
+
+    // Death screen
+    const deathConfig = {
+      categories: [{
+        id: 'death',
+        label: 'YOU DIED',
+        items: [
+          { id: 'retry', label: 'Try Again', kind: 'action', el: document.getElementById('btn-death-retry'), onConfirm: () => { gameAudio.playClick(); this.startLevel(this.currentLevelIndex); } },
+          { id: 'menu', label: 'Back to Menu', kind: 'action', el: document.getElementById('btn-death-menu'), onConfirm: () => { gameAudio.playClick(); this.returnToMenu(); } }
+        ]
+      }]
+    };
+    const deathController = new CrossbarController(deathConfig, {
+      itemTrackEl: document.getElementById('death-xmb-item-track')
+    });
+    deathController._updateLabels();
+    deathController.render(performance.now());
+    this.crossbarControllers['death-screen'] = deathController;
+
+    // Success screen: item set is rebuilt fresh in handleSuccess() each time
+    // (NEXT ROAD is conditionally hidden on the last level of a pack), so the
+    // controller itself is (re)constructed there, not here. See handleSuccess().
+  }
+
+  /**
+   * Returns the CrossbarController for the currently active overlay screen,
+   * or undefined if that screen hasn't been ported to the XMB engine yet.
+   * Single lookup point so later ports (Task E-I) just need to populate
+   * this.crossbarControllers[screenId] in their own setup method — no
+   * changes needed here or at the keyboard/gamepad dispatch sites.
+   */
+  getActiveCrossbarController() {
+    const activeScreen = document.querySelector('.overlay-screen.active');
+    if (!activeScreen) return undefined;
+    return this.crossbarControllers[activeScreen.id];
+  }
+
+  /** Lets the user drag the Physics Calibrator window by its title bar.
+   *  (It's also CSS-resizable from its bottom-right corner.) */
+  _makeCalibratorDraggable() {
+    const panel = document.getElementById('physics-calibrator-screen');
+    const handle = panel && panel.querySelector('.status-title');
+    if (!panel || !handle) return;
+    let startX = 0, startY = 0, originLeft = 0, originTop = 0, dragging = false;
+    handle.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      const r = panel.getBoundingClientRect();
+      originLeft = r.left; originTop = r.top;
+      startX = e.clientX; startY = e.clientY;
+      panel.style.right = 'auto'; panel.style.bottom = 'auto';
+      handle.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const left = Math.max(0, Math.min(window.innerWidth - 60, originLeft + (e.clientX - startX)));
+      const top = Math.max(0, Math.min(window.innerHeight - 40, originTop + (e.clientY - startY)));
+      panel.style.left = left + 'px';
+      panel.style.top = top + 'px';
+    });
+    const end = (e) => { if (dragging) { dragging = false; try { handle.releasePointerCapture(e.pointerId); } catch (_) {} } };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  }
+
+  /** Makes the category labels clickable (mouse) — clicking a category jumps to
+   *  it. Goes through the controller's (already sync-wrapped) handleDirection so
+   *  the per-category item-track swap fires too. Call after the handleDirection
+   *  wrap is installed in a setup. */
+  wireCategoryClicks(ctrl) {
+    (ctrl.config.categories || []).forEach((cat, i) => {
+      if (!cat.el) return;
+      cat.el.addEventListener('click', () => {
+        const dir = i > ctrl.categoryIndex ? 1 : -1;
+        while (ctrl.categoryIndex !== i) {
+          const before = ctrl.categoryIndex;
+          ctrl.handleDirection('horizontal', dir);
+          if (ctrl.categoryIndex === before) break; // guard against no-op (e.g. slider trap)
+        }
+      });
+    });
+  }
+
+  /**
+   * Routes one keydown event into a CrossbarController's tap/hold API.
+   * Arrow keys + WASD map to the four directions; native OS key-repeat
+   * keydowns (e.repeat === true) are ignored because startHold() already
+   * owns the repeat timing (immediate step -> 200ms -> fixed-rate) — letting
+   * both fire would double the repeat rate. Enter/Space confirm, Escape cancels
+   * and hands off to the screen's existing back/close button (same as the
+   * legacy gp.menuCancel path) since cancel() on the controller only plays
+   * the sound, it doesn't navigate.
+   */
+  handleCrossbarKeyboard(e, crossbar) {
+    // While remapping a gamepad button ("press any button"), don't let arrow
+    // keys navigate away from the listening row.
+    if (this.keyboard && this.keyboard.currentlyMappingAction) return;
+
+    if (typeof document !== 'undefined' && document.activeElement &&
+        (document.activeElement.tagName === 'INPUT' ||
+         document.activeElement.tagName === 'TEXTAREA' ||
+         document.activeElement.tagName === 'SELECT')) {
+      // Preserve the success-screen behavior: Enter in the initials field
+      // submits the score (the crossbar never sees the keystroke otherwise).
+      if (e.code === 'Enter' && document.activeElement.id === 'input-score-initials') {
+        e.preventDefault();
+        const submitBtn = document.getElementById('btn-score-submit');
+        if (submitBtn) submitBtn.click();
+      }
+      return;
+    }
+
+    const directionForCode = {
+      ArrowUp: ['vertical', -1], KeyW: ['vertical', -1],
+      ArrowDown: ['vertical', 1], KeyS: ['vertical', 1],
+      ArrowLeft: ['horizontal', -1], KeyA: ['horizontal', -1],
+      ArrowRight: ['horizontal', 1], KeyD: ['horizontal', 1]
+    };
+
+    if (directionForCode[e.code]) {
+      e.preventDefault();
+      if (e.repeat) return; // startHold()'s own timers own the repeat cadence
+      const [axis, dir] = directionForCode[e.code];
+      crossbar.startHold(axis, dir);
+      return;
+    }
+
+    if (e.code === 'Enter' || e.code === 'Space') {
+      e.preventDefault();
+      if (e.repeat) return;
+      crossbar.confirm();
+      return;
+    }
+
+    if (e.code === 'Escape') {
+      e.preventDefault();
+      if (e.repeat) return;
+      crossbar.cancel();
+      this._cancelActiveScreen();
+    }
+  }
+
+  /** Clicks the back/close button of the active overlay screen, so Escape /
+   *  gamepad-cancel actually navigate back (crossbar.cancel() only plays the
+   *  sound). Shared by the keyboard and gamepad cancel paths. */
+  _cancelActiveScreen() {
+    const activeScreen = document.querySelector('.overlay-screen.active');
+    if (!activeScreen) return;
+    const backButtons = {
+      'settings-screen': 'btn-settings-close',
+      'gamepad-config-screen': 'btn-gamepad-close',
+      'level-screen': 'btn-level-back',
+      'ship-picker-screen': 'btn-picker-back',
+      'how-to-screen': 'btn-how-to-back',
+      'death-screen': 'btn-death-menu',
+      'success-screen': 'btn-success-menu',
+      'pause-screen': 'btn-pause-resume'
+    };
+    const btnId = backButtons[activeScreen.id];
+    if (btnId) {
+      const btn = document.getElementById(btnId);
+      if (btn) btn.click();
     }
   }
 
@@ -1156,16 +2166,7 @@ class GameManager {
       this.returnToMenu();
     });
 
-    document.getElementById('btn-success-next').addEventListener('click', () => {
-      gameAudio.playClick();
-      const nextIdx = this.currentLevelIndex + 1;
-      const packLevels = getCachedPack(this.currentPack);
-      if (nextIdx < packLevels.length) {
-        this.startLevel(nextIdx);
-      } else {
-        this.returnToMenu();
-      }
-    });
+    document.getElementById('btn-success-next').addEventListener('click', () => this.goToNextRoadOrMenu());
 
     document.getElementById('btn-success-menu').addEventListener('click', () => {
       gameAudio.playClick();
@@ -1207,21 +2208,7 @@ class GameManager {
     // Start Infinite Road Mode
     const btnStartInfinite = document.getElementById('btn-start-infinite');
     if (btnStartInfinite) {
-      btnStartInfinite.addEventListener('click', async () => {
-        gameAudio.playClick();
-        this.isInfiniteMode = true;
-        this.infiniteZOffset = 0;
-        
-        let packLevels = getCachedPack(this.currentPack);
-        if (!packLevels) {
-          packLevels = await loadLevelPack(this.currentPack);
-        }
-        
-        const randomStartIdx = (packLevels && packLevels.length > 0)
-          ? Math.floor(Math.random() * packLevels.length)
-          : 0;
-        this.startLevel(randomStartIdx);
-      });
+      btnStartInfinite.addEventListener('click', () => this.startInfiniteRoad());
     }
 
     // Settings Menu Listeners
@@ -1296,50 +2283,6 @@ class GameManager {
       });
     }
 
-    const btnSettingsMusic = document.getElementById('btn-settings-music');
-    if (btnSettingsMusic) {
-      btnSettingsMusic.addEventListener('click', () => {
-        gameAudio.playClick();
-        if (gameAudio.musicSequencer) {
-          const isEnabled = !gameAudio.musicSequencer.musicEnabled;
-          gameAudio.setMusicEnabled(isEnabled);
-          localStorage.setItem('skyroads_music_play', isEnabled);
-          this.updateMusicToggleBtn();
-        }
-      });
-    }
-
-    const btnSettingsSoundMode = document.getElementById('btn-settings-sound-mode');
-    if (btnSettingsSoundMode) {
-      btnSettingsSoundMode.addEventListener('click', () => {
-        gameAudio.playClick();
-        const currentMode = gameAudio.soundMode || 'synth';
-        const nextMode = currentMode === 'synth' ? 'classic' : currentMode === 'classic' ? 'synthwave' : 'synth';
-        gameAudio.setSoundMode(nextMode);
-        localStorage.setItem('skyroads_sound_mode', nextMode);
-        this.updateSoundModeToggleBtn();
-        this.updateNextTrackBtnText();
-      });
-    }
-
-    const btnSettingsNextTrack = document.getElementById('btn-settings-next-track');
-    if (btnSettingsNextTrack) {
-      btnSettingsNextTrack.addEventListener('click', () => {
-        gameAudio.playClick();
-        gameAudio.nextTrack();
-        this.updateNextTrackBtnText();
-      });
-    }
-
-    const sliderMusicVolume = document.getElementById('slider-settings-music-volume');
-    if (sliderMusicVolume) {
-      sliderMusicVolume.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value) / 100;
-        gameAudio.setMusicVolume(val);
-        localStorage.setItem('skyroads_music_volume', val);
-      });
-    }
-
     const sliderSfxVolume = document.getElementById('slider-settings-sfx-volume');
     if (sliderSfxVolume) {
       sliderSfxVolume.addEventListener('input', (e) => {
@@ -1356,6 +2299,99 @@ class GameManager {
         this.keyboard.mouseControlsEnabled = !this.keyboard.mouseControlsEnabled;
         localStorage.setItem('skyroads_mouse_play', this.keyboard.mouseControlsEnabled);
         this.updateMouseToggleBtn();
+      });
+    }
+
+    const btnSettingsStarfield = document.getElementById('btn-settings-starfield');
+    if (btnSettingsStarfield) {
+      btnSettingsStarfield.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.starfieldEnabled = !this.starfieldEnabled;
+        if (this.graphics.starField) this.graphics.starField.visible = this.starfieldEnabled;
+        localStorage.setItem('skyroads_starfield_enabled', this.starfieldEnabled);
+        this.updateStarfieldToggleBtn();
+      });
+    }
+
+    const btnSettingsSpeedFov = document.getElementById('btn-settings-speed-fov');
+    if (btnSettingsSpeedFov) {
+      btnSettingsSpeedFov.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.speedFovEnabled = !this.speedFovEnabled;
+        this.graphics.setSpeedFovEnabled(this.speedFovEnabled);
+        localStorage.setItem('skyroads_speed_fov_enabled', this.speedFovEnabled);
+        this.updateSpeedFovToggleBtn();
+      });
+    }
+
+    const btnSettingsGhost = document.getElementById('btn-settings-ghost');
+    if (btnSettingsGhost) {
+      btnSettingsGhost.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.ghostEnabled = !this.ghostEnabled;
+        localStorage.setItem('skyroads_ghost_enabled', this.ghostEnabled);
+        if (!this.ghostEnabled) {
+          this.graphics.setGhostVisible(false);
+        } else if (this.loadedGhost) {
+          this.graphics.setGhostVisible(true);
+        }
+        this.updateGhostToggleBtn();
+      });
+    }
+
+    const btnSettingsVisualizerMode = document.getElementById('btn-settings-visualizer-mode');
+    if (btnSettingsVisualizerMode) {
+      btnSettingsVisualizerMode.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.visualizerWallMode = !this.visualizerWallMode;
+        localStorage.setItem('skyroads_visualizer_wall_mode', this.visualizerWallMode);
+        this.graphics.setVisualizerWallMode(this.visualizerWallMode);
+        this.updateVisualizerModeBtn();
+      });
+    }
+
+    const sliderWallAngle = document.getElementById('slider-settings-wall-angle');
+    if (sliderWallAngle) {
+      sliderWallAngle.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.graphics.setVisualizerWallParams({ angleDeg: val });
+        localStorage.setItem('skyroads_wall_angle', val);
+      });
+    }
+
+    const sliderWallSpread = document.getElementById('slider-settings-wall-spread');
+    if (sliderWallSpread) {
+      sliderWallSpread.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.graphics.setVisualizerWallParams({ halfTrack: val });
+        localStorage.setItem('skyroads_wall_spread', val);
+      });
+    }
+
+    const sliderWallHeight = document.getElementById('slider-settings-wall-height');
+    if (sliderWallHeight) {
+      sliderWallHeight.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.graphics.setVisualizerWallParams({ height: val });
+        localStorage.setItem('skyroads_wall_height', val);
+      });
+    }
+
+    const sliderStarSize = document.getElementById('slider-settings-star-size');
+    if (sliderStarSize) {
+      sliderStarSize.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value) / 100;
+        this.graphics.setStarSize(val);
+        localStorage.setItem('skyroads_star_size', val);
+      });
+    }
+
+    const sliderStarDensity = document.getElementById('slider-settings-star-density');
+    if (sliderStarDensity) {
+      sliderStarDensity.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.graphics.setStarDensity(val); // preserves current visibility internally
+        localStorage.setItem('skyroads_star_density', val);
       });
     }
 
@@ -1485,15 +2521,7 @@ class GameManager {
     gamepadActions.forEach(action => {
       const btn = document.getElementById(`btn-map-${action}`);
       if (btn) {
-        btn.addEventListener('click', () => {
-          gameAudio.playClick();
-          // Put the selected action into mapping state
-          this.keyboard.currentlyMappingAction = action;
-          // Clear text to show listening state
-          btn.innerText = '[ PRESS ANY BUTTON... ]';
-          btn.classList.remove('btn-glow');
-          btn.classList.add('btn-danger'); // red styling indicating recording
-        });
+        btn.addEventListener('click', () => this.startGamepadRemap(action));
       }
     });
 
@@ -1509,7 +2537,6 @@ class GameManager {
           if (this.preSettingsState === 'playing') {
             this.gameState = 'playing';
             gameAudio.startEngine();
-            gameAudio.startMusic(true, this.currentLevelIndex);
           } else {
             this.gameState = this.preSettingsState;
           }
@@ -1568,7 +2595,7 @@ class GameManager {
       btnCalibratorReset.addEventListener('click', () => {
         gameAudio.playClick();
         const basePresets = {
-          vga: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 25, dragSteer: 18, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0 },
+          vga: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 12.0, steerAccel: 50.0, dragSteer: 40.0, laneSnapStrength: 4.0, easyCollisionBounceVel: 5.0, easyCollisionBounceDist: 0.8, bounceFactor: 1.0, jumpImpulse: 11.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0 },
           snappy: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.25, gravityFactor: 1.45, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0 },
           lunar: { maxSpeedNormal: 24, maxSpeedBoost: 50, accelForward: 12, decelBrakes: 25, dragZ: 2, maxSteerSpeed: 8, steerAccel: 15, dragSteer: 8, laneSnapStrength: 4.0, easyCollisionBounceVel: 8, easyCollisionBounceDist: 1.5, bounceFactor: 1.5, jumpImpulse: 7.5, jumpFactor: 1.0, gravityFactor: 0.45, fallGravityMultiplier: 1.15, variableJumpDampening: 0.90, coyoteTimeBuffer: 0.40, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0 },
           custom: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0 }
@@ -1610,6 +2637,41 @@ class GameManager {
         }
         localStorage.setItem('skyroads_physics_active_preset', this.activePreset);
 
+        // Collect all preference keys to save to disk via backend API
+        const keysToSave = [
+          'skyroads_camera_mode',
+          'skyroads_mouse_play',
+          'skyroads_lane_snap',
+          'skyroads_double_jump',
+          'skyroads_boat_throttle',
+          'skyroads_stick_throttle',
+          'skyroads_difficulty',
+          'skyroads_physics_active_preset',
+          'skyroads_physics_preset_baseline_vga',
+          'skyroads_physics_preset_baseline_snappy',
+          'skyroads_physics_preset_baseline_lunar',
+          'skyroads_physics_preset_baseline_custom'
+        ];
+
+        const payload = {};
+        for (const key of keysToSave) {
+          const val = localStorage.getItem(key);
+          if (val !== null) {
+            payload[key] = val;
+          }
+        }
+
+        // Send payload to backend server
+        fetch('/api/save-settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        }).catch(err => {
+          console.error("Failed to write defaults to disk:", err);
+        });
+
         // Show success visual indicator alert inside HUD
         this.showCalibratorAlert();
         
@@ -1641,7 +2703,7 @@ class GameManager {
         localStorage.setItem(`skyroads_physics_preset_${this.activePreset}`, JSON.stringify(this.physicsPresets[this.activePreset]));
         
         // Apply camera-specific params directly to graphics
-        if (param === 'cameraHeight' || param === 'cameraPitchDeg' || param === 'cameraFOV') {
+        if (param === 'cameraHeight' || param === 'cameraPitchDeg' || param === 'cameraFOV' || param === 'cockpitFov') {
           this._applyCameraSettings(this.physicsPresets[this.activePreset]);
         }
 
@@ -1652,7 +2714,7 @@ class GameManager {
             readout.innerText = value === 1 ? 'ON' : 'OFF';
           } else if (param === 'cameraPitchDeg') {
             readout.innerText = `${Math.round(value)}°`;
-          } else if (param === 'cameraFOV') {
+          } else if (param === 'cameraFOV' || param === 'cockpitFov') {
             readout.innerText = `${Math.round(value)}°`;
           } else if (param === 'cameraHeight') {
             readout.innerText = value.toFixed(2);
@@ -1719,13 +2781,8 @@ class GameManager {
       });
     }
 
-    const btnInGamePause = document.getElementById('btn-in-game-pause');
-    if (btnInGamePause) {
-      btnInGamePause.addEventListener('click', () => {
-        gameAudio.playClick();
-        this.pauseGame();
-      });
-    }
+    // (In-game pause trigger button removed — the Settings gear pauses the game
+    // and its menu offers Resume / Retry / Quit; Esc still pauses too.)
 
     // Deprecated multi-layout toggle removed for single unified premium layout
 
@@ -1762,6 +2819,16 @@ class GameManager {
   }
 
   showScreen(screenId) {
+    // Toggle top-right HUD visibility based on active screen and game state
+    const topRightHud = document.getElementById('top-right-hud');
+    if (topRightHud) {
+      if (!screenId && this.gameState === 'playing') {
+        topRightHud.classList.remove('hidden');
+      } else {
+        topRightHud.classList.add('hidden');
+      }
+    }
+
     // Hide all overlay screens
     const screens = document.querySelectorAll('.overlay-screen');
     screens.forEach(s => s.classList.remove('active'));
@@ -1804,15 +2871,44 @@ class GameManager {
     target.offsetHeight;
     target.classList.add('active');
 
+    // Settings crossbar is rebuilt on every open (paused-only rows vary by state).
+    if (screenId === 'settings-screen') this.mountSettingsCrossbar();
+
     // Reset and auto-focus the first visible button for keyboard menu navigation
-    this.selectedMenuIndex = 0;
-    setTimeout(() => {
-      let buttons = Array.from(target.querySelectorAll('.btn, .level-item, .skin-option'));
-      buttons = buttons.filter(btn => !btn.classList.contains('hidden') && btn.style.display !== 'none');
-      if (buttons.length > 0) {
-        this.highlightMenuButton(buttons);
-      }
-    }, 50);
+    // Legacy auto-focus only for screens without an XMB controller; ported
+    // screens manage their own focus via the crossbar (avoids a stray
+    // keyboard-focused highlight that doesn't track the crossbar's item).
+    if (!this.crossbarControllers[screenId]) {
+      this.selectedMenuIndex = 0;
+      setTimeout(() => {
+        let buttons = Array.from(target.querySelectorAll('.btn, .level-item, .skin-option'));
+        buttons = buttons.filter(btn => !btn.classList.contains('hidden') && btn.style.display !== 'none');
+        if (buttons.length > 0) {
+          this.highlightMenuButton(buttons);
+        }
+      }, 50);
+    }
+  }
+
+  async startInfiniteRoad() {
+    gameAudio.playClick();
+    this.isInfiniteMode = true;
+    this.infiniteZOffset = 0;
+    let packLevels = getCachedPack(this.currentPack);
+    if (!packLevels) packLevels = await loadLevelPack(this.currentPack);
+    const randomStartIdx = (packLevels && packLevels.length > 0)
+      ? Math.floor(Math.random() * packLevels.length)
+      : 0;
+    this.startLevel(randomStartIdx);
+  }
+
+  /** Format a completion time (seconds) as m:ss.t for cards/leaderboards. */
+  formatTime(t) {
+    if (t == null || isNaN(t)) return '--:--';
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    const tenths = Math.floor((t * 10) % 10);
+    return `${m}:${String(s).padStart(2, '0')}.${tenths}`;
   }
 
   async showLevelSelection(packName) {
@@ -1833,9 +2929,6 @@ class GameManager {
     const packTitle = packName === 'standard' ? 'STANDARD PACK' : (packName === 'xmas' ? 'XMAS SPECIAL' : 'GENERATED PACK');
     document.getElementById('level-pack-title').innerText = packTitle;
 
-    const grid = document.getElementById('level-grid');
-    grid.innerHTML = ''; // Clear previous
-
     let names;
     if (packName === 'standard') {
       names = [...this.standardRoadNames, ...this.xmasRoadNames];
@@ -1845,39 +2938,156 @@ class GameManager {
       names = this.generatedRoadNames;
     }
 
+    // Build the decade-grouped XMB crossbar: horizontal = "Levels 1-10" etc.,
+    // vertical = the (<=10) levels in that group. buildLevelSelectConfig (tested
+    // in menuConfig) does the group-of-10 math; we just attach DOM + onConfirm.
+    const labels = levels.map((_, idx) => names[idx] || `ROAD ${idx}`);
+    const cfg = buildLevelSelectConfig(labels);
+    // Infinite Road is the first item of the first decade group (replaces the
+    // old standalone START INFINITE ROAD button).
+    if (cfg.categories[0]) {
+      cfg.categories[0].items.unshift({ id: 'infinite', label: 'INFINITE ROAD', kind: 'action', infinite: true });
+    }
+    const catTrack = document.getElementById('level-category-track');
+    const crossbar = document.getElementById('level-crossbar');
+    catTrack.innerHTML = '';
+    crossbar.querySelectorAll('.level-item-track-dyn').forEach(el => el.remove());
+    const placeholder = document.getElementById('level-item-track');
+    if (placeholder) placeholder.classList.add('hidden'); // replaced by per-decade tracks
 
-    levels.forEach((level, idx) => {
-      const btn = document.createElement('div');
-      btn.className = 'level-item';
-      
-      const numLabel = document.createElement('div');
-      numLabel.className = 'level-num';
-      numLabel.innerText = idx;
-      
-      const nameLabel = document.createElement('div');
-      nameLabel.className = 'level-name';
-      nameLabel.innerText = names[idx] || `ROAD ${idx}`;
+    const tracks = {};
+    cfg.categories.forEach((cat, ci) => {
+      const catEl = document.createElement('div');
+      catEl.className = 'xmb-category';
+      catEl.textContent = cat.label; // bake all decade labels so every group is
+                                     // visible in the bar, not just the active one
+      cat.label = ''; // engine should not append a duplicate label span
+      catTrack.appendChild(catEl);
+      cat.el = catEl;
 
-      btn.appendChild(numLabel);
-      btn.appendChild(nameLabel);
+      const track = document.createElement('div');
+      track.className = 'xmb-item-track level-item-track-dyn' + (ci === 0 ? '' : ' hidden');
+      crossbar.appendChild(track);
+      tracks[ci] = track;
 
-      // Render persistent personal best score badge if achieved
-      const bestScoreKey = `skyroads_best_score_${packName}_${idx}`;
-      const bestScore = localStorage.getItem(bestScoreKey);
-      if (bestScore) {
-        const scoreBadge = document.createElement('div');
-        scoreBadge.className = 'level-best-score';
-        scoreBadge.innerText = `🏆 ${parseInt(bestScore, 10).toLocaleString()}`;
-        btn.appendChild(scoreBadge);
+      cat.items.forEach(item => {
+        const btn = document.createElement('div');
+        btn.className = 'level-item xmb-item';
+
+        if (item.infinite) {
+          // Special first-item: Infinite Road. NOT a `.level-item` (it's not a
+          // numbered level) so level counts/first-level logic stay correct.
+          btn.className = 'xmb-item level-item-infinite';
+          const numLabel = document.createElement('div');
+          numLabel.className = 'level-num';
+          numLabel.innerText = '∞';
+          const nameLabel = document.createElement('div');
+          nameLabel.className = 'level-name';
+          nameLabel.innerText = 'INFINITE ROAD';
+          btn.appendChild(numLabel);
+          btn.appendChild(nameLabel);
+          const start = () => this.startInfiniteRoad();
+          btn.addEventListener('click', start);
+          item.el = btn;
+          item.label = '';
+          item.onConfirm = start;
+          track.appendChild(btn);
+          return;
+        }
+
+        const absIdx = parseInt(item.actionKey.replace('play-level-', ''), 10);
+        const numLabel = document.createElement('div');
+        numLabel.className = 'level-num';
+        numLabel.innerText = absIdx;
+        const nameLabel = document.createElement('div');
+        nameLabel.className = 'level-name';
+        nameLabel.innerText = labels[absIdx];
+        btn.appendChild(numLabel);
+        btn.appendChild(nameLabel);
+
+        const bestScore = localStorage.getItem(`skyroads_best_score_${packName}_${absIdx}`);
+        if (bestScore) {
+          const scoreBadge = document.createElement('div');
+          scoreBadge.className = 'level-best-score';
+          scoreBadge.innerText = `🏆 ${parseInt(bestScore, 10).toLocaleString()}`;
+          btn.appendChild(scoreBadge);
+        }
+
+        const start = () => { gameAudio.playClick(); this.startLevel(absIdx); };
+        btn.addEventListener('click', start); // mouse/touch still works
+        item.el = btn;
+        item.label = ''; // the button carries its own num/name; no duplicate label span
+        item.onConfirm = start;
+        track.appendChild(btn);
+      });
+    });
+
+    if (this.crossbarControllers['level-screen']) this.crossbarControllers['level-screen'].destroy();
+    const ctrl = new CrossbarController(cfg, { categoryTrackEl: catTrack, itemTrackEl: tracks[0], leftAlignItems: true });
+
+    // Live title card: refreshes for the focused item (name + screenshot +
+    // top-5 times). Reuses the existing score leaderboard store; the screenshot
+    // degrades gracefully when a thumb hasn't been generated yet.
+    const cardEl = document.getElementById('level-title-card');
+    const updateTitleCard = () => {
+      if (!cardEl) return;
+      const item = ctrl.activeItem;
+      const nameEl = cardEl.querySelector('.ltc-name');
+      const shotWrap = cardEl.querySelector('.ltc-shot-wrap');
+      const shotImg = cardEl.querySelector('.ltc-shot');
+      const tbody = cardEl.querySelector('.ltc-times tbody');
+      cardEl.classList.remove('hidden');
+
+      const isLevel = item && item.actionKey && item.actionKey.startsWith('play-level-');
+      if (!isLevel) {
+        nameEl.textContent = item && item.infinite ? 'INFINITE ROAD' : '—';
+        shotWrap.classList.add('no-shot');
+        shotImg.removeAttribute('src');
+        tbody.innerHTML = `<tr><td class="ltc-empty" colspan="4">${item && item.infinite ? 'Endless procedurally-streamed road.' : 'No records yet.'}</td></tr>`;
+        return;
       }
 
-      btn.addEventListener('click', () => {
-        gameAudio.playClick();
-        this.startLevel(idx);
-      });
+      const absIdx = parseInt(item.actionKey.replace('play-level-', ''), 10);
+      nameEl.textContent = labels[absIdx] || `ROAD ${absIdx}`;
 
-      grid.appendChild(btn);
-    });
+      shotWrap.classList.add('no-shot');
+      shotImg.onload = () => shotWrap.classList.remove('no-shot');
+      shotImg.onerror = () => shotWrap.classList.add('no-shot');
+      shotImg.src = `assets/level_thumbs/${packName}_${absIdx}.jpg`;
+
+      let records = [];
+      try {
+        const raw = localStorage.getItem(`skyroads_leaderboard_${packName}_${absIdx}`);
+        if (raw) { const p = JSON.parse(raw); if (Array.isArray(p)) records = p; }
+      } catch (e) { /* ignore corrupt store */ }
+
+      if (records.length === 0) {
+        tbody.innerHTML = `<tr><td class="ltc-empty" colspan="4">No records yet. Be the first!</td></tr>`;
+      } else {
+        tbody.innerHTML = records.slice(0, 5).map((r, i) => `
+          <tr>
+            <td class="ltc-rank">#${i + 1}</td>
+            <td class="ltc-ini">${r.initials || '???'}</td>
+            <td class="ltc-time">${this.formatTime(r.time)}</td>
+            <td class="ltc-score">${(r.score || 0).toLocaleString()}</td>
+          </tr>`).join('');
+      }
+    };
+
+    // Per-decade item-track swap, same pattern as the garage/main-menu ports.
+    const sync = () => {
+      const ai = ctrl.categoryIndex;
+      Object.entries(tracks).forEach(([i, el]) => el.classList.toggle('hidden', Number(i) !== ai));
+      ctrl.mount(catTrack, tracks[ai]);
+    };
+    sync();
+    const orig = ctrl.handleDirection.bind(ctrl);
+    ctrl.handleDirection = (axis, dir) => { orig(axis, dir); if (axis === 'horizontal') sync(); updateTitleCard(); };
+    this.wireCategoryClicks(ctrl);
+    ctrl._updateLabels();
+    ctrl.render(performance.now());
+    updateTitleCard();
+    this.crossbarControllers['level-screen'] = ctrl;
 
     this.showScreen('level-screen');
   }
@@ -1930,11 +3140,36 @@ class GameManager {
     return { spawnX, spawnY, spawnZ };
   }
 
-  async startLevel(index) {
+  async startLevel(index, opts = {}) {
+    if (this.keyboard && typeof this.keyboard.resetKeys === 'function') {
+      this.keyboard.resetKeys();
+    }
+    // Kick off Webamp playback the first time gameplay actually starts — this
+    // call site is guaranteed to run after a real user gesture (a button
+    // click), satisfying browser autoplay-gesture rules.
+    // If Webamp is already playing, do NOT call play() to avoid restarting or reloading it.
+    if (this.webampInstance) {
+      const isPlaying = this.webampInstance.getMediaStatus() === 'PLAYING';
+      if (!isPlaying && !this._webampStarted) {
+        try {
+          this.webampInstance.play();
+          this._webampStarted = true;
+        } catch (err) {
+          console.warn('[Visualizer] Webamp playback could not be started automatically:', err);
+        }
+      } else if (isPlaying) {
+        this._webampStarted = true;
+      }
+    }
+
     if (!this.isInfiniteMode) {
       this.infiniteZOffset = 0;
     }
     this.currentLevelIndex = index;
+
+    // Reset checkpoint system state
+    this.lastCheckpointPassed = null;
+    this.activeCheckpoint = null;
     
     // Check for local storage level overrides
     const storageKey = `skyroads_override_${this.currentPack}_${index}`;
@@ -2022,12 +3257,6 @@ class GameManager {
     const activeThemeIdx = getActiveThemeIndex(this.currentLevelData);
     disposeUnusedThemes(activeThemeIdx);
 
-    // Switch skybox to match theme — texture loads async so it won't block the level build
-    const activeTheme = THEMES[activeThemeIdx];
-    if (activeTheme && activeTheme.key && this.graphics.setThemeSkybox) {
-      this.graphics.setThemeSkybox(activeTheme.key);
-    }
-
     // 2. Build track geometry asynchronously with progress updates
     const onProgress = (percent) => {
       const progressBar = document.getElementById('loading-progress-bar');
@@ -2083,6 +3312,22 @@ class GameManager {
     this.gameState = 'playing';
     this.showScreen(''); // Hide all menus
 
+    // Bot driving (attract mode / idle demo)
+    this._botActive = !!opts.bot;
+    this.autopilot.reset();
+
+    // Ghost recording (this run) + playback (best saved run, if any)
+    this.ghost = new Ghost();
+    this.ghost.startRecording();
+    this.ghostElapsed = 0;
+    this._ghostSampleAccum = 0;
+    this.loadedGhost = Ghost.load(this.currentPack, index);
+    this.graphics.removeGhostMesh();
+    if (this.loadedGhost && this.ghostEnabled) {
+      this.graphics.createGhostMesh();
+      this.graphics.setGhostVisible(true);
+    }
+
     // Toggle Pause Trigger button visibility
     const btnInGamePause = document.getElementById('btn-in-game-pause');
     if (btnInGamePause) btnInGamePause.classList.remove('hidden');
@@ -2096,14 +3341,6 @@ class GameManager {
 
     // 6. Trigger Continuous Sound Hum
     gameAudio.startEngine();
-    // Audio-generated levels carry the synthwave track they were built from — force
-    // synthwave mode + that exact track so the level plays in sync with its music.
-    const forcedTrack = (this.currentLevelData && this.currentLevelData.synthwaveTrack !== undefined)
-      ? this.currentLevelData.synthwaveTrack : null;
-    if (forcedTrack !== null && gameAudio.soundMode !== 'synthwave') {
-      gameAudio.setSoundMode('synthwave');
-    }
-    gameAudio.startMusic(true, this.currentLevelIndex, forcedTrack);
 
     this.lastTime = performance.now();
 
@@ -2112,7 +3349,23 @@ class GameManager {
     }
   }
 
+  // Attract mode: picks a random level from the current pack and starts it bot-driven.
+  // Reuses the same random-index pattern as the "start infinite" button.
+  async _startBotRun() {
+    let packLevels = getCachedPack(this.currentPack);
+    if (!packLevels) {
+      packLevels = await loadLevelPack(this.currentPack);
+    }
+    const randomIdx = (packLevels && packLevels.length > 0)
+      ? Math.floor(Math.random() * packLevels.length)
+      : 0;
+    this.startLevel(randomIdx, { bot: true });
+  }
+
   returnToMenu() {
+    if (this.keyboard && typeof this.keyboard.resetKeys === 'function') {
+      this.keyboard.resetKeys();
+    }
     this.gameState = 'menu';
     document.getElementById('hud').classList.add('hidden');
     
@@ -2121,7 +3374,6 @@ class GameManager {
     if (btnInGamePause) btnInGamePause.classList.add('hidden');
 
     gameAudio.stopEngine();
-    gameAudio.startMusic(false);
     this.showScreen('menu-screen');
   }
 
@@ -2132,6 +3384,15 @@ class GameManager {
     const btnInGamePause = document.getElementById('btn-in-game-pause');
     if (btnInGamePause) btnInGamePause.classList.add('hidden');
     
+    // Reset the pause screen's crossbar itemIndex to 0 (Resume) before showing it
+    const pauseController = this.crossbarControllers['pause-screen'];
+    if (pauseController) {
+      pauseController.itemIndex = 0;
+      pauseController._lastItemIndexByCategory = (pauseController.config.categories || []).map(() => 0);
+      pauseController._updateLabels();
+      pauseController.render(performance.now());
+    }
+
     this.showScreen('pause-screen');
   }
 
@@ -2139,8 +3400,7 @@ class GameManager {
     this.gameState = 'playing';
     this.lastTime = performance.now();
     gameAudio.startEngine();
-    gameAudio.startMusic(true, this.currentLevelIndex);
-    
+
     const btnInGamePause = document.getElementById('btn-in-game-pause');
     if (btnInGamePause) btnInGamePause.classList.remove('hidden');
     
@@ -2153,7 +3413,6 @@ class GameManager {
       if (this.preSettingsState === 'playing') {
         this.gameState = 'playing';
         gameAudio.startEngine();
-        gameAudio.startMusic(true, this.currentLevelIndex);
         this.showScreen('');
       } else {
         this.gameState = this.preSettingsState;
@@ -2165,8 +3424,7 @@ class GameManager {
       gameAudio.stopEngine();
       this.preSettingsState = this.gameState;
       this.gameState = 'settings';
-      this.updateNextTrackBtnText();
-      
+
       // Update Settings popup overlay controls visibility based on gameplay state
       const pausedActions = document.getElementById('settings-paused-actions');
       if (pausedActions) {
@@ -2302,6 +3560,10 @@ class GameManager {
       this._fpsTimeAccum = 0;
     }
 
+    if (this._botActive && this.gameState === 'playing') {
+      this.autopilot.update(dt, this.keyboard, this.physics, this.levelInfo);
+    }
+
     if (this.keyboard && typeof this.keyboard.updateCombinedState === 'function') {
       this.keyboard.updateCombinedState();
     }
@@ -2319,41 +3581,61 @@ class GameManager {
     // Process gamepad menu navigation when not actively playing a level
     if (this.gameState !== 'playing' && this.keyboard && this.keyboard.gamepadConnected && !this.keyboard.currentlyMappingAction) {
       const gp = this.keyboard.gamepad;
-      
-      if (gp.menuDown) {
-        this.handleMenuKeyboard({ code: 'ArrowDown', preventDefault: () => {} });
-      } else if (gp.menuUp) {
-        this.handleMenuKeyboard({ code: 'ArrowUp', preventDefault: () => {} });
-      } else if (gp.menuLeft) {
-        this.handleMenuKeyboard({ code: 'ArrowLeft', preventDefault: () => {} });
-      } else if (gp.menuRight) {
-        this.handleMenuKeyboard({ code: 'ArrowRight', preventDefault: () => {} });
-      }
+      // gp.menu* booleans are edge-triggered (true for exactly one frame per
+      // physical press), so screens ported to the XMB engine get a single
+      // handleDirection()/confirm() call per edge here — there's no
+      // continuous-hold signal from the gamepad poll to feed startHold()/
+      // stopHold(), unlike the keyboard path in handleCrossbarKeyboard().
+      const crossbar = this.getActiveCrossbarController();
 
-      if (gp.menuSelect) {
-        this.handleMenuKeyboard({ code: 'Enter', preventDefault: () => {} });
-      }
+      if (crossbar) {
+        if (gp.menuDown) crossbar.handleDirection('vertical', 1);
+        else if (gp.menuUp) crossbar.handleDirection('vertical', -1);
+        else if (gp.menuLeft) crossbar.handleDirection('horizontal', -1);
+        else if (gp.menuRight) crossbar.handleDirection('horizontal', 1);
 
-      if (gp.menuCancel) {
-        const activeScreen = document.querySelector('.overlay-screen.active');
-        if (activeScreen) {
-          const cancelButtons = {
-            'settings-screen': 'btn-settings-close',
-            'gamepad-config-screen': 'btn-gamepad-close',
-            'level-screen': 'btn-level-back',
-            'ship-picker-screen': 'btn-picker-back',
-            'how-to-screen': 'btn-how-to-back',
-            'death-screen': 'btn-death-menu',
-            'success-screen': 'btn-success-menu',
-            'pause-screen': 'btn-pause-resume'
-          };
-          
-          const btnId = cancelButtons[activeScreen.id];
-          if (btnId) {
-            const btn = document.getElementById(btnId);
-            if (btn) {
-              gameAudio.playClick();
-              btn.click();
+        if (gp.menuSelect) crossbar.confirm();
+
+        if (gp.menuCancel) {
+          crossbar.cancel();
+          this._cancelActiveScreen();
+        }
+      } else {
+        if (gp.menuDown) {
+          this.handleMenuKeyboard({ code: 'ArrowDown', preventDefault: () => {} });
+        } else if (gp.menuUp) {
+          this.handleMenuKeyboard({ code: 'ArrowUp', preventDefault: () => {} });
+        } else if (gp.menuLeft) {
+          this.handleMenuKeyboard({ code: 'ArrowLeft', preventDefault: () => {} });
+        } else if (gp.menuRight) {
+          this.handleMenuKeyboard({ code: 'ArrowRight', preventDefault: () => {} });
+        }
+
+        if (gp.menuSelect) {
+          this.handleMenuKeyboard({ code: 'Enter', preventDefault: () => {} });
+        }
+
+        if (gp.menuCancel) {
+          const activeScreen = document.querySelector('.overlay-screen.active');
+          if (activeScreen) {
+            const cancelButtons = {
+              'settings-screen': 'btn-settings-close',
+              'gamepad-config-screen': 'btn-gamepad-close',
+              'level-screen': 'btn-level-back',
+              'ship-picker-screen': 'btn-picker-back',
+              'how-to-screen': 'btn-how-to-back',
+              'death-screen': 'btn-death-menu',
+              'success-screen': 'btn-success-menu',
+              'pause-screen': 'btn-pause-resume'
+            };
+
+            const btnId = cancelButtons[activeScreen.id];
+            if (btnId) {
+              const btn = document.getElementById(btnId);
+              if (btn) {
+                gameAudio.playClick();
+                btn.click();
+              }
             }
           }
         }
@@ -2443,8 +3725,6 @@ class GameManager {
           }
 
           // Update camera to follow rewinding ship
-          const _rewindAudio = gameAudio.getAnalyserData();
-          this.graphics.setAudioData(_rewindAudio || null);
           this.graphics.update(this.physics, dt);
 
           // Force budget-depleted stop
@@ -2468,6 +3748,51 @@ class GameManager {
 
         // 1. Advance Physics Engine (DT capped internally to prevent tunneling)
         this.physics.update(dt, this.keyboard, this.levelInfo);
+
+        // Check if player crossed/went through any checkpoints in generated levels
+        if (this.levelInfo && this.levelInfo.checkpoints && this.levelInfo.checkpoints.length > 0) {
+          const nextCheckpointIdx = this.lastCheckpointPassed === null ? 0 : this.lastCheckpointPassed + 1;
+          if (nextCheckpointIdx < this.levelInfo.checkpoints.length) {
+            const checkpoint = this.levelInfo.checkpoints[nextCheckpointIdx];
+            // Since Z moves negatively as the ship drives forward, check if we crossed checkpoint.z
+            if (this.physics.position.z <= checkpoint.z) {
+              this.lastCheckpointPassed = nextCheckpointIdx;
+              
+              // Verify the ship actually went THROUGH the arch (X within [-9, 9], Y within [baseY - 0.5, baseY + 6.5])
+              const passedX = this.physics.position.x >= -9.0 && this.physics.position.x <= 9.0;
+              const passedY = this.physics.position.y >= checkpoint.baseY - 0.5 && this.physics.position.y <= checkpoint.baseY + 6.5;
+              
+              if (passedX && passedY) {
+                this.activeCheckpoint = {
+                  index: nextCheckpointIdx,
+                  fuel: this.physics.fuel,
+                  oxygen: this.physics.oxygen,
+                  score: this.physics.score || 0,
+                  time: this.totalTime,
+                  position: {
+                    x: 0,
+                    y: checkpoint.baseY + 0.3,
+                    z: checkpoint.z - 8.0 // 8 units ahead of checkpoint on flat runway
+                  }
+                };
+                
+                // Play refill chime and trigger visual notification
+                if (typeof gameAudio.playRefill === 'function') {
+                  gameAudio.playRefill();
+                }
+                
+                const banner = document.getElementById('checkpoint-notify');
+                if (banner) {
+                  banner.classList.add('active');
+                  if (this._checkpointBannerTimeout) clearTimeout(this._checkpointBannerTimeout);
+                  this._checkpointBannerTimeout = setTimeout(() => {
+                    banner.classList.remove('active');
+                  }, 2000);
+                }
+              }
+            }
+          }
+        }
 
         // Record history snapshot for rewind mechanic (full level run, capped at 10k frames)
         if (this.stateHistory && !this.physics.isDead && !this.physics.isTransitioning && !this.isRewinding) {
@@ -2503,13 +3828,23 @@ class GameManager {
           this.speedTicks = (this.speedTicks || 0) + 1;
         }
 
+        // Ghost recording (throttled to ~10/sec) and playback
+        this.ghostElapsed += dt;
+        this._ghostSampleAccum += dt;
+        if (this._ghostSampleAccum >= 0.1) {
+          this._ghostSampleAccum = 0;
+          if (this.ghost) this.ghost.sample(this.totalTime, this.physics.position);
+        }
+        if (this.loadedGhost && this.ghostEnabled && this.graphics.ghostMesh) {
+          const ghostPos = Ghost.positionAt(this.loadedGhost.samples, this.ghostElapsed);
+          if (ghostPos) this.graphics.ghostMesh.position.set(ghostPos.x, ghostPos.y, ghostPos.z);
+        }
+
         // 2. Refresh HUD overlays
         this.updateHUD();
       }
 
-      // 3. Chase Camera and thrusters (feed live FFT data when synthwave mode is active)
-      const _audioData = gameAudio.getAnalyserData();
-      this.graphics.setAudioData(_audioData || null);
+      // 3. Chase Camera and thrusters
       this.graphics.update(this.physics, dt);
 
       // 4. Modulate Engine frequency
@@ -2574,6 +3909,23 @@ class GameManager {
         this.graphics.starField.rotation.y += 0.02 * dt;
       }
       this.graphics.render();
+
+      // Idle attract mode: start the bot after ~10s of no input on the menu.
+      if (this.gameState === 'menu') {
+        this._idleSeconds += dt;
+        if (this._idleSeconds >= 10) {
+          this._idleSeconds = 0;
+          this._startBotRun();
+        }
+      }
+
+      // Bot loop: after death/success while bot-driven, pause briefly then retry another level.
+      if (this._botActive && (this.gameState === 'death' || this.gameState === 'success') && !this._botLoopTimeoutId) {
+        this._botLoopTimeoutId = setTimeout(() => {
+          this._botLoopTimeoutId = null;
+          if (this._botActive) this._startBotRun();
+        }, 2000);
+      }
     }
 
     this.animationFrameId = requestAnimationFrame((t) => this.animate(t));
@@ -2685,15 +4037,84 @@ class GameManager {
     if (scoreTextEl) {
       scoreTextEl.innerText = String(liveScore).padStart(6, '0');
     }
+
+    // Update top-right level HUD
+    const topRightLevelEl = document.getElementById('top-right-level-name');
+    if (topRightLevelEl) {
+      topRightLevelEl.innerText = this.currentLevelData ? (this.currentLevelData.name || `ROAD ${this.currentLevelIndex}`) : `ROAD ${this.currentLevelIndex}`;
+    }
+    const topRightScoreEl = document.getElementById('top-right-score-val');
+    if (topRightScoreEl) {
+      topRightScoreEl.innerText = String(liveScore).padStart(6, '0');
+    }
   }
 
   handleDeath() {
     if (this.gameState === 'death') return;
+    if (this.keyboard && typeof this.keyboard.resetKeys === 'function') {
+      this.keyboard.resetKeys();
+    }
+
+    if (this.ghost) this.ghost.stopRecording();
 
     this.gameState = 'death';
     gameAudio.stopEngine();
     gameAudio.playExplosion();
     this.graphics.triggerExplosion(this.physics.position);
+
+    // If checkpoint is active, perform auto-respawn after explosion delay
+    if (this.activeCheckpoint) {
+      setTimeout(() => {
+        if (this.gameState !== 'death') return; // State changed (e.g. exited to menu)
+
+        // Restore ship physics
+        this.physics.position.set(
+          this.activeCheckpoint.position.x,
+          this.activeCheckpoint.position.y,
+          this.activeCheckpoint.position.z
+        );
+        this.physics.onGround = true;
+        this.physics.groundHeight = this.activeCheckpoint.position.y - 0.3;
+        this.physics.velocity.set(0, 0, 0);
+
+        // Restore resources & health
+        this.physics.fuel = this.activeCheckpoint.fuel;
+        this.physics.oxygen = this.activeCheckpoint.oxygen;
+        if (this.physics.health !== undefined) {
+          this.physics.health = 100.0;
+        }
+
+        // Restore score and elapsed time
+        this.physics.score = this.activeCheckpoint.score;
+        this.totalTime = this.activeCheckpoint.time;
+
+        // Reset death states
+        this.physics.isDead = false;
+        this.physics.deathReason = '';
+
+        // Make ship visible again and clear explosion particles
+        if (this.graphics.shipMesh) this.graphics.shipMesh.visible = true;
+        if (this.graphics.particles) {
+          for (const p of this.graphics.particles) {
+            this.graphics.scene.remove(p.mesh);
+            if (p.mesh.geometry) p.mesh.geometry.dispose();
+            if (p.mesh.material) p.mesh.material.dispose();
+          }
+          this.graphics.particles = [];
+        }
+
+        // Restart sound and resume gameplay
+        gameAudio.startEngine();
+        this.gameState = 'playing';
+        this.showScreen(''); // Hide all screens/menus
+        
+        // Trim history to match checkpoint start
+        if (this.stateHistory) {
+          this.stateHistory = this.stateHistory.filter(snap => snap.timestamp <= this.activeCheckpoint.time * 1000);
+        }
+      }, 1500);
+      return;
+    }
 
     // Display appropriate death reason
     let msg = "Your ship crashed into a wall of solid block.";
@@ -2732,8 +4153,18 @@ class GameManager {
 
     // Show death screen with "YOU DIED" immediately (title + reason, no buttons yet)
     const deathScreen = document.getElementById('death-screen');
-    const deathButtons = deathScreen ? deathScreen.querySelector('.menu-buttons') : null;
+    const deathButtons = deathScreen ? deathScreen.querySelector('.xmb-item-track') : null;
     if (deathButtons) deathButtons.style.display = 'none';
+
+    // Reset the death screen's crossbar itemIndex to 0 (Try Again) before showing it
+    const deathController = this.crossbarControllers['death-screen'];
+    if (deathController) {
+      deathController.itemIndex = 0;
+      deathController._lastItemIndexByCategory = (deathController.config.categories || []).map(() => 0);
+      deathController._updateLabels();
+      deathController.render(performance.now());
+    }
+
     this.showScreen('death-screen');
 
     if (canRewind) {
@@ -2844,10 +4275,26 @@ class GameManager {
     this.lastTime = performance.now();
   }
 
+  /** Shared by the legacy btn-success-next click listener and the success
+   * screen's crossbar "Next Road" item — advances to the next level in the
+   * current pack, or returns to the menu if this was the last level. */
+  goToNextRoadOrMenu() {
+    gameAudio.playClick();
+    const nextIdx = this.currentLevelIndex + 1;
+    const packLevels = getCachedPack(this.currentPack);
+    if (nextIdx < packLevels.length) {
+      this.startLevel(nextIdx);
+    } else {
+      this.returnToMenu();
+    }
+  }
+
   handleSuccess() {
+    if (this.keyboard && typeof this.keyboard.resetKeys === 'function') {
+      this.keyboard.resetKeys();
+    }
     this.gameState = 'success';
     gameAudio.stopEngine();
-    gameAudio.stopMusic();
     gameAudio.playWin();
 
     // 1. Calculate Score Statistics
@@ -2855,6 +4302,11 @@ class GameManager {
     const avgSpeedKmh = Math.floor(avgSpeed * 10);
     const wallHits = this.wallHits || 0;
     const totalTime = this.totalTime || 0.0;
+
+    if (this.ghost) {
+      this.ghost.stopRecording();
+      this.ghost.maybeSave(this.currentPack, this.currentLevelIndex, totalTime);
+    }
 
     let difficultyMult = 1.0;
     if (this.physics.difficulty === 'normal') difficultyMult = 1.5;
@@ -2906,9 +4358,75 @@ class GameManager {
     const submitBtn = document.getElementById('btn-score-submit');
     const inputBox = document.getElementById('leaderboard-input-box');
 
-    if (inputBox) inputBox.style.display = 'flex';
-    if (inputInitials) {
-      inputInitials.value = localStorage.getItem('skyroads_saved_initials') || '';
+    const leaderboardKey = `skyroads_leaderboard_${this.currentPack}_${this.currentLevelIndex}`;
+    
+    // Defensive leaderboard list loader
+    const getLeaderboardList = () => {
+      try {
+        const stored = localStorage.getItem(leaderboardKey);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {
+        console.warn("Failed to parse leaderboard records", e);
+      }
+      return [];
+    };
+
+    const list = getLeaderboardList();
+    let isRecord = false;
+    if (finalScore > 0) {
+      if (list.length < 5) {
+        isRecord = true;
+      } else {
+        const lowestRecord = list[list.length - 1];
+        if (lowestRecord && typeof lowestRecord.score === 'number') {
+          if (finalScore > lowestRecord.score) {
+            isRecord = true;
+          } else if (finalScore === lowestRecord.score && totalTime < lowestRecord.time) {
+            isRecord = true;
+          }
+        }
+      }
+    }
+
+    if (isRecord) {
+      if (inputBox) inputBox.style.display = 'flex';
+      if (inputInitials) {
+        inputInitials.setAttribute('autofocus', 'true');
+        inputInitials.value = localStorage.getItem('skyroads_saved_initials') || '';
+        
+        // Immediate focus attempt
+        inputInitials.focus();
+        inputInitials.select();
+        
+        // Multi-stage timeouts to combat CSS transitions and rendering updates
+        setTimeout(() => {
+          inputInitials.focus();
+          inputInitials.select();
+        }, 50);
+        
+        setTimeout(() => {
+          inputInitials.focus();
+          inputInitials.select();
+        }, 150);
+        
+        setTimeout(() => {
+          inputInitials.focus();
+          inputInitials.select();
+        }, 350);
+
+        setTimeout(() => {
+          inputInitials.focus();
+          inputInitials.select();
+        }, 600);
+      }
+    } else {
+      if (inputBox) inputBox.style.display = 'none';
+      if (inputInitials) {
+        inputInitials.removeAttribute('autofocus');
+      }
     }
 
     // Helper to render Leaderboard Table
@@ -2917,15 +4435,14 @@ class GameManager {
       if (!tbody) return;
       tbody.innerHTML = '';
 
-      const leaderboardKey = `skyroads_leaderboard_${this.currentPack}_${this.currentLevelIndex}`;
-      const list = JSON.parse(localStorage.getItem(leaderboardKey) || '[]');
+      const leaderboardEntries = getLeaderboardList();
 
-      if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#8c8f99; padding:15px; font-size:0.58rem;">No records yet. Be the first!</td></tr>`;
+      if (leaderboardEntries.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#8c8f99; padding:15px; font-size:0.58rem;">No records yet. Be the first!</td></tr>`;
         return;
       }
 
-      list.forEach((item, idx) => {
+      leaderboardEntries.forEach((item, idx) => {
         const tr = document.createElement('tr');
         if (activeEntry && activeEntry.initials === item.initials && activeEntry.score === item.score && activeEntry.time === item.time) {
           tr.className = 'leaderboard-row-active';
@@ -2934,6 +4451,7 @@ class GameManager {
         tr.innerHTML = `
           <td style="padding: 4px 6px;">#${idx + 1}</td>
           <td style="padding: 4px 6px; font-weight:bold;">${item.initials}</td>
+          <td style="padding: 4px 6px; text-align:right; color:#cfd3dd;">${this.formatTime(item.time)}</td>
           <td style="padding: 4px 6px; text-align:right; font-weight:bold; color: #00ffcc;">${item.score.toLocaleString()}</td>
         `;
         tbody.appendChild(tr);
@@ -2974,8 +4492,7 @@ class GameManager {
         localStorage.setItem('skyroads_saved_initials', initials);
 
         // Add score record to leaderboard list
-        const leaderboardKey = `skyroads_leaderboard_${this.currentPack}_${this.currentLevelIndex}`;
-        const currentList = JSON.parse(localStorage.getItem(leaderboardKey) || '[]');
+        const currentList = getLeaderboardList();
         
         const newRecord = {
           initials: initials,
@@ -3003,29 +4520,82 @@ class GameManager {
         if (inputBox) inputBox.style.display = 'none';
         renderLeaderboardTable(newRecord);
 
-        // Move focus to NEXT ROAD button
+        // Move focus to NEXT ROAD button (first crossbar item) or BACK TO MENU if last road
         const nextBtn = document.getElementById('btn-success-next');
         if (nextBtn && !nextBtn.classList.contains('hidden')) {
           nextBtn.focus();
-          // Also update menu navigation index for gamepad
-          this.selectedMenuIndex = 0;
+          const successController = this.crossbarControllers['success-screen'];
+          if (successController) successController.itemIndex = 0;
+        } else {
+          const menuBtn = document.getElementById('btn-success-menu');
+          if (menuBtn) {
+            menuBtn.focus();
+            const successController = this.crossbarControllers['success-screen'];
+            if (successController) successController.itemIndex = 0;
+          }
         }
       });
     }
 
     // Hide next button if it was the last road
     const packLevels = getCachedPack(this.currentPack);
-    if (this.currentLevelIndex + 1 >= packLevels.length) {
+    const isLastRoad = this.currentLevelIndex + 1 >= packLevels.length;
+    if (isLastRoad) {
       document.getElementById('btn-success-next').classList.add('hidden');
     } else {
       document.getElementById('btn-success-next').classList.remove('hidden');
     }
 
+    // Success screen: single-category vertical list, rebuilt fresh every time
+    // since NEXT ROAD is conditionally present (last level of a pack omits it).
+    const successItems = [];
+    if (!isLastRoad) {
+      successItems.push({ id: 'next', label: 'Next Road', kind: 'action', el: document.getElementById('btn-success-next'), onConfirm: () => this.goToNextRoadOrMenu() });
+    }
+    successItems.push({ id: 'menu', label: 'Back to Menu', kind: 'action', el: document.getElementById('btn-success-menu'), onConfirm: () => { gameAudio.playClick(); this.returnToMenu(); } });
+    const successConfig = { categories: [{ id: 'success', label: 'ROAD COMPLETED', items: successItems }] };
+    if (this.crossbarControllers['success-screen']) this.crossbarControllers['success-screen'].destroy();
+    const successController = new CrossbarController(successConfig, {
+      itemTrackEl: document.getElementById('success-xmb-item-track'),
+      flatItems: true // success actions are a horizontal button row, not a column
+    });
+    successController._updateLabels();
+    successController.render(performance.now());
+    this.crossbarControllers['success-screen'] = successController;
+
     this.showScreen('success-screen');
+
+    // Auto-focus next road or menu button if not a record
+    if (!isRecord) {
+      setTimeout(() => {
+        const nextBtn = document.getElementById('btn-success-next');
+        if (nextBtn && !isLastRoad) {
+          nextBtn.focus();
+          if (this.crossbarControllers['success-screen']) {
+            this.crossbarControllers['success-screen'].itemIndex = 0;
+            this.crossbarControllers['success-screen'].render(performance.now());
+          }
+        } else {
+          const menuBtn = document.getElementById('btn-success-menu');
+          if (menuBtn) {
+            menuBtn.focus();
+            if (this.crossbarControllers['success-screen']) {
+              this.crossbarControllers['success-screen'].itemIndex = 0;
+              this.crossbarControllers['success-screen'].render(performance.now());
+            }
+          }
+        }
+      }, 100);
+    }
   }
 
+  // ponytail: handleMenuKeyboard/handleShipPickerKeyboard/handleLevelSelectKeyboard/
+  // highlightMenuButton are now dead — every menu screen has a CrossbarController,
+  // so the keydown + gamepad dispatch always take the crossbar branch and never
+  // fall through here. Kept as a gated safety net; delete once manual testing
+  // confirms no screen ever lacks a controller.
   handleMenuKeyboard(e) {
-    if (typeof document !== 'undefined' && document.activeElement && 
+    if (typeof document !== 'undefined' && document.activeElement &&
         (document.activeElement.tagName === 'INPUT' || 
          document.activeElement.tagName === 'TEXTAREA' || 
          document.activeElement.tagName === 'SELECT')) {
@@ -3191,19 +4761,7 @@ class GameManager {
   }
 
   updateCollisionViewToggleBtn() {
-    const isEnabled = this.collisionViewEnabled;
-    const btn = document.getElementById('btn-settings-collision-view');
-    if (btn) {
-      if (isEnabled) {
-        btn.innerText = 'COLLISION VIEW: ON';
-        btn.classList.remove('btn-info');
-        btn.classList.add('btn-primary');
-      } else {
-        btn.innerText = 'COLLISION VIEW: OFF';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-info');
-      }
-    }
+    this._setToggleBtnState('btn-settings-collision-view', this.collisionViewEnabled, 'COLLISION VIEW');
   }
 
   toggleSceneCollisionView(enabled) {
@@ -3216,16 +4774,9 @@ class GameManager {
     if (this.graphics.sceneryGroup) {
       this.graphics.sceneryGroup.visible = !enabled;
     }
-    if (this.graphics.skyboxMesh) {
-      this.graphics.skyboxMesh.visible = !enabled;
-    }
     // Also toggle procedural background elements if they were active
-    if (!this.graphics.gltfLoaded || !enabled) {
-      if (this.graphics.nebulaSphere) this.graphics.nebulaSphere.visible = !enabled;
-      if (this.graphics.starField) this.graphics.starField.visible = !enabled;
-      if (this.graphics.galaxyPoints) this.graphics.galaxyPoints.visible = !enabled;
-      if (this.graphics.sunMesh) this.graphics.sunMesh.visible = !enabled;
-    }
+    if (this.graphics.starField) this.graphics.starField.visible = !enabled;
+    if (this.graphics.galaxyPoints) this.graphics.galaxyPoints.visible = !enabled;
 
     // 2. Traverse the scene and swap materials of meshes
     this.graphics.scene.traverse((node) => {
@@ -3310,8 +4861,30 @@ class GameManager {
 }
 
 // Instantiate and start the application on load
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+  // Attempt to fetch fresh defaults from disk at runtime to bypass Vite's ESM cache
+  if (typeof fetch === 'function') {
+    try {
+      const response = await fetch('/api/get-settings');
+      if (response.ok) {
+        const defaults = await response.json();
+        for (const [key, value] of Object.entries(defaults)) {
+          const valStr = typeof value === 'string' ? value : JSON.stringify(value);
+          localStorage.setItem(key, valStr);
+          
+          if (key.startsWith('skyroads_physics_preset_baseline_')) {
+            const activeKey = key.replace('_baseline_', '_');
+            localStorage.setItem(activeKey, valStr);
+          }
+        }
+      }
+    } catch (e) {
+      // Failed to fetch - fall back to the statically-seeded defaults in userSettings.js
+    }
+  }
+
   const manager = new GameManager();
   manager.init();
   window.gameManagerInstance = manager;
+  initLayoutDebugPanel();
 });

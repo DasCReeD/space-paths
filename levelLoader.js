@@ -19,10 +19,24 @@ import customDecalSlipperyUrl from './assets/custom/decal_slippery.png';
 // Dynamic Theme Assets (Cyberpunk, Industrial, Organic, Alien)
 import cpRoadDiff from './assets/custom/road_diffuse_cyberpunk.png';
 import cpRoadNorm from './assets/custom/road_normal_cyberpunk.png';
+import cpRoadRough from './assets/custom/road_roughness_cyberpunk.png';
+import cpRoadMetal from './assets/custom/road_metalness_cyberpunk.png';
+import cpRoadEmit from './assets/custom/road_emissive_cyberpunk.png';
+import cpEdgeDiff from './assets/custom/road_edge_diffuse_cyberpunk.png';
+import cpEdgeNorm from './assets/custom/road_edge_normal_cyberpunk.png';
+import cpEdgeRough from './assets/custom/road_edge_roughness_cyberpunk.png';
+import cpEdgeMetal from './assets/custom/road_edge_metalness_cyberpunk.png';
+import cpEdgeEmit from './assets/custom/road_edge_emissive_cyberpunk.png';
 import cpObstacleDiff from './assets/custom/obstacle_diffuse_cyberpunk.png';
 import cpObstacleNorm from './assets/custom/obstacle_normal_cyberpunk.png';
+import cpObstacleRough from './assets/custom/obstacle_roughness_cyberpunk.png';
+import cpObstacleMetal from './assets/custom/obstacle_metalness_cyberpunk.png';
+import cpObstacleEmit from './assets/custom/obstacle_emissive_cyberpunk.png';
 import cpTunnelDiff from './assets/custom/tunnel_diffuse_cyberpunk.png';
 import cpTunnelNorm from './assets/custom/tunnel_normal_cyberpunk.png';
+import cpTunnelRough from './assets/custom/tunnel_roughness_cyberpunk.png';
+import cpTunnelMetal from './assets/custom/tunnel_metalness_cyberpunk.png';
+import cpTunnelEmit from './assets/custom/tunnel_emissive_cyberpunk.png';
 import cpDecalBoost from './assets/custom/decal_boost_cyberpunk.png';
 import cpDecalSlow from './assets/custom/decal_slow_cyberpunk.png';
 import cpDecalExplosive from './assets/custom/decal_explosive_cyberpunk.png';
@@ -32,10 +46,24 @@ import cpDecalSlippery from './assets/custom/decal_slippery_cyberpunk.png';
 
 import indRoadDiff from './assets/custom/road_diffuse_industrial.png';
 import indRoadNorm from './assets/custom/road_normal_industrial.png';
+import indRoadRough from './assets/custom/road_roughness_industrial.png';
+import indRoadMetal from './assets/custom/road_metalness_industrial.png';
+import indRoadEmit from './assets/custom/road_emissive_industrial.png';
+import indEdgeDiff from './assets/custom/road_edge_diffuse_industrial.png';
+import indEdgeNorm from './assets/custom/road_edge_normal_industrial.png';
+import indEdgeRough from './assets/custom/road_edge_roughness_industrial.png';
+import indEdgeMetal from './assets/custom/road_edge_metalness_industrial.png';
+import indEdgeEmit from './assets/custom/road_edge_emissive_industrial.png';
 import indObstacleDiff from './assets/custom/obstacle_diffuse_industrial.png';
 import indObstacleNorm from './assets/custom/obstacle_normal_industrial.png';
+import indObstacleRough from './assets/custom/obstacle_roughness_industrial.png';
+import indObstacleMetal from './assets/custom/obstacle_metalness_industrial.png';
+import indObstacleEmit from './assets/custom/obstacle_emissive_industrial.png';
 import indTunnelDiff from './assets/custom/tunnel_diffuse_industrial.png';
 import indTunnelNorm from './assets/custom/tunnel_normal_industrial.png';
+import indTunnelRough from './assets/custom/tunnel_roughness_industrial.png';
+import indTunnelMetal from './assets/custom/tunnel_metalness_industrial.png';
+import indTunnelEmit from './assets/custom/tunnel_emissive_industrial.png';
 import indDecalBoost from './assets/custom/decal_boost_industrial.png';
 import indDecalSlow from './assets/custom/decal_slow_industrial.png';
 import indDecalExplosive from './assets/custom/decal_explosive_industrial.png';
@@ -45,10 +73,24 @@ import indDecalSlippery from './assets/custom/decal_slippery_industrial.png';
 
 import alienRoadDiff from './assets/custom/road_diffuse_alien.png';
 import alienRoadNorm from './assets/custom/road_normal_alien.png';
+import alienRoadRough from './assets/custom/road_roughness_alien.png';
+import alienRoadMetal from './assets/custom/road_metalness_alien.png';
+import alienRoadEmit from './assets/custom/road_emissive_alien.png';
+import alienEdgeDiff from './assets/custom/road_edge_diffuse_alien.png';
+import alienEdgeNorm from './assets/custom/road_edge_normal_alien.png';
+import alienEdgeRough from './assets/custom/road_edge_roughness_alien.png';
+import alienEdgeMetal from './assets/custom/road_edge_metalness_alien.png';
+import alienEdgeEmit from './assets/custom/road_edge_emissive_alien.png';
 import alienObstacleDiff from './assets/custom/obstacle_diffuse_alien.png';
 import alienObstacleNorm from './assets/custom/obstacle_normal_alien.png';
+import alienObstacleRough from './assets/custom/obstacle_roughness_alien.png';
+import alienObstacleMetal from './assets/custom/obstacle_metalness_alien.png';
+import alienObstacleEmit from './assets/custom/obstacle_emissive_alien.png';
 import alienTunnelDiff from './assets/custom/tunnel_diffuse_alien.png';
 import alienTunnelNorm from './assets/custom/tunnel_normal_alien.png';
+import alienTunnelRough from './assets/custom/tunnel_roughness_alien.png';
+import alienTunnelMetal from './assets/custom/tunnel_metalness_alien.png';
+import alienTunnelEmit from './assets/custom/tunnel_emissive_alien.png';
 import alienDecalBoost from './assets/custom/decal_boost_alien.png';
 import alienDecalSlow from './assets/custom/decal_slow_alien.png';
 import alienDecalExplosive from './assets/custom/decal_explosive_alien.png';
@@ -58,10 +100,24 @@ import alienDecalSlippery from './assets/custom/decal_slippery_alien.png';
 
 import orgRoadDiff from './assets/custom/road_diffuse_organic.png';
 import orgRoadNorm from './assets/custom/road_normal_organic.png';
+import orgRoadRough from './assets/custom/road_roughness_organic.png';
+import orgRoadMetal from './assets/custom/road_metalness_organic.png';
+import orgRoadEmit from './assets/custom/road_emissive_organic.png';
+import orgEdgeDiff from './assets/custom/road_edge_diffuse_organic.png';
+import orgEdgeNorm from './assets/custom/road_edge_normal_organic.png';
+import orgEdgeRough from './assets/custom/road_edge_roughness_organic.png';
+import orgEdgeMetal from './assets/custom/road_edge_metalness_organic.png';
+import orgEdgeEmit from './assets/custom/road_edge_emissive_organic.png';
 import orgObstacleDiff from './assets/custom/obstacle_diffuse_organic.png';
 import orgObstacleNorm from './assets/custom/obstacle_normal_organic.png';
+import orgObstacleRough from './assets/custom/obstacle_roughness_organic.png';
+import orgObstacleMetal from './assets/custom/obstacle_metalness_organic.png';
+import orgObstacleEmit from './assets/custom/obstacle_emissive_organic.png';
 import orgTunnelDiff from './assets/custom/tunnel_diffuse_organic.png';
 import orgTunnelNorm from './assets/custom/tunnel_normal_organic.png';
+import orgTunnelRough from './assets/custom/tunnel_roughness_organic.png';
+import orgTunnelMetal from './assets/custom/tunnel_metalness_organic.png';
+import orgTunnelEmit from './assets/custom/tunnel_emissive_organic.png';
 import orgDecalBoost from './assets/custom/decal_boost_organic.png';
 import orgDecalSlow from './assets/custom/decal_slow_organic.png';
 import orgDecalExplosive from './assets/custom/decal_explosive_organic.png';
@@ -216,24 +272,76 @@ function classifyTileBehavior(topColor) {
   return { behavior: null, emissiveGlow: false, glowColor: null };
 }
 
+let _deathBeamTexture = null;
+function getDeathBeamTexture() {
+  if (_deathBeamTexture) return _deathBeamTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 8;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null; // jsdom test environment has no canvas 2D context
+  const grad = ctx.createLinearGradient(0, canvas.height, 0, 0);
+  grad.addColorStop(0, 'rgba(255,60,20,1.0)');
+  grad.addColorStop(0.3, 'rgba(255,20,10,0.55)');
+  grad.addColorStop(1, 'rgba(255,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  _deathBeamTexture = new THREE.CanvasTexture(canvas);
+  return _deathBeamTexture;
+}
+
+/**
+ * Warning beam of light cast straight up from a 'burning' (red death) tile —
+ * two crossed vertical planes so it reads from any horizontal viewing angle
+ * without true camera-facing billboard logic, the standard cheap trick for
+ * fire/laser FX. Scoped to burning tiles only — callers must check
+ * `behavior === 'burning'` before calling this.
+ */
+function createDeathBeam(xPos, yTop, zPos) {
+  const beamHeight = 16;
+  const beamWidth = TILE_WIDTH * 0.7;
+  const mat = new THREE.MeshBasicMaterial({
+    map: getDeathBeamTexture(),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    fog: false
+  });
+  const group = new THREE.Group();
+  for (let i = 0; i < 2; i++) {
+    const geom = new THREE.PlaneGeometry(beamWidth, beamHeight);
+    geom.translate(0, beamHeight / 2, 0); // pivot at the bottom
+    const plane = new THREE.Mesh(geom, mat);
+    plane.rotation.y = i * Math.PI / 2;
+    group.add(plane);
+  }
+  group.position.set(xPos, yTop, zPos);
+  return group;
+}
+
 /**
  * Calculate tile height and vertical position from block flags.
  * Returns { height, yPos, isObstacle }.
  */
 function computeTileGeometry(tile) {
-  if (tile.tunnel) {
+  if (!tile) {
     return { height: 0.45, yPos: -0.225, isObstacle: false };
   }
+  const baseY = (tile.startY !== undefined) ? tile.startY : 0.0;
+  if (tile.tunnel) {
+    return { height: 0.45, yPos: baseY - 0.225, isObstacle: false };
+  }
   if (tile.full && tile.half) {
-    return { height: 3.0, yPos: 1.5, isObstacle: true };
+    return { height: 3.0, yPos: baseY + 1.5, isObstacle: true };
   }
   if (tile.full) {
-    return { height: 2.0, yPos: 1.0, isObstacle: true };
+    return { height: 2.0, yPos: baseY + 1.0, isObstacle: true };
   }
   if (tile.half) {
-    return { height: 1.0, yPos: 0.5, isObstacle: true };
+    return { height: 1.0, yPos: baseY + 0.5, isObstacle: true };
   }
-  return { height: 0.45, yPos: -0.225, isObstacle: false };
+  return { height: 0.45, yPos: baseY - 0.225, isObstacle: false };
 }
 
 /**
@@ -319,12 +427,6 @@ function getTileHeight(tile) {
  * Scans levelData rows and dynamically inserts ramp properties for tiles
  * immediately preceding an elevated tunnel entrance.
  */
-function preprocessLevelRamps(levelData) {
-  // Tunnel floors are flat at road level (baseY). They do not have elevated floors,
-  // so we do not generate ramps leading up to them.
-  return;
-}
-
 /**
  * Adjust texture coordinates (UVs) of BoxGeometry dynamically to prevent
  * aspect-ratio stretching and squishing on side faces of variable-dimension blocks.
@@ -399,7 +501,7 @@ export const textureCache = new Map();
  * Load a premium color-divided seamless abstract pattern texture from the user's
  * downloaded folder, mapping it organically to Level 2's color palette (and all other levels).
  */
-function getSeamlessTexture(colorIndex) {
+function getSeamlessTexture(colorIndex, levelIndex = 0) {
   if (typeof document === 'undefined') return null;
 
   // Map each VGA palette color index (0-15) to its closest color-divided folder
@@ -423,9 +525,9 @@ function getSeamlessTexture(colorIndex) {
   };
   const folder = folderMapping[colorIndex] || 'Dark';
 
-  // Choose a distinct pattern texture (1 to 13) inside the folder based on the colorIndex,
-  // ensuring different block types load completely different abstract geometries!
-  const patternIndex = (colorIndex % 13) + 1;
+  // Choose a distinct pattern texture (1 to 13) inside the folder based on the colorIndex + levelIndex,
+  // ensuring different levels and block types load completely different abstract geometries!
+  const patternIndex = ((colorIndex + levelIndex) % 13) + 1;
   const patternStr = String(patternIndex).padStart(2, '0');
   const key = `./SBS - Seamless Abstract Pack - 512x512/PNG/${folder}/texture_${patternStr}.png`;
 
@@ -435,7 +537,7 @@ function getSeamlessTexture(colorIndex) {
   const url = module.default;
   if (!url) return null;
 
-  const cacheKey = `seamless_${colorIndex}_${url}`;
+  const cacheKey = `seamless_${colorIndex}_${levelIndex}_${url}`;
   if (textureCache.has(cacheKey)) {
     return textureCache.get(cacheKey);
   }
@@ -465,11 +567,11 @@ function getSeamlessTexture(colorIndex) {
  * Generate a high-fidelity procedural texture canvas for each block type/behavior,
  * matching the user's beautiful geometric and abstract pattern specifications.
  */
-function getProceduralTexture(behavior, baseColor, colorIndex) {
+function getProceduralTexture(behavior, baseColor, colorIndex, levelIndex = 0) {
   // Graceful check for test runners or environments where document/canvas is unavailable
   if (typeof document === 'undefined') return null;
 
-  const cacheKey = `${behavior}_${baseColor.getHexString()}_${colorIndex}`;
+  const cacheKey = `${behavior}_${baseColor.getHexString()}_${colorIndex}_${levelIndex}`;
   if (textureCache.has(cacheKey)) {
     return textureCache.get(cacheKey);
   }
@@ -501,10 +603,11 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     // Draw thick dark black backing circles first to create immense contrast
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 9;
+    const radiusOffset = (levelIndex % 3) * 4;
     for (let x = 0; x <= 256; x += 64) {
       for (let y = 0; y <= 256; y += 64) {
         ctx.beginPath();
-        ctx.arc(x, y, 32, 0, Math.PI * 2);
+        ctx.arc(x, y, 32 - radiusOffset, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
@@ -514,7 +617,7 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     for (let x = 0; x <= 256; x += 64) {
       for (let y = 0; y <= 256; y += 64) {
         ctx.beginPath();
-        ctx.arc(x, y, 32, 0, Math.PI * 2);
+        ctx.arc(x, y, 32 - radiusOffset, 0, Math.PI * 2);
         ctx.stroke();
         ctx.fillStyle = 'rgba(0, 230, 255, 0.25)';
         ctx.fill();
@@ -526,7 +629,7 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     for (let x = 32; x < 256; x += 64) {
       for (let y = 32; y < 256; y += 64) {
         ctx.beginPath();
-        ctx.arc(x, y, 16, 0, Math.PI * 2);
+        ctx.arc(x, y, 16 - radiusOffset / 2, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
@@ -536,7 +639,7 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     for (let x = 32; x < 256; x += 64) {
       for (let y = 32; y < 256; y += 64) {
         ctx.beginPath();
-        ctx.arc(x, y, 16, 0, Math.PI * 2);
+        ctx.arc(x, y, 16 - radiusOffset / 2, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
@@ -551,11 +654,14 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     ctx.lineWidth = 14;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+    const isFlipped = (levelIndex % 2 === 0);
+    const peakYOffset = isFlipped ? 16 : 64;
+    const edgeYOffset = isFlipped ? 64 : 16;
     for (let yOffset = -64; yOffset < 256; yOffset += 96) {
       ctx.beginPath();
-      ctx.moveTo(32, yOffset + 64);
-      ctx.lineTo(128, yOffset + 16);
-      ctx.lineTo(224, yOffset + 64);
+      ctx.moveTo(32, yOffset + edgeYOffset);
+      ctx.lineTo(128, yOffset + peakYOffset);
+      ctx.lineTo(224, yOffset + edgeYOffset);
       ctx.stroke();
     }
     
@@ -564,20 +670,22 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     ctx.lineWidth = 8;
     for (let yOffset = -64; yOffset < 256; yOffset += 96) {
       ctx.beginPath();
-      ctx.moveTo(32, yOffset + 64);
-      ctx.lineTo(128, yOffset + 16);
-      ctx.lineTo(224, yOffset + 64);
+      ctx.moveTo(32, yOffset + edgeYOffset);
+      ctx.lineTo(128, yOffset + peakYOffset);
+      ctx.lineTo(224, yOffset + edgeYOffset);
       ctx.stroke();
     }
     
     // Draw staggered black inner chevrons
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 7;
+    const peakYOffsetStagger = isFlipped ? 18 : 50;
+    const edgeYOffsetStagger = isFlipped ? 50 : 18;
     for (let yOffset = -32; yOffset < 256; yOffset += 96) {
       ctx.beginPath();
-      ctx.moveTo(48, yOffset + 50);
-      ctx.lineTo(128, yOffset + 18);
-      ctx.lineTo(208, yOffset + 50);
+      ctx.moveTo(48, yOffset + edgeYOffsetStagger);
+      ctx.lineTo(128, yOffset + peakYOffsetStagger);
+      ctx.lineTo(208, yOffset + edgeYOffsetStagger);
       ctx.stroke();
     }
     
@@ -586,9 +694,9 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     ctx.lineWidth = 3;
     for (let yOffset = -32; yOffset < 256; yOffset += 96) {
       ctx.beginPath();
-      ctx.moveTo(48, yOffset + 50);
-      ctx.lineTo(128, yOffset + 18);
-      ctx.lineTo(208, yOffset + 50);
+      ctx.moveTo(48, yOffset + edgeYOffsetStagger);
+      ctx.lineTo(128, yOffset + peakYOffsetStagger);
+      ctx.lineTo(208, yOffset + edgeYOffsetStagger);
       ctx.stroke();
     }
   }
@@ -597,28 +705,29 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     // Draw black mesh backings
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 16;
-    for (let i = 0; i <= 256; i += 32) {
+    const spacing = 32 + (levelIndex % 2 === 0 ? 0 : 8);
+    for (let i = 0; i <= 256; i += spacing) {
       ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
     }
     // Draw bright solid forest-green grid lines
     ctx.strokeStyle = '#00aa33';
     ctx.lineWidth = 10;
-    for (let i = 0; i <= 256; i += 32) {
+    for (let i = 0; i <= 256; i += spacing) {
       ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
     }
     // Highlighting threads with bright neon green
     ctx.strokeStyle = '#66ff66';
     ctx.lineWidth = 3;
-    for (let i = 16; i <= 256; i += 32) {
+    for (let i = spacing / 2; i <= 256; i += spacing) {
       ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
     }
     // Add bright orange knots for incredible high-contrast pop!
     ctx.fillStyle = '#ffaa00';
-    for (let x = 0; x <= 256; x += 32) {
-      for (let y = 0; y <= 256; y += 32) {
+    for (let x = 0; x <= 256; x += spacing) {
+      for (let y = 0; y <= 256; y += spacing) {
         ctx.fillRect(x - 3, y - 3, 6, 6);
       }
     }
@@ -628,28 +737,30 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     // Draw thick black diagonal backing lines
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 7;
+    const latticeShift = (levelIndex % 3) * 8;
     for (let i = -256; i <= 256; i += 32) {
-      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + 256, 256); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(i + 256, 0); ctx.lineTo(i, 256); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(i + latticeShift, 0); ctx.lineTo(i + latticeShift + 256, 256); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(i + latticeShift + 256, 0); ctx.lineTo(i + latticeShift, 256); ctx.stroke();
     }
     // Draw glowing bright white diagonal lines
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 3;
     for (let i = -256; i <= 256; i += 32) {
-      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + 256, 256); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(i + 256, 0); ctx.lineTo(i, 256); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(i + latticeShift, 0); ctx.lineTo(i + latticeShift + 256, 256); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(i + latticeShift + 256, 0); ctx.lineTo(i + latticeShift, 256); ctx.stroke();
     }
     // Large cyan core nodes with black outlines
     for (let x = 0; x <= 256; x += 32) {
       for (let y = 0; y <= 256; y += 32) {
-        if ((x + y) % 64 === 0) {
+        const sx = x + latticeShift;
+        if ((sx + y) % 64 === 0 && sx >= 0 && sx <= 256) {
           ctx.beginPath();
-          ctx.arc(x, y, 6, 0, Math.PI * 2);
+          ctx.arc(sx, y, 6, 0, Math.PI * 2);
           ctx.fillStyle = '#000000';
           ctx.fill();
           
           ctx.beginPath();
-          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.arc(sx, y, 4, 0, Math.PI * 2);
           ctx.fillStyle = '#00ffff';
           ctx.fill();
         }
@@ -683,17 +794,18 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     }
     
     // Black backing flame cracks
+    const shiftX = (levelIndex * 17) % 40;
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 9;
     ctx.beginPath();
-    ctx.moveTo(10, 20); ctx.lineTo(60, 120); ctx.lineTo(120, 80); ctx.lineTo(180, 210); ctx.lineTo(240, 140);
+    ctx.moveTo(10 + shiftX, 20); ctx.lineTo(60 + shiftX, 120); ctx.lineTo(120 + shiftX, 80); ctx.lineTo(180 + shiftX, 210); ctx.lineTo(240 + shiftX, 140);
     ctx.stroke();
     
     // Glowing neon orange/pink flame cracks
     ctx.strokeStyle = '#ff007f';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(10, 20); ctx.lineTo(60, 120); ctx.lineTo(120, 80); ctx.lineTo(180, 210); ctx.lineTo(240, 140);
+    ctx.moveTo(10 + shiftX, 20); ctx.lineTo(60 + shiftX, 120); ctx.lineTo(120 + shiftX, 80); ctx.lineTo(180 + shiftX, 210); ctx.lineTo(240 + shiftX, 140);
     ctx.stroke();
   }
   else if (colorIndex === 7 || colorIndex === 15) {
@@ -701,12 +813,13 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     // Black backings
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 12;
+    const amp = 16 + (levelIndex % 3) * 4;
     for (let y = -32; y < 256 + 32; y += 32) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(64, y + 16);
+      ctx.lineTo(64, y + amp);
       ctx.lineTo(128, y);
-      ctx.lineTo(192, y + 16);
+      ctx.lineTo(192, y + amp);
       ctx.lineTo(256, y);
       ctx.stroke();
     }
@@ -716,9 +829,9 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     for (let y = -32; y < 256 + 32; y += 32) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(64, y + 16);
+      ctx.lineTo(64, y + amp);
       ctx.lineTo(128, y);
-      ctx.lineTo(192, y + 16);
+      ctx.lineTo(192, y + amp);
       ctx.lineTo(256, y);
       ctx.stroke();
     }
@@ -727,30 +840,31 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     for (let y = -32; y < 256 + 32; y += 32) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(64, y + 16);
+      ctx.lineTo(64, y + amp);
       ctx.lineTo(128, y);
-      ctx.lineTo(192, y + 16);
+      ctx.lineTo(192, y + amp);
       ctx.lineTo(256, y);
       ctx.stroke();
     }
   }
   else if (colorIndex === 14) {
     // Circular pop-art target shapes
+    const shapeSize = 48 - (levelIndex % 3) * 6;
     for (let x = 64; x < 256; x += 128) {
       for (let y = 64; y < 256; y += 128) {
         // Draw black target backing rings
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 8;
-        ctx.beginPath(); ctx.arc(x, y, 48, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(x, y, 32, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, shapeSize, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, shapeSize * 0.66, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, shapeSize * 0.33, 0, Math.PI * 2); ctx.stroke();
         
         // Draw bright white target rings
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(x, y, 48, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(x, y, 32, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, shapeSize, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, shapeSize * 0.66, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, shapeSize * 0.33, 0, Math.PI * 2); ctx.stroke();
         
         // Center black backing core
         ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fillStyle = '#000000'; ctx.fill();
@@ -764,7 +878,9 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     // Draw thick dark black panel lines for maximum 3D block contrast
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
     ctx.lineWidth = 4;
-    for (let y = 0; y <= 256; y += 64) {
+    const panelCount = (levelIndex % 2 === 0) ? 4 : 8;
+    const panelHeight = 256 / panelCount;
+    for (let y = 0; y <= 256; y += panelHeight) {
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(256, y);
@@ -774,7 +890,7 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     // Slat bevel highlights
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
     ctx.lineWidth = 2;
-    for (let y = 0; y <= 256; y += 64) {
+    for (let y = 0; y <= 256; y += panelHeight) {
       ctx.beginPath();
       ctx.moveTo(0, y + 2);
       ctx.lineTo(256, y + 2);
@@ -784,28 +900,28 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
     // Staggered vertical panel divisions in solid black
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
     ctx.lineWidth = 3;
-    for (let r = 0; r < 4; r++) {
-      const yVal = r * 64;
-      const shift = (r % 2) * 64;
+    for (let r = 0; r < panelCount; r++) {
+      const yVal = r * panelHeight;
+      const shift = (r % 2) * (256 / 4);
       for (let c = 0; c < 4; c++) {
-        const xVal = c * 128 + shift;
+        const xVal = c * (256 / 2) + shift;
         ctx.beginPath();
         ctx.moveTo(xVal % 256, yVal);
-        ctx.lineTo(xVal % 256, yVal + 64);
+        ctx.lineTo(xVal % 256, yVal + panelHeight);
         ctx.stroke();
       }
     }
 
     // Larger 3D metal rivets near boundaries with dark shadow drop
-    for (let r = 0; r < 4; r++) {
-      const yVal = r * 64;
-      const shift = (r % 2) * 64;
+    for (let r = 0; r < panelCount; r++) {
+      const yVal = r * panelHeight;
+      const shift = (r % 2) * (256 / 4);
       for (let c = 0; c < 4; c++) {
-        const xVal = c * 128 + shift;
+        const xVal = c * (256 / 2) + shift;
         // Rivet Shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.beginPath(); ctx.arc((xVal + 11) % 256, yVal + 11, 3.5, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc((xVal + 119) % 256, yVal + 11, 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc((xVal + (256 / 2) - 9) % 256, yVal + 11, 3.5, 0, Math.PI * 2); ctx.fill();
 
         // Rivet Cap (Bright Silver)
         ctx.fillStyle = 'rgba(230, 230, 240, 0.95)';
@@ -825,17 +941,10 @@ function getProceduralTexture(behavior, baseColor, colorIndex) {
 const customAssets = import.meta.glob('./assets/custom/*.png', { eager: true });
 const levelAssets = import.meta.glob('./assets/custom/level_*/*.png', { eager: true });
 const levelObjAssets = import.meta.glob('./assets/custom/level_*/*.obj', { query: '?url', eager: true });
-const skyboxAssets = import.meta.glob('./assets/custom/skybox/*.jpg', { eager: true });
 
 export function getCustomAssetUrl(filename) {
   const key = `./assets/custom/${filename}`;
   const module = customAssets[key];
-  return module ? module.default : null;
-}
-
-export function getSkyboxAssetUrl(themeKey) {
-  const key = `./assets/custom/skybox/${themeKey}_sky.jpg`;
-  const module = skyboxAssets[key];
   return module ? module.default : null;
 }
 
@@ -905,6 +1014,80 @@ const generatedThemes = biomeConfigs.map(([name, key, defaultColorVal, defaultMa
   };
 });
 
+export const BIOME_COLOR_PROFILES = {
+  void: [
+    { road: [0.05, 0.0, 0.1], rail: [0.8, 0.0, 1.0], accent: [0.4, 0.0, 0.8] },
+    { road: [0.0, 0.05, 0.12], rail: [0.0, 0.8, 1.0], accent: [1.0, 0.4, 0.0] },
+    { road: [0.0, 0.05, 0.0], rail: [0.0, 1.0, 0.0], accent: [0.5, 1.0, 0.0] },
+    { road: [0.08, 0.0, 0.0], rail: [1.0, 0.2, 0.0], accent: [1.0, 0.8, 0.0] }
+  ],
+  ridge: [
+    { road: [0.0, 0.1, 0.3], rail: [0.0, 0.6, 1.0], accent: [0.0, 0.2, 0.6] },
+    { road: [0.22, 0.05, 0.0], rail: [1.0, 0.3, 0.0], accent: [0.6, 0.1, 0.0] },
+    { road: [0.15, 0.1, 0.0], rail: [1.0, 0.8, 0.0], accent: [0.7, 0.5, 0.0] }
+  ],
+  thrill: [
+    { road: [0.1, 0.1, 0.12], rail: [0.0, 0.8, 1.0], accent: [0.15, 0.15, 0.18] },
+    { road: [0.12, 0.1, 0.1], rail: [1.0, 0.0, 0.5], accent: [0.18, 0.15, 0.15] },
+    { road: [0.08, 0.1, 0.08], rail: [0.0, 1.0, 0.5], accent: [0.12, 0.18, 0.12] }
+  ],
+  core: [
+    { road: [0.02, 0.18, 0.06], rail: [0.2, 1.0, 0.4], accent: [0.05, 0.3, 0.1] },
+    { road: [0.18, 0.02, 0.06], rail: [1.0, 0.2, 0.4], accent: [0.3, 0.05, 0.1] },
+    { road: [0.02, 0.06, 0.18], rail: [0.2, 0.4, 1.0], accent: [0.05, 0.1, 0.3] }
+  ],
+  glitch: [
+    { road: [0.08, 0.01, 0.1], rail: [1.0, 0.0, 0.8], accent: [0.12, 0.02, 0.15] },
+    { road: [0.01, 0.08, 0.1], rail: [0.0, 1.0, 0.8], accent: [0.02, 0.12, 0.15] },
+    { road: [0.08, 0.08, 0.01], rail: [1.0, 1.0, 0.0], accent: [0.12, 0.12, 0.02] }
+  ],
+  tundra: [
+    { road: [0.7, 0.9, 1.0], rail: [0.0, 0.9, 1.0], accent: [0.8, 0.95, 1.0] },
+    { road: [0.85, 0.8, 0.9], rail: [0.8, 0.4, 1.0], accent: [0.9, 0.85, 0.95] },
+    { road: [0.7, 0.9, 0.8], rail: [0.0, 1.0, 0.6], accent: [0.8, 0.95, 0.85] }
+  ],
+  furnace: [
+    { road: [0.15, 0.08, 0.05], rail: [1.0, 0.4, 0.0], accent: [0.2, 0.1, 0.05] },
+    { road: [0.18, 0.04, 0.04], rail: [1.0, 0.0, 0.0], accent: [0.25, 0.05, 0.05] },
+    { road: [0.12, 0.12, 0.04], rail: [1.0, 0.8, 0.0], accent: [0.18, 0.18, 0.06] }
+  ],
+  shallows: [
+    { road: [0.08, 0.02, 0.18], rail: [0.0, 0.8, 1.0], accent: [0.1, 0.05, 0.22] },
+    { road: [0.02, 0.08, 0.18], rail: [0.0, 1.0, 0.5], accent: [0.05, 0.1, 0.22] },
+    { road: [0.12, 0.02, 0.12], rail: [1.0, 0.2, 0.8], accent: [0.15, 0.05, 0.15] }
+  ],
+  spire: [
+    { road: [0.9, 0.9, 0.95], rail: [1.0, 0.8, 0.2], accent: [0.95, 0.95, 0.98] },
+    { road: [0.85, 0.9, 0.95], rail: [0.2, 0.8, 1.0], accent: [0.9, 0.95, 0.98] },
+    { road: [0.9, 0.85, 0.9], rail: [1.0, 0.2, 0.6], accent: [0.95, 0.9, 0.95] }
+  ],
+  pulse: [
+    { road: [0.18, 0.18, 0.2], rail: [0.0, 0.9, 1.0], accent: [0.2, 0.2, 0.22] },
+    { road: [0.18, 0.16, 0.2], rail: [1.0, 0.0, 1.0], accent: [0.2, 0.18, 0.22] },
+    { road: [0.16, 0.18, 0.16], rail: [0.0, 1.0, 0.0], accent: [0.18, 0.2, 0.18] }
+  ],
+  cyberpunk: [
+    { road: [0.15, 0.15, 0.25], rail: [0.0, 0.9, 1.0], accent: [0.2, 0.2, 0.35] },
+    { road: [0.2, 0.12, 0.22], rail: [1.0, 0.0, 0.8], accent: [0.25, 0.15, 0.3] },
+    { road: [0.12, 0.2, 0.18], rail: [0.0, 1.0, 0.5], accent: [0.15, 0.25, 0.22] }
+  ],
+  industrial: [
+    { road: [0.5, 0.5, 0.55], rail: [1.0, 0.5, 0.0], accent: [0.5, 0.5, 0.5] },
+    { road: [0.4, 0.45, 0.45], rail: [0.0, 0.8, 1.0], accent: [0.4, 0.4, 0.4] },
+    { road: [0.45, 0.4, 0.4], rail: [0.8, 0.2, 0.2], accent: [0.45, 0.45, 0.45] }
+  ],
+  alien: [
+    { road: [0.6, 0.2, 0.7], rail: [0.8, 0.0, 1.0], accent: [0.6, 0.2, 0.7] },
+    { road: [0.2, 0.6, 0.5], rail: [0.0, 1.0, 0.8], accent: [0.2, 0.6, 0.5] },
+    { road: [0.6, 0.4, 0.2], rail: [1.0, 0.5, 0.0], accent: [0.6, 0.4, 0.2] }
+  ],
+  organic: [
+    { road: [0.45, 0.3, 0.15], rail: [0.0, 0.8, 0.2], accent: [0.45, 0.3, 0.15] },
+    { road: [0.4, 0.2, 0.18], rail: [1.0, 0.4, 0.2], accent: [0.4, 0.2, 0.18] },
+    { road: [0.3, 0.35, 0.2], rail: [0.8, 0.9, 0.2], accent: [0.3, 0.35, 0.2] }
+  ]
+};
+
 // Theme definition sets
 export const THEMES = [
 
@@ -913,15 +1096,19 @@ export const THEMES = [
     key: 'cyberpunk',
     defaultColor: new THREE.Color(0.15, 0.15, 0.25),
     behaviors: {
-      default:  { map: cpRoadDiff, normalMap: cpRoadNorm, color: new THREE.Color(0.2, 0.2, 0.35) },
-      obstacle: { map: cpObstacleDiff, normalMap: cpObstacleNorm, color: new THREE.Color(0.8, 0.6, 0.0) },
-      tunnel:   { map: cpTunnelDiff, normalMap: cpTunnelNorm },
-      boost:    { map: cpRoadDiff, normalMap: cpRoadNorm, decal: cpDecalBoost, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.0, 1.0, 0.0) },
-      super_boost: { map: cpRoadDiff, normalMap: cpRoadNorm, decal: cpDecalBoost, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.0, 1.0, 1.0) },
-      refill:   { map: cpRoadDiff, normalMap: cpRoadNorm, decal: cpDecalRefill, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.0, 0.5, 1.0) },
-      burning:  { map: cpRoadDiff, normalMap: cpRoadNorm, decal: cpDecalExplosive, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(1.0, 0.0, 0.0) },
-      sticky:   { map: cpRoadDiff, normalMap: cpRoadNorm, decal: cpDecalSticky, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.5, 0.0, 0.6) },
-      slippery: { map: cpRoadDiff, normalMap: cpRoadNorm, decal: cpDecalSlippery, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.0, 0.8, 1.0) },
+      default:  { 
+        map: cpRoadDiff, normalMap: cpRoadNorm, roughnessMap: cpRoadRough, metalnessMap: cpRoadMetal, emissiveMap: cpRoadEmit,
+        edgeMap: cpEdgeDiff, edgeNormalMap: cpEdgeNorm, edgeRoughnessMap: cpEdgeRough, edgeMetalnessMap: cpEdgeMetal, edgeEmissiveMap: cpEdgeEmit,
+        color: new THREE.Color(0.2, 0.2, 0.35) 
+      },
+      obstacle: { map: cpObstacleDiff, normalMap: cpObstacleNorm, roughnessMap: cpObstacleRough, metalnessMap: cpObstacleMetal, emissiveMap: cpObstacleEmit, color: new THREE.Color(0.8, 0.6, 0.0) },
+      tunnel:   { map: cpTunnelDiff, normalMap: cpTunnelNorm, roughnessMap: cpTunnelRough, metalnessMap: cpTunnelMetal, emissiveMap: cpTunnelEmit },
+      boost:    { map: cpRoadDiff, normalMap: cpRoadNorm, roughnessMap: cpRoadRough, metalnessMap: cpRoadMetal, emissiveMap: cpRoadEmit, decal: cpDecalBoost, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.0, 1.0, 0.0) },
+      super_boost: { map: cpRoadDiff, normalMap: cpRoadNorm, roughnessMap: cpRoadRough, metalnessMap: cpRoadMetal, emissiveMap: cpRoadEmit, decal: cpDecalBoost, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.0, 1.0, 1.0) },
+      refill:   { map: cpRoadDiff, normalMap: cpRoadNorm, roughnessMap: cpRoadRough, metalnessMap: cpRoadMetal, emissiveMap: cpRoadEmit, decal: cpDecalRefill, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.0, 0.5, 1.0) },
+      burning:  { map: cpRoadDiff, normalMap: cpRoadNorm, roughnessMap: cpRoadRough, metalnessMap: cpRoadMetal, emissiveMap: cpRoadEmit, decal: cpDecalExplosive, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(1.0, 0.0, 0.0) },
+      sticky:   { map: cpRoadDiff, normalMap: cpRoadNorm, roughnessMap: cpRoadRough, metalnessMap: cpRoadMetal, emissiveMap: cpRoadEmit, decal: cpDecalSticky, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.5, 0.0, 0.6) },
+      slippery: { map: cpRoadDiff, normalMap: cpRoadNorm, roughnessMap: cpRoadRough, metalnessMap: cpRoadMetal, emissiveMap: cpRoadEmit, decal: cpDecalSlippery, color: new THREE.Color(0.15, 0.15, 0.25), emissive: new THREE.Color(0.0, 0.8, 1.0) },
     }
   },
   {
@@ -929,15 +1116,19 @@ export const THEMES = [
     key: 'industrial',
     defaultColor: new THREE.Color(0.5, 0.5, 0.55),
     behaviors: {
-      default:  { map: indRoadDiff, normalMap: indRoadNorm, color: new THREE.Color(0.5, 0.5, 0.5) },
-      obstacle: { map: indObstacleDiff, normalMap: indObstacleNorm, color: new THREE.Color(0.3, 0.3, 0.3) },
-      tunnel:   { map: indTunnelDiff, normalMap: indTunnelNorm },
-      boost:    { map: indRoadDiff, normalMap: indRoadNorm, decal: indDecalBoost, color: new THREE.Color(0.2, 0.8, 0.2), emissive: new THREE.Color(0.1, 0.4, 0.1) },
-      super_boost: { map: indRoadDiff, normalMap: indRoadNorm, decal: indDecalBoost, color: new THREE.Color(0.2, 0.8, 1.0), emissive: new THREE.Color(0.1, 0.4, 0.5) },
-      refill:   { map: indRoadDiff, normalMap: indRoadNorm, decal: indDecalRefill, color: new THREE.Color(0.2, 0.6, 1.0), emissive: new THREE.Color(0.1, 0.3, 0.5) },
-      burning:  { map: indRoadDiff, normalMap: indRoadNorm, decal: indDecalExplosive, color: new THREE.Color(1.0, 0.2, 0.2), emissive: new THREE.Color(0.5, 0.1, 0.1) },
-      sticky:   { map: indRoadDiff, normalMap: indRoadNorm, decal: indDecalSticky, color: new THREE.Color(0.15, 0.4, 0.15), emissive: new THREE.Color(0.05, 0.15, 0.05) },
-      slippery: { map: indRoadDiff, normalMap: indRoadNorm, decal: indDecalSlippery, color: new THREE.Color(0.7, 0.8, 1.0), emissive: new THREE.Color(0.3, 0.35, 0.4) },
+      default:  { 
+        map: indRoadDiff, normalMap: indRoadNorm, roughnessMap: indRoadRough, metalnessMap: indRoadMetal, emissiveMap: indRoadEmit,
+        edgeMap: indEdgeDiff, edgeNormalMap: indEdgeNorm, edgeRoughnessMap: indEdgeRough, edgeMetalnessMap: indEdgeMetal, edgeEmissiveMap: indEdgeEmit,
+        color: new THREE.Color(0.5, 0.5, 0.5) 
+      },
+      obstacle: { map: indObstacleDiff, normalMap: indObstacleNorm, roughnessMap: indObstacleRough, metalnessMap: indObstacleMetal, emissiveMap: indObstacleEmit, color: new THREE.Color(0.3, 0.3, 0.3) },
+      tunnel:   { map: indTunnelDiff, normalMap: indTunnelNorm, roughnessMap: indTunnelRough, metalnessMap: indTunnelMetal, emissiveMap: indTunnelEmit },
+      boost:    { map: indRoadDiff, normalMap: indRoadNorm, roughnessMap: indRoadRough, metalnessMap: indRoadMetal, emissiveMap: indRoadEmit, decal: indDecalBoost, color: new THREE.Color(0.2, 0.8, 0.2), emissive: new THREE.Color(0.1, 0.4, 0.1) },
+      super_boost: { map: indRoadDiff, normalMap: indRoadNorm, roughnessMap: indRoadRough, metalnessMap: indRoadMetal, emissiveMap: indRoadEmit, decal: indDecalBoost, color: new THREE.Color(0.2, 0.8, 1.0), emissive: new THREE.Color(0.1, 0.4, 0.5) },
+      refill:   { map: indRoadDiff, normalMap: indRoadNorm, roughnessMap: indRoadRough, metalnessMap: indRoadMetal, emissiveMap: indRoadEmit, decal: indDecalRefill, color: new THREE.Color(0.2, 0.6, 1.0), emissive: new THREE.Color(0.1, 0.3, 0.5) },
+      burning:  { map: indRoadDiff, normalMap: indRoadNorm, roughnessMap: indRoadRough, metalnessMap: indRoadMetal, emissiveMap: indRoadEmit, decal: indDecalExplosive, color: new THREE.Color(1.0, 0.2, 0.2), emissive: new THREE.Color(0.5, 0.1, 0.1) },
+      sticky:   { map: indRoadDiff, normalMap: indRoadNorm, roughnessMap: indRoadRough, metalnessMap: indRoadMetal, emissiveMap: indRoadEmit, decal: indDecalSticky, color: new THREE.Color(0.15, 0.4, 0.15), emissive: new THREE.Color(0.05, 0.15, 0.05) },
+      slippery: { map: indRoadDiff, normalMap: indRoadNorm, roughnessMap: indRoadRough, metalnessMap: indRoadMetal, emissiveMap: indRoadEmit, decal: indDecalSlippery, color: new THREE.Color(0.7, 0.8, 1.0), emissive: new THREE.Color(0.3, 0.35, 0.4) },
     }
   },
   {
@@ -945,15 +1136,19 @@ export const THEMES = [
     key: 'alien',
     defaultColor: new THREE.Color(0.6, 0.2, 0.7),
     behaviors: {
-      default:  { map: alienRoadDiff, normalMap: alienRoadNorm, color: new THREE.Color(0.6, 0.2, 0.7), roughness: 0.1, metalness: 0.9 },
-      obstacle: { map: alienObstacleDiff, normalMap: alienObstacleNorm, color: new THREE.Color(0.4, 0.1, 0.5), roughness: 0.2, metalness: 0.8 },
-      tunnel:   { map: alienTunnelDiff, normalMap: alienTunnelNorm },
-      boost:    { map: alienRoadDiff, normalMap: alienRoadNorm, decal: alienDecalBoost, color: new THREE.Color(0.0, 1.0, 0.0), emissive: new THREE.Color(0.0, 1.0, 0.0), roughness: 0.1, metalness: 0.9 },
-      super_boost: { map: alienRoadDiff, normalMap: alienRoadNorm, decal: alienDecalBoost, color: new THREE.Color(0.0, 1.0, 1.0), emissive: new THREE.Color(0.0, 1.0, 1.0), roughness: 0.1, metalness: 0.9 },
-      refill:   { map: alienRoadDiff, normalMap: alienRoadNorm, decal: alienDecalRefill, color: new THREE.Color(0.0, 0.5, 1.0), emissive: new THREE.Color(0.0, 0.5, 1.0), roughness: 0.1, metalness: 0.9 },
-      burning:  { map: alienRoadDiff, normalMap: alienRoadNorm, decal: alienDecalExplosive, color: new THREE.Color(1.0, 0.0, 0.0), emissive: new THREE.Color(1.0, 0.0, 0.0), roughness: 0.1, metalness: 0.9 },
-      sticky:   { map: alienRoadDiff, normalMap: alienRoadNorm, decal: alienDecalSticky, color: new THREE.Color(0.1, 0.5, 0.1), emissive: new THREE.Color(0.05, 0.25, 0.05), roughness: 0.4, metalness: 0.6 },
-      slippery: { map: alienRoadDiff, normalMap: alienRoadNorm, decal: alienDecalSlippery, color: new THREE.Color(0.8, 0.9, 1.0), emissive: new THREE.Color(0.1, 0.2, 0.3), roughness: 0.0, metalness: 0.95 },
+      default:  { 
+        map: alienRoadDiff, normalMap: alienRoadNorm, roughnessMap: alienRoadRough, metalnessMap: alienRoadMetal, emissiveMap: alienRoadEmit,
+        edgeMap: alienEdgeDiff, edgeNormalMap: alienEdgeNorm, edgeRoughnessMap: alienEdgeRough, edgeMetalnessMap: alienEdgeMetal, edgeEmissiveMap: alienEdgeEmit,
+        color: new THREE.Color(0.6, 0.2, 0.7) 
+      },
+      obstacle: { map: alienObstacleDiff, normalMap: alienObstacleNorm, roughnessMap: alienObstacleRough, metalnessMap: alienObstacleMetal, emissiveMap: alienObstacleEmit, color: new THREE.Color(0.4, 0.1, 0.5) },
+      tunnel:   { map: alienTunnelDiff, normalMap: alienTunnelNorm, roughnessMap: alienTunnelRough, metalnessMap: alienTunnelMetal, emissiveMap: alienTunnelEmit },
+      boost:    { map: alienRoadDiff, normalMap: alienRoadNorm, roughnessMap: alienRoadRough, metalnessMap: alienRoadMetal, emissiveMap: alienRoadEmit, decal: alienDecalBoost, color: new THREE.Color(0.0, 1.0, 0.0), emissive: new THREE.Color(0.0, 1.0, 0.0) },
+      super_boost: { map: alienRoadDiff, normalMap: alienRoadNorm, roughnessMap: alienRoadRough, metalnessMap: alienRoadMetal, emissiveMap: alienRoadEmit, decal: alienDecalBoost, color: new THREE.Color(0.0, 1.0, 1.0), emissive: new THREE.Color(0.0, 1.0, 1.0) },
+      refill:   { map: alienRoadDiff, normalMap: alienRoadNorm, roughnessMap: alienRoadRough, metalnessMap: alienRoadMetal, emissiveMap: alienRoadEmit, decal: alienDecalRefill, color: new THREE.Color(0.0, 0.5, 1.0), emissive: new THREE.Color(0.0, 0.5, 1.0) },
+      burning:  { map: alienRoadDiff, normalMap: alienRoadNorm, roughnessMap: alienRoadRough, metalnessMap: alienRoadMetal, emissiveMap: alienRoadEmit, decal: alienDecalExplosive, color: new THREE.Color(1.0, 0.0, 0.0), emissive: new THREE.Color(1.0, 0.0, 0.0) },
+      sticky:   { map: alienRoadDiff, normalMap: alienRoadNorm, roughnessMap: alienRoadRough, metalnessMap: alienRoadMetal, emissiveMap: alienRoadEmit, decal: alienDecalSticky, color: new THREE.Color(0.1, 0.5, 0.1), emissive: new THREE.Color(0.05, 0.25, 0.05) },
+      slippery: { map: alienRoadDiff, normalMap: alienRoadNorm, roughnessMap: alienRoadRough, metalnessMap: alienRoadMetal, emissiveMap: alienRoadEmit, decal: alienDecalSlippery, color: new THREE.Color(0.8, 0.9, 1.0), emissive: new THREE.Color(0.1, 0.2, 0.3) },
     }
   },
   {
@@ -961,15 +1156,19 @@ export const THEMES = [
     key: 'organic',
     defaultColor: new THREE.Color(0.45, 0.3, 0.15),
     behaviors: {
-      default:  { map: orgRoadDiff, normalMap: orgRoadNorm, color: new THREE.Color(0.45, 0.3, 0.15) },
-      obstacle: { map: orgObstacleDiff, normalMap: orgObstacleNorm, color: new THREE.Color(0.2, 0.15, 0.1) },
-      tunnel:   { map: orgTunnelDiff, normalMap: orgTunnelNorm },
-      boost:    { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalBoost, color: new THREE.Color(0.3, 0.8, 0.3), emissive: new THREE.Color(0.1, 0.4, 0.1) },
-      super_boost: { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalBoost, color: new THREE.Color(0.2, 0.8, 1.0), emissive: new THREE.Color(0.1, 0.4, 0.5) },
-      refill:   { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalRefill, color: new THREE.Color(0.2, 0.5, 0.9), emissive: new THREE.Color(0.1, 0.25, 0.45) },
-      burning:  { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalExplosive, color: new THREE.Color(0.9, 0.25, 0.1), emissive: new THREE.Color(0.45, 0.1, 0.05) },
-      sticky:   { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalSticky, color: new THREE.Color(0.2, 0.4, 0.2), emissive: new THREE.Color(0.05, 0.15, 0.05) },
-      slippery: { map: orgRoadDiff, normalMap: orgRoadNorm, decal: orgDecalSlippery, color: new THREE.Color(0.85, 0.85, 0.9), emissive: new THREE.Color(0.25, 0.25, 0.3) },
+      default:  { 
+        map: orgRoadDiff, normalMap: orgRoadNorm, roughnessMap: orgRoadRough, metalnessMap: orgRoadMetal, emissiveMap: orgRoadEmit,
+        edgeMap: orgEdgeDiff, edgeNormalMap: orgEdgeNorm, edgeRoughnessMap: orgEdgeRough, edgeMetalnessMap: orgEdgeMetal, edgeEmissiveMap: orgEdgeEmit,
+        color: new THREE.Color(0.45, 0.3, 0.15) 
+      },
+      obstacle: { map: orgObstacleDiff, normalMap: orgObstacleNorm, roughnessMap: orgObstacleRough, metalnessMap: orgObstacleMetal, emissiveMap: orgObstacleEmit, color: new THREE.Color(0.2, 0.15, 0.1) },
+      tunnel:   { map: orgTunnelDiff, normalMap: orgTunnelNorm, roughnessMap: orgTunnelRough, metalnessMap: orgTunnelMetal, emissiveMap: orgTunnelEmit },
+      boost:    { map: orgRoadDiff, normalMap: orgRoadNorm, roughnessMap: orgRoadRough, metalnessMap: orgRoadMetal, emissiveMap: orgRoadEmit, decal: orgDecalBoost, color: new THREE.Color(0.3, 0.8, 0.3), emissive: new THREE.Color(0.1, 0.4, 0.1) },
+      super_boost: { map: orgRoadDiff, normalMap: orgRoadNorm, roughnessMap: orgRoadRough, metalnessMap: orgRoadMetal, emissiveMap: orgRoadEmit, decal: orgDecalBoost, color: new THREE.Color(0.2, 0.8, 1.0), emissive: new THREE.Color(0.1, 0.4, 0.5) },
+      refill:   { map: orgRoadDiff, normalMap: orgRoadNorm, roughnessMap: orgRoadRough, metalnessMap: orgRoadMetal, emissiveMap: orgRoadEmit, decal: orgDecalRefill, color: new THREE.Color(0.2, 0.5, 0.9), emissive: new THREE.Color(0.1, 0.25, 0.45) },
+      burning:  { map: orgRoadDiff, normalMap: orgRoadNorm, roughnessMap: orgRoadRough, metalnessMap: orgRoadMetal, emissiveMap: orgRoadEmit, decal: orgDecalExplosive, color: new THREE.Color(0.9, 0.25, 0.1), emissive: new THREE.Color(0.45, 0.1, 0.05) },
+      sticky:   { map: orgRoadDiff, normalMap: orgRoadNorm, roughnessMap: orgRoadRough, metalnessMap: orgRoadMetal, emissiveMap: orgRoadEmit, decal: orgDecalSticky, color: new THREE.Color(0.2, 0.4, 0.2), emissive: new THREE.Color(0.05, 0.15, 0.05) },
+      slippery: { map: orgRoadDiff, normalMap: orgRoadNorm, roughnessMap: orgRoadRough, metalnessMap: orgRoadMetal, emissiveMap: orgRoadEmit, decal: orgDecalSlippery, color: new THREE.Color(0.85, 0.85, 0.9), emissive: new THREE.Color(0.25, 0.25, 0.3) },
     }
   }
 ].concat(generatedThemes);
@@ -990,13 +1189,38 @@ export function getActiveThemeIndex(levelData) {
     return 4 + (Math.floor(idx / 3) % 10);
   }
 
+  let idx = null;
   if (levelData && typeof levelData.level_index === 'number') {
-    return levelData.level_index % 4;
+    idx = levelData.level_index;
+  } else if (typeof window !== 'undefined' && typeof window.currentLevelIndex === 'number') {
+    idx = window.currentLevelIndex;
   }
-  if (typeof window !== 'undefined' && typeof window.currentLevelIndex === 'number') {
-    return window.currentLevelIndex % 4;
+
+  if (idx === null) {
+    return 0;
   }
-  return 0;
+
+  // 10 worlds mapping for standard/xmas packs
+  // Index 0-29: standard levels (10 worlds * 3 levels)
+  // Index 30-59: xmas levels (10 worlds * 3 levels)
+  const isXmas = idx >= 30;
+  const relativeIdx = isXmas ? idx - 30 : idx;
+  const worldIdx = Math.floor(relativeIdx / 3) % 10;
+
+  const worldToTheme = [
+    9,  // Yama -> Tundra
+    11, // Oasis -> Shallows
+    3,  // Sub-Terrania -> Organic
+    10, // Red Heat -> Furnace
+    13, // Storm Wind -> Pulse
+    4,  // The Void -> Void
+    0,  // Outer Space -> Cyberpunk
+    2,  // Phantasmagoria -> Alien
+    12, // Spire -> Spire
+    1   // Aftermath -> Industrial
+  ];
+
+  return worldToTheme[worldIdx] !== undefined ? worldToTheme[worldIdx] : 0;
 }
 
 
@@ -1033,10 +1257,34 @@ function getLoadedTexture(url, isColorTexture = false) {
 }
 
 /**
+ * Perturb a color slightly based on the levelIndex to create unique variations.
+ */
+export function perturbColor(color, levelIndex, salt = 0) {
+  const temp = { h: 0, s: 0, l: 0 };
+  color.getHSL(temp);
+  
+  // Deterministic hue shift: shift up to 30 degrees (30/360 = 0.083)
+  const shiftRange = 30 / 360;
+  // Generate a deterministic offset between -shiftRange and +shiftRange
+  const hueOffset = (((levelIndex * 17 + salt * 31) % 100) / 100) * (2 * shiftRange) - shiftRange;
+  temp.h = (temp.h + hueOffset + 1.0) % 1.0;
+  
+  // Saturation shift: ±10%
+  const satOffset = (((levelIndex * 7 + salt * 13) % 100) / 100) * 0.2 - 0.1;
+  temp.s = Math.max(0.2, Math.min(1.0, temp.s + satOffset));
+  
+  // Lightness shift: ±8%
+  const lightOffset = (((levelIndex * 13 + salt * 7) % 100) / 100) * 0.16 - 0.08;
+  temp.l = Math.max(0.05, Math.min(0.95, temp.l + lightOffset));
+  
+  return new THREE.Color().setHSL(temp.h, temp.s, temp.l);
+}
+
+/**
  * Create a Three.js material for a tile based on its color and behavior,
  * supporting dynamic level skinning with 4 themes and multi-level fallbacks.
  */
-function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorIndex, levelData, colIndex) {
+function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorIndex, levelData, colIndex, rowIndex) {
   const themeIndex = getActiveThemeIndex(levelData);
   const theme = THEMES[themeIndex];
   
@@ -1049,9 +1297,8 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   let activeMap = themeBehavior.map;
   let activeNorm = themeBehavior.normalMap;
 
-  // For generated levels, theme textures on themeBehavior.map/normalMap are the SD1.5 assets —
-  // only fall through to per-level lookup when the theme has no texture (rare edge case).
-  if (isGenerated && levelIndex !== null && !themeBehavior.map) {
+  // For generated levels, always check if level-specific textures exist to ensure pattern variation!
+  if (isGenerated && levelIndex !== null) {
     if (behaviorKey === 'default' || behaviorKey === 'boost' || behaviorKey === 'refill' || behaviorKey === 'burning' || behaviorKey === 'sticky' || behaviorKey === 'slippery' || behaviorKey === 'slow') {
       const roadDiff = getLevelAssetUrl(levelIndex, 'road_diffuse.png');
       const roadNorm = getLevelAssetUrl(levelIndex, 'road_normal.png');
@@ -1080,10 +1327,10 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   let metalnessTex = null;
   let emissiveMapTex = null;
 
-  // Edge columns (0,1 = left rail, 5,6 = right rail) use road_edge textures for generated themes
+  // Edge columns (0,1 = left rail, 5,6 = right rail) use road_edge textures for all themes if defined
   const isEdgeCol = colIndex !== undefined && (colIndex <= 1 || colIndex >= 5);
   const isRoadBehavior = !behaviorKey || behaviorKey === 'default';
-  if (isEdgeCol && isRoadBehavior && isGenerated && themeBehavior.edgeMap) {
+  if (isEdgeCol && isRoadBehavior && themeBehavior.edgeMap) {
     activeMap = themeBehavior.edgeMap;
     if (themeBehavior.edgeNormalMap) activeNorm = themeBehavior.edgeNormalMap;
   }
@@ -1093,10 +1340,10 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
     if (activeNorm) {
       normalTexture = getLoadedTexture(activeNorm, false);
     }
-    // PBR maps — for edge columns use edge-specific maps, otherwise use behavior maps
-    const roughSrc = (isEdgeCol && isRoadBehavior && isGenerated) ? themeBehavior.edgeRoughnessMap : themeBehavior.roughnessMap;
-    const metalSrc = (isEdgeCol && isRoadBehavior && isGenerated) ? themeBehavior.edgeMetalnessMap : themeBehavior.metalnessMap;
-    const emitSrc  = (isEdgeCol && isRoadBehavior && isGenerated) ? themeBehavior.edgeEmissiveMap  : themeBehavior.emissiveMap;
+    // PBR maps — for edge columns use edge-specific maps if available, otherwise use behavior maps
+    const roughSrc = (isEdgeCol && isRoadBehavior) ? themeBehavior.edgeRoughnessMap : themeBehavior.roughnessMap;
+    const metalSrc = (isEdgeCol && isRoadBehavior) ? themeBehavior.edgeMetalnessMap : themeBehavior.metalnessMap;
+    const emitSrc  = (isEdgeCol && isRoadBehavior) ? themeBehavior.edgeEmissiveMap  : themeBehavior.emissiveMap;
     if (roughSrc) roughnessTex   = getLoadedTexture(roughSrc, false);
     if (metalSrc) metalnessTex   = getLoadedTexture(metalSrc, false);
     if (emitSrc)  emissiveMapTex = getLoadedTexture(emitSrc,  true);
@@ -1105,10 +1352,13 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
 
   // Level 2: Fall back to canvas procedural rendering if standard textures are absent/failed
   if (!texture) {
+    const rIdxForPattern = typeof rowIndex === 'number' ? rowIndex : 0;
+    const segmentIndex = Math.floor(rIdxForPattern / 32);
+    const patternSeed = (levelIndex !== null ? levelIndex : 0) + segmentIndex;
     // Falls back to seamless abstract pattern pack or canvas procedural
-    texture = getSeamlessTexture(colorIndex);
+    texture = getSeamlessTexture(colorIndex, patternSeed);
     if (!texture) {
-      texture = getProceduralTexture(behavior, baseColor, colorIndex);
+      texture = getProceduralTexture(behavior, baseColor, colorIndex, patternSeed);
     }
   }
 
@@ -1121,9 +1371,107 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   if (behaviorKey === 'obstacle' && matColor.r + matColor.g + matColor.b < 0.05 && themeBehavior.color) {
     matColor = themeBehavior.color;
   }
+
+  const profiles = BIOME_COLOR_PROFILES[theme.key];
+  const levelIdx = levelIndex !== null ? levelIndex : 0;
+  const activeProfile = profiles && profiles.length > 0 ? profiles[levelIdx % profiles.length] : null;
+
+  if (activeProfile && !isTestEnv) {
+    let roadColor = new THREE.Color(...activeProfile.road);
+    let railColor = new THREE.Color(...activeProfile.rail);
+    let accentColor = new THREE.Color(...activeProfile.accent);
+
+    // Apply HSL Color Perturbation using levelIndex
+    roadColor = perturbColor(roadColor, levelIdx, 1);
+    railColor = perturbColor(railColor, levelIdx, 2);
+    accentColor = perturbColor(accentColor, levelIdx, 3);
+
+    if (!isSpecial) {
+      const cIdx = typeof colIndex === 'number' ? colIndex : 3;
+      const rIdx = typeof rowIndex === 'number' ? rowIndex : 0;
+      const layoutStyle = levelIdx % 4;
+
+      if (layoutStyle === 0) {
+        // Style 0: Standard center-stripe
+        if (cIdx === 3) {
+          matColor = accentColor;
+        } else if (cIdx === 2 || cIdx === 4) {
+          matColor = roadColor;
+        } else if (cIdx === 1 || cIdx === 5) {
+          matColor = roadColor.clone().multiplyScalar(0.85);
+        } else {
+          matColor = railColor.clone().multiplyScalar(0.7);
+        }
+      } else if (layoutStyle === 1) {
+        // Style 1: Checkerboard on road lanes (2, 3, 4)
+        if (cIdx === 1 || cIdx === 5) {
+          matColor = roadColor.clone().multiplyScalar(0.85);
+        } else if (cIdx === 0 || cIdx === 6) {
+          matColor = railColor.clone().multiplyScalar(0.7);
+        } else {
+          const isCheck = (cIdx + rIdx) % 2 === 0;
+          matColor = isCheck 
+            ? roadColor.clone().lerp(accentColor, 0.4) 
+            : roadColor;
+        }
+      } else if (layoutStyle === 2) {
+        // Style 2: Dual accent stripes on lanes 2 and 4
+        if (cIdx === 2 || cIdx === 4) {
+          matColor = accentColor;
+        } else if (cIdx === 3) {
+          matColor = roadColor;
+        } else if (cIdx === 1 || cIdx === 5) {
+          matColor = roadColor.clone().multiplyScalar(0.85);
+        } else {
+          matColor = railColor.clone().multiplyScalar(0.7);
+        }
+      } else {
+        // Style 3: Edge focus (accent on lanes 1 and 5)
+        if (cIdx === 1 || cIdx === 5) {
+          matColor = accentColor;
+        } else if (cIdx === 2 || cIdx === 3 || cIdx === 4) {
+          matColor = roadColor;
+        } else {
+          matColor = railColor.clone().multiplyScalar(0.7);
+        }
+      }
+
+      if (typeof rowIndex === 'number') {
+        const rowRhythms = {
+          glitch: 2,
+          furnace: 2,
+          pulse: 2,
+          void: 8,
+          spire: 8,
+          cyberpunk: 4,
+          ridge: 4,
+          thrill: 4,
+          core: 4,
+          organic: 6,
+          tundra: 6,
+          shallows: 6,
+          industrial: 4,
+          alien: 4
+        };
+        const rhythm = rowRhythms[theme.key] || 4;
+        const alternatingFactor = (Math.floor(rowIndex / rhythm) % 2 === 0) ? 1.0 : 0.85;
+        matColor = matColor.clone().multiplyScalar(alternatingFactor);
+      }
+    } else if (behaviorKey === 'obstacle') {
+      matColor = accentColor;
+    }
+  }
   
-  const isGlowing = emissiveGlow || !!themeBehavior.emissive;
-  const matEmissive = isSpecial && themeBehavior.emissive ? themeBehavior.emissive : (isGlowing ? glowColor || baseColor : new THREE.Color(0, 0, 0));
+  let isGlowing = emissiveGlow || !!themeBehavior.emissive;
+  
+  // Enable emissive neon highlights on obstacles matching their theme's accent color
+  if (behaviorKey === 'obstacle' && activeProfile && !isTestEnv) {
+    isGlowing = true;
+  }
+  
+  const matEmissive = isSpecial && themeBehavior.emissive 
+    ? themeBehavior.emissive 
+    : (isGlowing ? glowColor || matColor : new THREE.Color(0, 0, 0));
   
   const matParams = {
     color: matColor,
@@ -1154,7 +1502,7 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
 
   if (isGlowing) {
     matParams.emissive = matEmissive;
-    matParams.emissiveIntensity = 0.9;
+    matParams.emissiveIntensity = behaviorKey === 'obstacle' ? 0.35 : 0.9;
   } else if (emissiveMapTex) {
     // PBR emissive channel drives neon trim glow (WipEout-style edge lighting)
     matParams.emissiveMap = emissiveMapTex;
@@ -1180,30 +1528,40 @@ function loadAndApplyObstacleModel(mesh, levelIndex, r, c, width, height, length
   const applyModel = (originalObj) => {
     const obj = originalObj.clone();
     
-    // Scale and position the OBJ model to fit the block dimensions (width, height, length)
     // Compute the bounding box of the loaded OBJ model
     const bbox = new THREE.Box3().setFromObject(obj);
     const size = new THREE.Vector3();
     bbox.getSize(size);
     
+    // Check for degenerate/empty geometry immediately
+    if (size.x < 0.01 || size.y < 0.01 || size.z < 0.01) {
+      // Model is degenerate/invisible — keep the original BoxGeometry
+      return;
+    }
+
     const scaleX = size.x > 0 ? (width / size.x) : 1;
     const scaleY = size.y > 0 ? (height / size.y) : 1;
     // Limit Z scaling to prevent horizontal stretching of obstacles along the track
     const scaleZ = size.z > 0 ? (Math.min(length, width) / size.z) : 1;
     
-    obj.scale.set(scaleX, scaleY, scaleZ);
-
-    // Deterministic pseudo-random Y rotation per-obstacle for visual variety
-    const rotSteps = 4; // 0°, 90°, 180°, 270°
-    const rotIndex = (r * 17 + c * 11) % rotSteps;
-    obj.rotation.y = (rotIndex * Math.PI) / 2;
-
-    // Center the model relative to its bounding box center
+    // Create a wrapper group to pivot-rotate around the geometric center
+    const wrapper = new THREE.Group();
+    
+    // Position the original obj relative to the wrapper so its center is at the wrapper's local origin.
+    // This translates the geometry BEFORE rotation or scale is applied in the parent-child matrix.
     const center = new THREE.Vector3();
     bbox.getCenter(center);
-    obj.position.set(-center.x * scaleX, -center.y * scaleY, -center.z * scaleZ);
+    obj.position.set(-center.x, -center.y, -center.z);
+    
+    wrapper.add(obj);
 
-    // Apply the parent mesh material to all children
+    // Apply scaling and rotation to the wrapper (which rotates around the centered origin)
+    wrapper.scale.set(scaleX, scaleY, scaleZ);
+    const rotSteps = 4; // 0°, 90°, 180°, 270°
+    const rotIndex = (r * 17 + c * 11) % rotSteps;
+    wrapper.rotation.y = (rotIndex * Math.PI) / 2;
+
+    // Apply the parent mesh material to all children of obj
     obj.traverse((child) => {
       if (child.isMesh) {
         child.material = mesh.material;
@@ -1215,20 +1573,8 @@ function loadAndApplyObstacleModel(mesh, levelIndex, r, c, width, height, length
       }
     });
 
-    // Verify the loaded model has visible geometry before replacing the original box
-    const objBbox = new THREE.Box3().setFromObject(obj);
-    const objSize = new THREE.Vector3();
-    objBbox.getSize(objSize);
-    if (objSize.x < 0.01 || objSize.y < 0.01 || objSize.z < 0.01) {
-      // Model is degenerate/invisible — keep the original BoxGeometry
-      return;
-    }
-
-    // Keep the original BoxGeometry visible — OBJ models are decorative children added on top.
-    // Previously, disposing the box geometry caused invisible collision blocks when OBJ models
-    // rendered incorrectly (too small, wrong normals, or partial coverage of the tile area).
-    // The OBJ is added as a visible child alongside the existing box.
-    mesh.add(obj);
+    // Keep the original BoxGeometry visible — wrapper with OBJ model is a decorative child added on top
+    mesh.add(wrapper);
   };
 
   if (loadedObjCache.has(cacheKey)) {
@@ -1264,7 +1610,7 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
     const behaviorColor = activeColor > 0 ? (activeColor + 1) : 0;
     const { behavior, emissiveGlow, glowColor } = classifyTileBehavior(behaviorColor);
     const baseColor = getPaletteColor(palette, behaviorColor);
-    const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData, c);
+    const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData, c, r);
 
     const yBottom = Math.min(startY, endY, 0.0) - 2.0;
     const geom = createRampGeometry(TILE_WIDTH, TILE_LENGTH, yBottom, startY, endY);
@@ -1339,7 +1685,8 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
               isAnimated: true,
               speed: (behavior === 'boost' || behavior === 'super_boost') ? -2.5 : (behavior === 'sticky' ? 1.0 : 0.0),
               pulse: behavior === 'burning' || behavior === 'refill',
-              baseIntensity: 3.0
+              baseIntensity: behavior === 'burning' ? 8.0 : 3.0,
+              pulseAmplitude: behavior === 'burning' ? 3.0 : 1.5
             };
             if (!scene.userData.animatedDecals) {
               scene.userData.animatedDecals = [];
@@ -1349,7 +1696,7 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
 
           const decalMesh = new THREE.Mesh(decalGeom, decalMat);
           const centerY = (startY + endY) / 2;
-          
+
           // Offset slightly along normal vector to prevent z-fighting
           const cosA = Math.cos(slopeAngle);
           const sinA = Math.sin(slopeAngle);
@@ -1360,6 +1707,9 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
           decalMesh.position.set(xPos, centerY + yOffset, zPos - TILE_LENGTH / 2 + zOffsetLocal);
           scene.add(decalMesh);
           roadMeshes.push(decalMesh);
+          if (behavior === 'burning') {
+            roadMeshes.push(createDeathBeam(xPos, Math.max(startY, endY) + 0.3, zPos - TILE_LENGTH / 2 + zOffsetLocal));
+          }
         }
       }
     }
@@ -1390,7 +1740,7 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
 
   const { behavior, emissiveGlow, glowColor } = classifyTileBehavior(behaviorColor);
   const baseColor = getPaletteColor(palette, behaviorColor);
-  const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior || (isObstacle ? 'obstacle' : null), behaviorColor, levelData, c);
+  const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior || (isObstacle ? 'obstacle' : null), behaviorColor, levelData, c, r);
 
   // Main block mesh — 2 depth segments for smooth curvature bending
   const geom = new THREE.BoxGeometry(TILE_WIDTH, height, TILE_LENGTH, 1, 1, 2);
@@ -1476,7 +1826,8 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
               isAnimated: true,
               speed: (behavior === 'boost' || behavior === 'super_boost') ? -2.5 : (behavior === 'sticky' ? 1.0 : 0.0),
               pulse: behavior === 'burning' || behavior === 'refill',
-              baseIntensity: 3.0
+              baseIntensity: behavior === 'burning' ? 8.0 : 3.0,
+              pulseAmplitude: behavior === 'burning' ? 3.0 : 1.5
             };
             if (scene.userData) {
               if (!scene.userData.animatedDecals) scene.userData.animatedDecals = [];
@@ -1488,6 +1839,9 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
           decalMesh.position.set(xPos, yPos + halfH + 0.015, mesh.position.z);
           scene.add(decalMesh);
           roadMeshes.push(decalMesh);
+          if (behavior === 'burning') {
+            roadMeshes.push(createDeathBeam(xPos, yPos + halfH + 0.3, mesh.position.z));
+          }
         }
       }
     }
@@ -1695,8 +2049,15 @@ function buildMergedTunnel(group, r, palette, scene, collidables, roadMeshes, ro
     ribMesh.rotation.x = Math.PI / 2;
     ribMesh.position.set(centerX, baseY, meshZ + zOffset);
     ribMesh.scale.set(1, 1, archHeight / radius);
+    ribMesh.userData = {
+      baseScale: new THREE.Vector3(1, 1, archHeight / radius)
+    };
     scene.add(ribMesh);
     roadMeshes.push(ribMesh);
+    if (scene.userData) {
+      if (!scene.userData.tunnelRibs) scene.userData.tunnelRibs = [];
+      scene.userData.tunnelRibs.push(ribMesh);
+    }
   }
 
   const archThickness = 0.15;
@@ -1868,6 +2229,50 @@ function buildFinishLine(trackLength, scene, roadMeshes, zOffset = 0, isInfinite
 }
 
 /**
+ * Build the neon green checkpoint archway.
+ */
+function buildCheckpointArchway(checkpoint, scene, roadMeshes, zOffset = 0) {
+  const finishZ = checkpoint.z + zOffset;
+  const baseY = checkpoint.baseY || 0.0;
+  const finishWidth = TOTAL_ROAD_WIDTH + 4.0;
+  const finishMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
+    color: 0x39ff14, // Neon Green / Electric Lime
+    emissive: 0x39ff14,
+    emissiveIntensity: 1.0,
+  }));
+
+  // Ground strip
+  const finishGeom = new THREE.BoxGeometry(finishWidth, 0.2, 2.0);
+  adjustBoxUVs(finishGeom, finishWidth, 0.2, 2.0);
+  const finishLineMesh = new THREE.Mesh(finishGeom, finishMat);
+  finishLineMesh.position.set(0, baseY - 0.05, finishZ);
+  scene.add(finishLineMesh);
+  roadMeshes.push(finishLineMesh);
+
+  // Left arch pillar
+  const finishArchGeom = new THREE.BoxGeometry(0.3, 8.0, 0.3);
+  adjustBoxUVs(finishArchGeom, 0.3, 8.0, 0.3);
+  const leftFin = new THREE.Mesh(finishArchGeom, finishMat);
+  leftFin.position.set(-finishWidth / 2, baseY + 4.0, finishZ);
+  scene.add(leftFin);
+
+  // Right arch pillar
+  const rightFin = new THREE.Mesh(finishArchGeom, finishMat);
+  rightFin.position.set(finishWidth / 2, baseY + 4.0, finishZ);
+  scene.add(rightFin);
+
+  // Top beam
+  const topFinGeom = new THREE.BoxGeometry(finishWidth, 0.3, 0.3);
+  adjustBoxUVs(topFinGeom, finishWidth, 0.3, 0.3);
+  const topFin = new THREE.Mesh(topFinGeom, finishMat);
+  topFin.position.set(0, baseY + 8.0, finishZ);
+  scene.add(topFin);
+
+  roadMeshes.push(leftFin, rightFin, topFin);
+}
+
+
+/**
  * Extract level metadata (gravity, fuel, oxygen) with safe defaults.
  */
 function extractLevelMeta(levelData) {
@@ -2034,7 +2439,7 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
       const { behavior, emissiveGlow, glowColor } = classifyTileBehavior(behaviorColor);
       const baseColor = getPaletteColor(palette, behaviorColor);
 
-      const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData, c);
+      const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData, c, r);
 
       // Use standard BoxGeometry with Z-only subdivisions for smooth curvature bending.
       // RoundedBoxGeometry collapses intermediate vertices to corners (Math.sign snap),
@@ -2055,12 +2460,15 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
 
       // WipEout-style rail glow trim on edge columns — thin strip along the inner road edge
       const levelIndexForGlow = levelData && typeof levelData.level_index === 'number' ? levelData.level_index : (typeof window !== 'undefined' ? window.currentLevelIndex : null);
-      const isGeneratedForGlow = (levelData && levelData.isGenerated) || (levelIndexForGlow >= 61) || (typeof window !== 'undefined' && window.currentGamePack === 'generated');
       const isEdgeColBlock = c <= 1 || c >= 5;
-      if (isEdgeColBlock && isGeneratedForGlow && !isTestEnv) {
+      if (isEdgeColBlock && !isTestEnv) {
         const railThemeIndex = getActiveThemeIndex(levelData);
         const railTheme = THEMES[railThemeIndex];
-        const railColor = railTheme ? railTheme.defaultColor.clone() : new THREE.Color(0.0, 0.8, 1.0);
+        const railProfiles = railTheme ? BIOME_COLOR_PROFILES[railTheme.key] : null;
+        const levelIdx = levelIndexForGlow !== null ? levelIndexForGlow : 0;
+        const railColor = railProfiles && railProfiles.length > 0
+          ? new THREE.Color(...railProfiles[levelIdx % railProfiles.length].rail)
+          : (railTheme ? railTheme.defaultColor.clone() : new THREE.Color(0.0, 0.8, 1.0));
         const stripW = 0.14;  // thin trim — not full column width
         const stripH = 0.10;
         const stripGeom = new THREE.BoxGeometry(stripW, stripH, length);
@@ -2137,7 +2545,8 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
                 isAnimated: true,
                 speed: (behavior === 'boost' || behavior === 'super_boost') ? -2.5 : (behavior === 'sticky' ? 1.0 : 0.0),
                 pulse: behavior === 'burning' || behavior === 'refill',
-                baseIntensity: 3.0
+                baseIntensity: behavior === 'burning' ? 8.0 : 3.0,
+                pulseAmplitude: behavior === 'burning' ? 3.0 : 1.5
               };
               if (!scene.userData.animatedDecals) {
                 scene.userData.animatedDecals = [];
@@ -2149,6 +2558,9 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
             decalMesh.position.set(xPos, yPos + height / 2 + 0.005, zPos_center);
             scene.add(decalMesh);
             roadMeshes.push(decalMesh);
+            if (behavior === 'burning') {
+              roadMeshes.push(createDeathBeam(xPos, yPos + height / 2 + 0.3, zPos_center));
+            }
           }
         }
       }
@@ -2242,7 +2654,7 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
       const { behavior, emissiveGlow, glowColor } = classifyTileBehavior(behaviorColor);
       const baseColor = getPaletteColor(palette, behaviorColor);
       
-      const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior || (isObstacle ? 'obstacle' : null), behaviorColor, levelData);
+      const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior || (isObstacle ? 'obstacle' : null), behaviorColor, levelData, c, r);
 
       // Use standard BoxGeometry with Z-only subdivisions for smooth curvature.
       const depthSegments = Math.max(1, spanZ);
@@ -2337,7 +2749,8 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
                 isAnimated: true,
                 speed: (behavior === 'boost' || behavior === 'super_boost') ? -2.5 : (behavior === 'sticky' ? 1.0 : 0.0),
                 pulse: behavior === 'burning' || behavior === 'refill',
-                baseIntensity: 3.0
+                baseIntensity: behavior === 'burning' ? 8.0 : 3.0,
+                pulseAmplitude: behavior === 'burning' ? 3.0 : 1.5
               };
               if (!scene.userData.animatedDecals) {
                 scene.userData.animatedDecals = [];
@@ -2349,6 +2762,9 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
             decalMesh.position.set(xPos, yPos + height / 2 + 0.005, zPos_center);
             scene.add(decalMesh);
             roadMeshes.push(decalMesh);
+            if (behavior === 'burning') {
+              roadMeshes.push(createDeathBeam(xPos, yPos + height / 2 + 0.3, zPos_center));
+            }
           }
         }
       }
@@ -2361,7 +2777,10 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
  * Used for small levels and unit tests.
  */
 export function buildLevel(levelData, scene, zOffset = 0, isInfiniteMode = false) {
-  preprocessLevelRamps(levelData);
+  if (scene && scene.userData) {
+    scene.userData.animatedDecals = [];
+    scene.userData.tunnelRibs = [];
+  }
   const collidables = [];
   const specialTiles = [];
   const roadMeshes = [];
@@ -2387,6 +2806,12 @@ export function buildLevel(levelData, scene, zOffset = 0, isInfiniteMode = false
 
   const finishZ = buildFinishLine(trackLength, scene, roadMeshes, zOffset, isInfiniteMode);
 
+  if (levelData.checkpoints) {
+    levelData.checkpoints.forEach(checkpoint => {
+      buildCheckpointArchway(checkpoint, scene, roadMeshes, zOffset);
+    });
+  }
+
   return {
     trackLength,
     collidables,
@@ -2396,6 +2821,7 @@ export function buildLevel(levelData, scene, zOffset = 0, isInfiniteMode = false
     fuel: initialFuel,
     oxygen: initialOxygen,
     roadMeshes,
+    checkpoints: levelData.checkpoints || [],
   };
 }
 
@@ -2410,7 +2836,10 @@ export function buildLevel(levelData, scene, zOffset = 0, isInfiniteMode = false
  * @returns {Promise<object>} Level info object (same shape as buildLevel return).
  */
 export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInfiniteMode = false) {
-  preprocessLevelRamps(levelData);
+  if (scene && scene.userData) {
+    scene.userData.animatedDecals = [];
+    scene.userData.tunnelRibs = [];
+  }
   const collidables = [];
   const specialTiles = [];
   const roadMeshes = [];
@@ -2428,6 +2857,13 @@ export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInf
       buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMeshes, zOffset);
       if (onProgress) onProgress(100);
       const finishZ = buildFinishLine(trackLength, scene, roadMeshes, zOffset, isInfiniteMode);
+      
+      if (levelData.checkpoints) {
+        levelData.checkpoints.forEach(checkpoint => {
+          buildCheckpointArchway(checkpoint, scene, roadMeshes, zOffset);
+        });
+      }
+
       resolve({
         trackLength,
         collidables,
@@ -2437,6 +2873,7 @@ export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInf
         fuel: initialFuel,
         oxygen: initialOxygen,
         roadMeshes,
+        checkpoints: levelData.checkpoints || [],
       });
       return;
     }
@@ -2467,6 +2904,13 @@ export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInf
       } else {
         // All rows processed — build finish line and resolve
         const finishZ = buildFinishLine(trackLength, scene, roadMeshes, zOffset, isInfiniteMode);
+        
+        if (levelData.checkpoints) {
+          levelData.checkpoints.forEach(checkpoint => {
+            buildCheckpointArchway(checkpoint, scene, roadMeshes, zOffset);
+          });
+        }
+
         resolve({
           trackLength,
           collidables,
@@ -2476,6 +2920,7 @@ export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInf
           fuel: initialFuel,
           oxygen: initialOxygen,
           roadMeshes,
+          checkpoints: levelData.checkpoints || [],
         });
       }
     }

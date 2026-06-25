@@ -3,10 +3,6 @@
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\core_road_diffuse.png"
   },
-  "core_road_edge": {
-    "status": "completed",
-    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\core_road_edge_diffuse.png"
-  },
   "core_obstacle": {
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\core_obstacle_diffuse.png"
@@ -51,10 +47,6 @@
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\organic_road_diffuse.png"
   },
-  "organic_road_edge": {
-    "status": "completed",
-    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\organic_road_edge_diffuse.png"
-  },
   "organic_obstacle": {
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\organic_obstacle_diffuse.png"
@@ -82,10 +74,6 @@
   "furnace_road": {
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\furnace_road_diffuse.png"
-  },
-  "furnace_road_edge": {
-    "status": "completed",
-    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\furnace_road_edge_diffuse.png"
   },
   "furnace_obstacle": {
     "status": "completed",
@@ -115,17 +103,9 @@
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\pulse_road_diffuse.png"
   },
-  "pulse_road_edge": {
-    "status": "completed",
-    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\pulse_road_edge_diffuse.png"
-  },
   "pulse_obstacle": {
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\pulse_obstacle_diffuse.png"
-  },
-  "pulse_tunnel": {
-    "status": "completed",
-    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\pulse_tunnel_diffuse.png"
   },
   "ridge_road": {
     "status": "completed",
@@ -138,10 +118,6 @@
   "ridge_obstacle": {
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\ridge_obstacle_diffuse.png"
-  },
-  "ridge_tunnel": {
-    "status": "completed",
-    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\ridge_tunnel_diffuse.png"
   },
   "shallows_road": {
     "status": "completed",
@@ -179,10 +155,6 @@
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\thrill_road_diffuse.png"
   },
-  "thrill_road_edge": {
-    "status": "completed",
-    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\thrill_road_edge_diffuse.png"
-  },
   "thrill_obstacle": {
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\thrill_obstacle_diffuse.png"
@@ -194,10 +166,6 @@
   "tundra_road": {
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\tundra_road_diffuse.png"
-  },
-  "tundra_road_edge": {
-    "status": "completed",
-    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\tundra_road_edge_diffuse.png"
   },
   "tundra_obstacle": {
     "status": "completed",
@@ -211,10 +179,6 @@
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\void_road_diffuse.png"
   },
-  "void_road_edge": {
-    "status": "completed",
-    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\void_road_edge_diffuse.png"
-  },
   "void_obstacle": {
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\void_obstacle_diffuse.png"
@@ -222,5 +186,41 @@
   "void_tunnel": {
     "status": "completed",
     "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\void_tunnel_diffuse.png"
+  },
+  "core_road_edge": {
+    "status": "completed",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\core_road_edge_diffuse.png"
+  },
+  "organic_road_edge": {
+    "status": "completed",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\organic_road_edge_diffuse.png"
+  },
+  "furnace_road_edge": {
+    "status": "completed",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\furnace_road_edge_diffuse.png"
+  },
+  "pulse_road_edge": {
+    "status": "completed",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\pulse_road_edge_diffuse.png"
+  },
+  "pulse_tunnel": {
+    "status": "completed",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\pulse_tunnel_diffuse.png"
+  },
+  "ridge_tunnel": {
+    "status": "completed",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\ridge_tunnel_diffuse.png"
+  },
+  "thrill_road_edge": {
+    "status": "completed",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\thrill_road_edge_diffuse.png"
+  },
+  "tundra_road_edge": {
+    "status": "completed",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\tundra_road_edge_diffuse.png"
+  },
+  "void_road_edge": {
+    "status": "completed",
+    "diffuse": "c:\\dev\\Sky roads\\assets\\custom\\void_road_edge_diffuse.png"
   }
 }

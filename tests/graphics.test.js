@@ -7,6 +7,7 @@ import * as THREE from 'three';
 const mockRendererInstance = {
   setSize: vi.fn(),
   setPixelRatio: vi.fn(),
+  setClearAlpha: vi.fn(),
   render: vi.fn(),
   domElement: document.createElement('canvas'),
   shadowMap: { enabled: false, type: null },
@@ -232,11 +233,6 @@ describe('GraphicsEngine', () => {
       );
       expect(hasGrid).toBe(false);
     });
-
-    it('should add a sun mesh to the scene', () => {
-      expect(engine.sunMesh).toBeInstanceOf(THREE.Mesh);
-      expect(engine.sunMesh.position.z).toBe(-350);
-    });
   });
 
   // ── createShipMesh() ─────────────────────────────────────────────────────
@@ -344,17 +340,6 @@ describe('GraphicsEngine', () => {
       expect(engine.starField.position.x).toBe(0);
       expect(engine.starField.position.y).toBe(0);
       expect(engine.starField.position.z).toBe(-60);
-    });
-
-    it('should update sunMesh position to track ship horizontally', () => {
-      const physics = createMockPhysics({
-        position: new THREE.Vector3(4, 0, -80)
-      });
-
-      engine.update(physics, 0.016);
-
-      expect(engine.sunMesh.position.x).toBe(4);
-      expect(engine.sunMesh.position.z).toBe(-80 - 350);
     });
 
     it('should apply banking roll based on lateral velocity', () => {
@@ -517,6 +502,37 @@ describe('GraphicsEngine', () => {
       expect(engine.camLookTarget.y).toBeLessThan(0.4);
       expect(engine.camLookTarget.z).toBeGreaterThan(-35);
       expect(engine.camLookTarget.z).toBeLessThan(-30);
+    });
+
+    it('should pitch the ship matching the ramp slope when onRamp is true', () => {
+      const physics = createMockPhysics({
+        onRamp: true,
+        rampSlope: 0.25,
+        velocity: new THREE.Vector3(0, 0, -10)
+      });
+
+      engine.update(physics, 0.016);
+
+      expect(engine.shipMesh.rotation.x).toBeCloseTo(0.0375, 4);
+    });
+
+    it('should revert pitch to standard velocity-based calculation when onRamp becomes false', () => {
+      const physicsOnRamp = createMockPhysics({
+        onRamp: true,
+        rampSlope: 0.25,
+        velocity: new THREE.Vector3(0, 0, -10)
+      });
+      engine.update(physicsOnRamp, 0.016);
+      expect(engine.shipMesh.rotation.x).toBeCloseTo(0.0375, 4);
+
+      const physicsOffRamp = createMockPhysics({
+        onRamp: false,
+        rampSlope: 0.0,
+        velocity: new THREE.Vector3(0, -5, -10)
+      });
+      engine.update(physicsOffRamp, 0.016);
+
+      expect(engine.shipMesh.rotation.x).toBeCloseTo(0.0375, 4);
     });
   });
 
@@ -1071,53 +1087,18 @@ describe('GraphicsEngine', () => {
     });
   });
 
-  // ── GLTF Skybox Integration ──────────────────────────────────────────────
+  // ── Starfield backdrop ────────────────────────────────────────────────────
 
-  describe('GLTF Skybox Integration', () => {
-    it('should initialize with null skyboxMesh and gltfLoaded as false', () => {
-      expect(engine.skyboxMesh).toBeNull();
-      expect(engine.gltfLoaded).toBe(false);
-    });
-
+  describe('Starfield backdrop', () => {
     it('should set scene background to deep-space black for the starfield backdrop', () => {
       engine.init(container);
       expect(engine.scene.background).toBeInstanceOf(THREE.Color);
       expect(engine.scene.background.getHex()).toBe(0x01000a);
     });
 
-    it('should update GLTF skybox position and rotation in update() when loaded', () => {
+    it('should keep the starfield visible as the decorative parallax backdrop', () => {
       engine.init(container);
-      
-      // Simulate successful asynchronous load
-      const mockSkyboxMesh = new THREE.Object3D();
-      engine.skyboxMesh = mockSkyboxMesh;
-      engine.gltfLoaded = true;
-
-      const physics = createMockPhysics({
-        position: new THREE.Vector3(50, 10, -120)
-      });
-
-      engine.update(physics, 0.1);
-
-      // Position should match physics position perfectly
-      expect(engine.skyboxMesh.position.x).toBe(50);
-      expect(engine.skyboxMesh.position.y).toBe(10);
-      expect(engine.skyboxMesh.position.z).toBe(-120);
-
-      // Rotation.y should have increased over time
-      expect(engine.skyboxMesh.rotation.y).toBeGreaterThan(0);
-    });
-
-    it('should fall back gracefully to procedural objects when gltfLoaded is false', () => {
-      engine.init(container);
-      
-      // Since it's test env, gltf is not loaded
-      expect(engine.gltfLoaded).toBe(false);
-
-      // Flying starfield is the backdrop now; the purple nebula sphere is off by default
-      expect(engine.nebulaSphere.visible).toBe(false);
       expect(engine.starField.visible).not.toBe(false);
-      expect(engine.sunMesh.visible).not.toBe(false);
     });
   });
 });

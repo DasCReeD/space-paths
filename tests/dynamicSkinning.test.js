@@ -8,7 +8,8 @@ import {
   getLevelAssetUrl,
   disposeUnusedThemes,
   loadedTextureCache,
-  textureCache
+  textureCache,
+  perturbColor
 } from '../levelLoader.js';
 
 // Helper mock scene
@@ -55,22 +56,29 @@ describe('Dynamic Level Skinning Manager', () => {
       }
     });
 
-    it('should map levelData.level_index to 0..3 themes using modulo 4', () => {
-      expect(getActiveThemeIndex({ level_index: 0 })).toBe(0);
-      expect(getActiveThemeIndex({ level_index: 1 })).toBe(1);
-      expect(getActiveThemeIndex({ level_index: 2 })).toBe(2);
-      expect(getActiveThemeIndex({ level_index: 3 })).toBe(3);
-      expect(getActiveThemeIndex({ level_index: 4 })).toBe(0);
-      expect(getActiveThemeIndex({ level_index: 15 })).toBe(3);
+    it('should map levelData.level_index to correct world themes', () => {
+      expect(getActiveThemeIndex({ level_index: 0 })).toBe(9); // Yama -> Tundra
+      expect(getActiveThemeIndex({ level_index: 1 })).toBe(9);
+      expect(getActiveThemeIndex({ level_index: 2 })).toBe(9);
+      expect(getActiveThemeIndex({ level_index: 3 })).toBe(11); // Oasis -> Shallows
+      expect(getActiveThemeIndex({ level_index: 4 })).toBe(11);
+      expect(getActiveThemeIndex({ level_index: 6 })).toBe(3); // Sub-Terrania -> Organic
+      expect(getActiveThemeIndex({ level_index: 9 })).toBe(10); // Red Heat -> Furnace
+      expect(getActiveThemeIndex({ level_index: 12 })).toBe(13); // Storm Wind -> Pulse
+      expect(getActiveThemeIndex({ level_index: 15 })).toBe(4); // Void -> Void
+      expect(getActiveThemeIndex({ level_index: 18 })).toBe(0); // Outer Space -> Cyberpunk
+      expect(getActiveThemeIndex({ level_index: 21 })).toBe(2); // Phantasmagoria -> Alien
+      expect(getActiveThemeIndex({ level_index: 24 })).toBe(12); // Spire -> Spire
+      expect(getActiveThemeIndex({ level_index: 27 })).toBe(1); // Aftermath -> Industrial
     });
 
     it('should fall back to window.currentLevelIndex if levelData.level_index is missing', () => {
       if (typeof window !== 'undefined') {
         window.currentLevelIndex = 2;
-        expect(getActiveThemeIndex({})).toBe(2);
+        expect(getActiveThemeIndex({})).toBe(9);
         
         window.currentLevelIndex = 5;
-        expect(getActiveThemeIndex({})).toBe(1);
+        expect(getActiveThemeIndex({})).toBe(11);
       }
     });
 
@@ -151,7 +159,7 @@ describe('Dynamic Level Skinning Manager', () => {
       row[3] = createFlatTile(10); // Color index 10 corresponds to boost behavior
       
       const levelData = createBaseLevelData({
-        level_index: 1, // Industrial theme
+        level_index: 27, // Industrial theme (World 9 Aftermath)
         rows: [row]
       });
 
@@ -172,7 +180,7 @@ describe('Dynamic Level Skinning Manager', () => {
       row[3] = createFlatTile(9); // Color index 9 corresponds to refill behavior
       
       const levelData = createBaseLevelData({
-        level_index: 2, // Alien glass theme
+        level_index: 21, // Alien glass theme (World 7 Phantasmagoria)
         rows: [row]
       });
 
@@ -190,7 +198,7 @@ describe('Dynamic Level Skinning Manager', () => {
       row[3] = createFlatTile(12); // Color index 12 corresponds to burning behavior
       
       const levelData = createBaseLevelData({
-        level_index: 3, // Retro cabin theme
+        level_index: 6, // Retro cabin theme (World 2 Sub-Terrania)
         rows: [row]
       });
 
@@ -321,6 +329,38 @@ describe('Dynamic Level Skinning Manager', () => {
           expect(activeTexture.dispose).not.toHaveBeenCalled();
         }
       }
+    });
+  });
+
+  describe('Advanced Visual Skinning Extensions', () => {
+    it('should perturb colors deterministically based on levelIndex and salt', () => {
+      const base = new THREE.Color(0.5, 0.5, 0.5);
+      const c1 = perturbColor(base, 10, 1);
+      const c2 = perturbColor(base, 10, 1);
+      const c3 = perturbColor(base, 11, 1);
+
+      expect(c1.r).toBe(c2.r);
+      expect(c1.g).toBe(c2.g);
+      expect(c1.b).toBe(c2.b);
+
+      expect(c1.r).not.toBe(c3.r);
+    });
+
+    it('should reset animatedDecals and tunnelRibs in scene.userData when building level', () => {
+      const scene = {
+        add: vi.fn(),
+        userData: {
+          animatedDecals: [{}],
+          tunnelRibs: [{}]
+        }
+      };
+      const levelData = createBaseLevelData({
+        level_index: 0,
+        rows: [Array(ROAD_WIDTH_LANES).fill(createFlatTile(0))]
+      });
+      buildLevel(levelData, scene);
+      expect(scene.userData.animatedDecals).toHaveLength(0);
+      expect(scene.userData.tunnelRibs).toHaveLength(0);
     });
   });
 });

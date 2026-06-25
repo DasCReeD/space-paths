@@ -36,14 +36,25 @@ const mockGraphicsInstance = {
   spawnCityScenery: vi.fn(),
   loadLevelSceneryModels: vi.fn((index, resolve) => { if (resolve) resolve(); }),
   scene: { add: vi.fn(), remove: vi.fn() },
-  starField: { rotation: { y: 0 } },
+  starField: { rotation: { y: 0 }, visible: true },
+  starCount: 1500,
+  starSizeMultiplier: 1.0,
+  setStarSize: vi.fn(),
+  setStarDensity: vi.fn(),
+  setSpeedFovEnabled: vi.fn(),
+  setCockpitFOV: vi.fn(),
+  setVisualizerCanvas: vi.fn(),
+  setVisualizerWallMode: vi.fn(),
+  setVisualizerWallParams: vi.fn(),
+  createGhostMesh: vi.fn(),
+  setGhostVisible: vi.fn(),
+  removeGhostMesh: vi.fn(),
+  ghostMesh: null,
   render: vi.fn(),
   update: vi.fn(),
   triggerExplosion: vi.fn(),
   updateCameraHUD: vi.fn(),
   setCameraFOV: vi.fn(),
-  setThemeSkybox: vi.fn(),
-  setAudioData: vi.fn(),
   cameraHeightAdjust: -0.5,
   cameraPitchAdjust: 0.087,
 };
@@ -81,7 +92,8 @@ const mockKeyboardInstance = {
 vi.mock('../physics.js', () => ({
   PhysicsEngine: vi.fn(() => mockPhysicsInstance),
   KeyboardController: vi.fn(() => mockKeyboardInstance),
-  SHIP_LENGTH: 1.8
+  SHIP_LENGTH: 1.8,
+  LEGACY_MODEL_ALIASES: {}
 }));
 
 const mockBuildLevelResult = {
@@ -119,14 +131,12 @@ vi.mock('../audio.js', () => ({
     playWallCollision: vi.fn(),
     playLandingRebound: vi.fn(),
     playSteer: vi.fn(),
-    startMusic: vi.fn(),
-    stopMusic: vi.fn(),
-    setMusicEnabled: vi.fn(),
-    setMusicVolume: vi.fn(),
     setSfxVolume: vi.fn(),
-    setSoundMode: vi.fn(),
-    getAnalyserData: vi.fn().mockReturnValue(null),
-    musicSequencer: { musicEnabled: true }
+    playVerticalTick: vi.fn(),
+    playHorizontalSwoosh: vi.fn(),
+    playConfirmSound: vi.fn(),
+    playCancelSound: vi.fn(),
+    playBoundaryError: vi.fn(),
   }
 }));
 
@@ -197,7 +207,10 @@ function createMinimalDOM() {
 
     <div id="level-screen" class="overlay-screen hidden">
       <h2 id="level-pack-title"></h2>
-      <div id="level-grid"></div>
+      <div id="level-crossbar" class="xmb-crossbar">
+        <div id="level-category-track" class="xmb-category-track"></div>
+        <div id="level-item-track" class="xmb-item-track"></div>
+      </div>
       <button id="btn-level-back"></button>
     </div>
 
@@ -205,9 +218,11 @@ function createMinimalDOM() {
       <p id="death-reason"></p>
       <p id="death-rewind-prompt" class="hidden">HOLD <span class="rewind-key">R</span> TO REWIND</p>
       <p id="death-rewind-depleted" class="hidden">REWIND DEPLETED</p>
-      <div class="menu-buttons">
-        <button id="btn-death-retry"></button>
-        <button id="btn-death-menu"></button>
+      <div class="xmb-crossbar xmb-crossbar-single" id="death-xmb-crossbar">
+        <div class="xmb-item-track" id="death-xmb-item-track">
+          <button id="btn-death-retry" class="xmb-item"></button>
+          <button id="btn-death-menu" class="xmb-item"></button>
+        </div>
       </div>
     </div>
 
@@ -229,8 +244,12 @@ function createMinimalDOM() {
         <tbody id="leaderboard-table-body"></tbody>
       </table>
 
-      <button id="btn-success-next"></button>
-      <button id="btn-success-menu"></button>
+      <div class="xmb-crossbar xmb-crossbar-single" id="success-xmb-crossbar">
+        <div class="xmb-item-track" id="success-xmb-item-track">
+          <button id="btn-success-next" class="xmb-item"></button>
+          <button id="btn-success-menu" class="xmb-item"></button>
+        </div>
+      </div>
     </div>
 
     <div id="hud" class="hidden">
@@ -409,7 +428,7 @@ describe('GameManager (app.js)', () => {
       await loadApp();
       await clickAndFlush('btn-play-standard');
 
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       const items = grid.querySelectorAll('.level-item');
       expect(items.length).toBe(MOCK_STANDARD_LEVELS.length);
     });
@@ -418,7 +437,7 @@ describe('GameManager (app.js)', () => {
       await loadApp();
       await clickAndFlush('btn-play-xmas');
 
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       const items = grid.querySelectorAll('.level-item');
       expect(items.length).toBe(MOCK_XMAS_LEVELS.length);
     });
@@ -452,7 +471,7 @@ describe('GameManager (app.js)', () => {
       await loadApp();
       await clickAndFlush('btn-play-standard');
 
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       const items = grid.querySelectorAll('.level-item');
 
       // Check second item (idx=1) since jsdom has a known quirk where
@@ -462,7 +481,7 @@ describe('GameManager (app.js)', () => {
 
       // jsdom's innerText setter populates innerText, not innerHTML
       expect(secondNum.innerText).toBe(1);
-      expect(secondName.innerText).toBe('RED HEAT');
+      expect(secondName.innerText).toBe('RED HEAT — ROAD 1');
     });
 
     it('should call loadLevelPack with the correct pack name', async () => {
@@ -480,7 +499,7 @@ describe('GameManager (app.js)', () => {
       await clickAndFlush('btn-level-back');
       await clickAndFlush('btn-play-xmas');
 
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       const items = grid.querySelectorAll('.level-item');
       expect(items.length).toBe(MOCK_XMAS_LEVELS.length);
     });
@@ -491,7 +510,7 @@ describe('GameManager (app.js)', () => {
   describe('startLevel()', () => {
     async function navigateToLevelAndStart(levelIndex = 0) {
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       const items = grid.querySelectorAll('.level-item');
       await clickElementAndFlush(items[levelIndex]);
     }
@@ -557,7 +576,7 @@ describe('GameManager (app.js)', () => {
     it('should hide HUD and show menu screen', async () => {
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
 
       await clickAndFlush('btn-success-menu');
@@ -573,7 +592,7 @@ describe('GameManager (app.js)', () => {
       const { gameAudio } = await import('../audio.js');
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
 
       await clickAndFlush('btn-success-menu');
@@ -588,7 +607,7 @@ describe('GameManager (app.js)', () => {
     async function startLevelAndTriggerDeath(reason = 'COLLIDED WITH BLOCK') {
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
 
       mockPhysicsInstance.isDead = true;
@@ -634,7 +653,7 @@ describe('GameManager (app.js)', () => {
     it('should record snapshots during active play frames up to 10000 frames', async () => {
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
 
       const manager = window.gameManagerInstance;
@@ -652,7 +671,7 @@ describe('GameManager (app.js)', () => {
     it('should show the rewind prompt after 1 second if rewind is available on death', async () => {
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
 
       const manager = window.gameManagerInstance;
@@ -672,7 +691,7 @@ describe('GameManager (app.js)', () => {
     it('should show retry/menu buttons after 4 seconds if no rewind action is taken', async () => {
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
 
       const manager = window.gameManagerInstance;
@@ -682,7 +701,7 @@ describe('GameManager (app.js)', () => {
       manager.handleDeath();
 
       const deathScreen = document.getElementById('death-screen');
-      const deathButtons = deathScreen.querySelector('.menu-buttons');
+      const deathButtons = deathScreen.querySelector('.xmb-item-track');
       expect(deathButtons.style.display).toBe('none');
 
       // Advance by 4 seconds
@@ -732,7 +751,7 @@ describe('GameManager (app.js)', () => {
       async (reason, expectedMessage) => {
         await loadApp();
         await clickAndFlush('btn-play-standard');
-        const grid = document.getElementById('level-grid');
+        const grid = document.getElementById('level-crossbar');
         await clickElementAndFlush(grid.querySelector('.level-item'));
 
         mockPhysicsInstance.isDead = true;
@@ -760,7 +779,7 @@ describe('GameManager (app.js)', () => {
     async function startLevelAndTriggerSuccess(levelIndex = 0) {
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       const items = grid.querySelectorAll('.level-item');
       await clickElementAndFlush(items[levelIndex]);
 
@@ -807,7 +826,7 @@ describe('GameManager (app.js)', () => {
     async function startAndGetFrameRunner() {
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
     }
 
@@ -897,7 +916,7 @@ describe('GameManager (app.js)', () => {
       const { buildLevelAsync } = await import('../levelLoader.js');
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
 
       const callCountBefore = buildLevelAsync.mock.calls.length;
@@ -909,7 +928,7 @@ describe('GameManager (app.js)', () => {
     it('should return to menu when death menu button is clicked', async () => {
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
 
       await clickAndFlush('btn-death-menu');
@@ -1083,7 +1102,7 @@ describe('GameManager (app.js)', () => {
     async function startLevel() {
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
     }
 
@@ -1177,7 +1196,7 @@ describe('GameManager (app.js)', () => {
     async function startAndGetFrameRunner() {
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
     }
 
@@ -1231,7 +1250,7 @@ describe('GameManager (app.js)', () => {
     it('should compute accurate score breakdown at level completion', async () => {
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
 
       const manager = window.gameManagerInstance;
@@ -1270,7 +1289,7 @@ describe('GameManager (app.js)', () => {
       localStorage.clear();
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
 
       const manager = window.gameManagerInstance;
@@ -1324,7 +1343,7 @@ describe('GameManager (app.js)', () => {
       localStorage.clear();
       await loadApp();
       await clickAndFlush('btn-play-standard');
-      const grid = document.getElementById('level-grid');
+      const grid = document.getElementById('level-crossbar');
       await clickElementAndFlush(grid.querySelector('.level-item'));
 
       const manager = window.gameManagerInstance;
@@ -1357,6 +1376,71 @@ describe('GameManager (app.js)', () => {
       const leaderboard = JSON.parse(localStorage.getItem(leaderboardKey));
       expect(leaderboard).toHaveLength(1);
       expect(leaderboard[0].initials).toBe('ENT');
+    });
+
+    it('should NOT count score of 0 as a record even if leaderboard is empty', async () => {
+      localStorage.clear();
+      await loadApp();
+      await clickAndFlush('btn-play-standard');
+      const grid = document.getElementById('level-crossbar');
+      await clickElementAndFlush(grid.querySelector('.level-item'));
+
+      const manager = window.gameManagerInstance;
+      // Configure mock level run metrics to get final score of 0
+      manager.totalTime = 100.0;
+      manager.speedAccumulator = 0;
+      manager.speedTicks = 10;
+      manager.wallHits = 100; // very high penalty to clamp score to 0
+      mockPhysicsInstance.difficulty = 'easy';
+
+      manager.handleSuccess();
+
+      // The leaderboard input box should be hidden
+      const inputBox = document.getElementById('leaderboard-input-box');
+      expect(inputBox.style.display).toBe('none');
+
+      // The next button should be focused
+      const nextBtn = document.getElementById('btn-success-next');
+      await new Promise(r => setTimeout(r, 150)); // Wait for focus timeout
+      expect(document.activeElement).toBe(nextBtn);
+    });
+
+    it('should fallback focus to BACK TO MENU button if next button is hidden on last road', async () => {
+      localStorage.clear();
+      await loadApp();
+      await clickAndFlush('btn-play-standard');
+      const grid = document.getElementById('level-crossbar');
+      await clickElementAndFlush(grid.querySelector('.level-item'));
+
+      const manager = window.gameManagerInstance;
+      // Mock it as the last level of the pack standard (standard has 3 levels: index 0, 1, 2)
+      manager.currentLevelIndex = 2; // last level index for mock standard levels
+      manager.totalTime = 10.0;
+      manager.speedAccumulator = 100;
+      manager.speedTicks = 10;
+      manager.wallHits = 5; // low score
+      mockPhysicsInstance.difficulty = 'easy';
+
+      // Pre-populate leaderboard with 5 high scores so that 21000 is not a record
+      const leaderboardKey = `skyroads_leaderboard_standard_2`;
+      const highScores = [
+        { initials: 'AAA', score: 90000, time: 5.0 },
+        { initials: 'BBB', score: 80000, time: 5.0 },
+        { initials: 'CCC', score: 70000, time: 5.0 },
+        { initials: 'DDD', score: 60000, time: 5.0 },
+        { initials: 'EEE', score: 50000, time: 5.0 }
+      ];
+      localStorage.setItem(leaderboardKey, JSON.stringify(highScores));
+
+      manager.handleSuccess();
+
+      const nextBtn = document.getElementById('btn-success-next');
+      expect(nextBtn.classList.contains('hidden')).toBe(true);
+
+      // The menu button should be focused since next is hidden
+      const menuBtn = document.getElementById('btn-success-menu');
+      await new Promise(r => setTimeout(r, 150)); // Wait for focus timeout
+      expect(document.activeElement).toBe(menuBtn);
     });
   });
 });

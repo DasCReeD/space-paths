@@ -1,7 +1,16 @@
 # SkyRoads WebGL — Module Map
 
-> **Last updated:** 2026-06-15
+> **Last updated:** 2026-06-25
 > Authoritative code map for all source modules, their exports, dependencies, and relationships.
+>
+> **2026-06-25 — Visualizer Preset Variety:** Added 179 pre-converted Waveform presets from the projectM "presets-cream-of-the-crop" repository, loaded asynchronously on demand.
+>
+> **2026-06-22 — XMB menu system:** All in-game menus were rebuilt as a PS3
+> XrossMediaBar-style crossbar. New modules `xmbMenu.js` (engine) and
+> `menuConfig.js` (data); the `visualizer/` module's floating panel was folded
+> into the Settings menu as a VISUALIZER category. See those sections + the
+> updated `app.js`, `index.html`, `index.css` notes below.
+
 
 ---
 
@@ -38,6 +47,8 @@
 29. [Data Files](#data-files)
 30. [analyze_audio.js — Audio Feature Extractor](#analyze_audiojs)
 31. [generate_audio_level.js — Audio Level Generator](#generate_audio_leveljs)
+32. [convert-all-presets.js — Waveform Presets Offline Converter](#convert-all-presetsjs)
+
 
 ---
 
@@ -45,7 +56,10 @@
 
 | File | Size | Lines (approx) | Purpose |
 |------|------|-----------------|---------|
-| [app.js](../app.js) | 111 KB | ~2,797 | GameManager — state machine, UI, game loop, input, garage, settings |
+| [app.js](../app.js) | 111 KB | ~2,797 | GameManager — state machine, UI, game loop, input, garage, settings, XMB menu wiring |
+| [xmbMenu.js](../xmbMenu.js) | ~13 KB | ~360 | `CrossbarController` — shared PS3-XMB crossbar engine (state, tween, input, render) |
+| [menuConfig.js](../menuConfig.js) | ~10 KB | ~210 | Pure-data menu trees (main/settings/garage/gamepad) + `buildLevelSelectConfig` |
+| [visualizer/](../visualizer/) | — | — | Webamp + Butterchurn music visualizer; preset controls exposed to the XMB Settings menu |
 | [graphics.js](../graphics.js) | 93 KB | ~1,800 | Three.js rendering, particles, skybox, theming, ship models |
 | [levelLoader.js](../levelLoader.js) | 88 KB | ~2,200 | Level geometry builder, themed textures, async building |
 | [index.css](../index.css) | 78 KB | ~3,145 | Retro-futuristic glassmorphism design system |
@@ -70,6 +84,7 @@
 | [vite.config.js](../vite.config.js) | <1 KB | ~20 | Build + test configuration |
 | [analyze_audio.js](../tools/analyze_audio.js) | 17 KB | ~480 | Extracts BPM, dynamic range, and sections from MP3s to JSON |
 | [generate_audio_level.js](../tools/generate_audio_level.js) | 18 KB | ~345 | Procedurally generates levels from analyzed audio JSON |
+| [convert-all-presets.js](../scripts/convert-all-presets.js) | ~5 KB | ~130 | Offline Puppeteer converter for Waveform presets (filters out shaders) |
 
 ---
 
@@ -99,6 +114,25 @@
 | `GamepadManager` | class (internal) | Xbox/generic gamepad polling, button mapping, deadzone config |
 | `SKIN_DETAILS` | const object | Display names and descriptions for ship skins |
 
+**XMB menu integration (added 2026-06):**
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `this.crossbarControllers` | object | Map of `screenId → CrossbarController`; one per overlay menu |
+| `getActiveCrossbarController()` | method | Returns the active overlay's controller (dispatch lookup) |
+| `handleCrossbarKeyboard(e, ctrl)` | method | Routes keydown (arrows/WASD/Enter/Esc) into a controller; tap vs hold |
+| `wireCategoryClicks(ctrl)` | method | Makes category cells mouse-clickable (jump to category) |
+| `_cancelActiveScreen()` | method | Esc/B back-nav: clicks the active screen's back/close button |
+| `setupXmbMenus()` | method | Builds the main-menu + how-to controllers from `mainMenuConfig` |
+| `mountSettingsCrossbar()` | method | (Re)builds the Settings crossbar each open (GAME…VISUALIZER, slider exception, paused rows) |
+| `buildLiveSettingsConfig()` / `_resolveSettingsAction()` / `_settingsItemValueText()` | methods | Turn `settingsConfig` data into live handlers + value labels |
+| `_renderSettingsSlider(id)` / `_renderVisualizerSettings()` | methods | Update visible slider fills / VISUALIZER rows from live state |
+| `setupGarageCrossbar()` / `setupPauseDeathSuccessCrossbars()` | methods | Build the garage (Hull/Skin/Paint) + single-category dialog controllers |
+| `showLevelSelection(pack)` | method | Builds the per-pack decade crossbar (Infinite Road is item 0 of group 1) |
+| `startInfiniteRoad()` | method | Starts infinite mode (the Infinite Road menu item) |
+| `_makeCalibratorDraggable()` | method | Pointer-drag the physics calibrator window by its title bar |
+| `this.visualizerControls` | field | The visualizer `controls` object (consumed by the VISUALIZER settings category) |
+
 **Dependencies:**
 - [levels.js](../levels.js) → `loadLevelPack`, `getCachedPack`
 - [graphics.js](../graphics.js) → `GraphicsEngine`
@@ -107,7 +141,70 @@
 - [audio.js](../audio.js) → `gameAudio`
 - [preview.js](../preview.js) → `ShipPreviewEngine`
 - [touchControls.js](../touchControls.js) → `TouchControlManager`
+- [xmbMenu.js](../xmbMenu.js) → `CrossbarController`
+- [menuConfig.js](../menuConfig.js) → `mainMenuConfig`, `settingsConfig`, `garageConfig`, `gamepadConfigConfig`, `buildLevelSelectConfig`
+- [visualizer/index.js](../visualizer/index.js) → `initVisualizer`
 - `three` (npm)
+
+---
+
+## xmbMenu.js
+
+**Purpose:** Framework-free engine for the PS3 XrossMediaBar-style menus. One `CrossbarController` drives a horizontal row of categories and a vertical column of items, translating both so the **active** category/item sits on a fixed, screen-centred focal point ("the world moves, not the cursor"). Pure logic + DOM style writes; no app/game coupling, unit-tested headless.
+
+**Stats:** ~360 lines · ~13 KB · **Exports:** `CrossbarController`, `easeOutCubic`, `TWEEN_DURATION_MS`
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `CrossbarController(config, {categoryTrackEl, itemTrackEl})` | class | State `{categoryIndex,itemIndex}`, per-category remembered item index |
+| `.handleDirection(axis, dir)` | method | One step; clamps at bounds (boundary SFX, no wrap); **slider exception**: Left/Right adjusts a focused `kind:'slider'` item via `onAdjust` |
+| `.confirm()` / `.cancel()` | methods | Fire item `onConfirm` (+ confirm SFX) / play cancel SFX (caller does nav) |
+| `.startHold(axis,dir)` / `.stopHold()` | methods | Tap → 200 ms delay → fixed-rate repeat (no ramp) |
+| `.render(now)` | method | rAF-driven: writes `transform: translate(...)` to tracks (centring + scroll) + per-item scale/opacity; label-on-focus span |
+| `.mount(catEl, itemEl)` / `.destroy()` | methods | (Re)bind track DOM / cancel rAF+timers |
+| `CATEGORY_SLOT_PX=200`, `ITEM_SLOT_PX=56` | consts | Fixed slot sizes — must match `.xmb-category` width / `.xmb-item` height in `index.css` |
+| `safePlay(fn)` | fn (internal) | Guards audio-hook calls so a throwing SFX stub can't abort navigation |
+
+**Visual contract:** active = scale 1.0 / opacity 1.0 + label shown; inactive = 0.75 / 0.6, label hidden. Tween = cubic ease-out, 150 ms, retarget-safe (interruptible mid-flight).
+
+**Dependencies:** [audio.js](../audio.js) → `gameAudio` (5 hooks: `playVerticalTick`, `playHorizontalSwoosh`, `playConfirmSound`, `playCancelSound`, `playBoundaryError`).
+**Tests:** [tests/xmbMenu.test.js](../tests/xmbMenu.test.js) — tween math, retarget continuity, boundary clamp, slider exception, hold-timer sequencing.
+
+---
+
+## menuConfig.js
+
+**Purpose:** Pure-data menu trees (no DOM, no imports). Each item carries an `actionKey` string that `app.js` resolves to a live handler/`el` — keeps data and wiring separate.
+
+**Stats:** ~210 lines · ~10 KB
+
+| Export | Type | Description |
+|--------|------|-------------|
+| `mainMenuConfig` | object | PLAY (packs + load custom) / EXTRAS (editor, garage, how-to) |
+| `settingsConfig` | object | 6 categories: GAME, AUDIO, VISUALS, CONTROLS, DISPLAY (incl. calibrator + close items), **VISUALIZER** (preset slider + lock/fav/mode/webamp) |
+| `garageConfig` | object | HULL (7) / SKIN (12) / PAINT (7 presets + custom-color focus item) |
+| `gamepadConfigConfig` | object | Single category: 7 remap rows |
+| `buildLevelSelectConfig(levelNames)` | function | Groups N level names into decade categories ("Levels 1-10"…); absolute indices in `actionKey` |
+
+**Tests:** [tests/menuConfig.test.js](../tests/menuConfig.test.js) — category/item counts, unique ids, slider bounds, decade-group math.
+
+---
+
+## visualizer/ — Music Visualizer & XMB Controls
+
+**Purpose:** Webamp (playback + playlist) + a standalone Butterchurn render engine fed by Webamp's analyser; output canvas is read by `graphics.js` as a `CanvasTexture` (sky/wall visualizer). Its preset-control state machine is now surfaced inside the **Settings → VISUALIZER** XMB category (the old floating panel was removed).
+
+| File | Purpose |
+|------|---------|
+| `visualizer/index.js` | `initVisualizer({initialTracks})` → `{ webamp, controls, canvas, dispose }` |
+| `visualizer/controls.js` | `createControls()` → `controls`: `prev/next`, `toggleLocked`, `toggleFavoriteCurrent`, `toggleTransitionMode`, `setWebampVisible`, `getPresetInfo()→{index,name,total,isFavorite,isLocked,transitionMode}`, `onChange(fn)` |
+| `visualizer/engine.js` | Employs an asynchronous, fetch-on-demand architecture to load presets at runtime by calling `fetch('./visualizer-presets/[file].json')` to prevent bundling bloat. Integrates with Butterchurn and controls bloom. |
+| `visualizer/control-panel.js` | (legacy) floating panel — **no longer mounted**; controls live in the Settings menu |
+| `visualizer/presets.js` | Generated index array of 179 pre-converted Waveform preset metadata entries: `{ name, file }`. |
+| `webamp-init.js`, `style.css` | Webamp bootstrap and layout styles |
+
+
+**Consumed by:** `app.js` (`this.visualizerControls`, the `vis-*` settings actions + `_renderVisualizerSettings`).
 
 ---
 
@@ -512,6 +609,18 @@
 | Loading Screen | `#screen-loading` | Spinner + progress bar |
 | Mobile Touch HUD | `#mobile-touch-hud` | Individual buttons: joystick/d-pad, thrust, brake, jump, camera, rewind, curve, zoom, pause, edit/customize |
 
+> **XMB markup (2026-06):** Each overlay menu now contains an `.xmb-crossbar`
+> with an `.xmb-category-track` (horizontal `.xmb-category` cells) and one or
+> more `.xmb-item-track`s (vertical `.xmb-item` rows). Multi-category screens
+> (`#menu-screen`, `#settings-screen`, `#ship-picker-screen`, `#level-screen`)
+> swap a per-category item-track; single-category dialogs use
+> `.xmb-crossbar-single`. Settings gained a **VISUALIZER** category
+> (`#settings-xmb-cat-visualizer` + `#settings-xmb-item-track-visualizer`) and
+> its Calibrator/Close are now items, not fixed chrome. The standalone
+> `#btn-start-infinite` and the floating visualizer panel (`#btn-skybox-controls`)
+> were removed. The physics calibrator (`#physics-calibrator-screen`) is now
+> draggable (title bar) + CSS-resizable.
+
 ---
 
 ## index.css
@@ -540,7 +649,8 @@
 16. **Cockpit Overlay** — First-person cabin bezel image
 17. **Pause/Fullscreen** — Glassmorphic floating buttons
 18. **Touch Controls v2** — Individual button system with anchor positioning, customizer mode, responsive breakpoints
-19. **Physics Calibrator** — Floating panel with slider groups, preset buttons
+19. **Physics Calibrator** — Floating, **draggable + resizable** panel (`resize:both`; opacity/visibility show-hide) with slider groups, preset buttons
+20. **XMB Crossbar** (2026-06) — `.overlay-screen.active` is full-screen with `backdrop-filter: blur(26px)` (game blurred behind, no glass-card window); `.xmb-crossbar` fills the viewport; `.xmb-category-track`/`.xmb-item-track` anchored at `left:50% / top:50%` with the engine writing the centring + scroll `translate`; fixed `.xmb-category` (200px) / `.xmb-item` (56px) slots; `pointer-events` on tracks vs cells; `.level-item-infinite` pill; settings slider fills
 
 ---
 
@@ -664,6 +774,13 @@ graph TD
     APP --> PRV["preview.js<br/>ShipPreviewEngine"]
     APP --> LVL["levels.js<br/>Pack Loader"]
     APP --> TC["touchControls.js<br/>TouchControlManager"]
+    APP --> XMB["xmbMenu.js<br/>CrossbarController"]
+    APP --> MCFG["menuConfig.js<br/>menu data"]
+    APP --> VIS["visualizer/index.js<br/>initVisualizer"]
+
+    XMB --> AUD
+    VIS --> GFX
+    VIS --> WA["webamp + butterchurn (npm)"]
 
     TC --> PHY
     TC --> GFX
@@ -792,3 +909,17 @@ assets/
 **Dependencies:**
 - [worldBuilder.js](../worldBuilder.js) → `solveLevel`, `assembleFromSegments`
 - Node.js filesystem modules.
+
+---
+
+## convert-all-presets.js
+
+**Purpose:** Offline build-time converter that recursively walks the `scratch/presets-repo/Waveform` directory to parse `.milk` presets and compile them into JSON objects using Puppeteer. Pre-filters out presets relying on custom WebGL pixel shaders (`warp_1`, `comp_1`, backticks, `shader_body`) to avoid runtime rendering errors, and writes successfully converted presets as standalone JSON files to `public/visualizer-presets/` and updates the index registry in `visualizer/presets.js`.
+
+**Stats:** ~130 lines · ~5 KB
+
+**Dependencies:**
+- `puppeteer` (npm)
+- `node:fs/promises`
+- `C:/dev/BrainBlur/node_modules/milkdrop-preset-converter-aws/dist/milkdrop-preset-converter-aws.min.js`
+

@@ -1,0 +1,206 @@
+/**
+ * style.css — visualizer layer styling.
+ *
+ * Two parts:
+ * 1. The Butterchurn output canvas (#visualizer-canvas) is kept off-screen —
+ *    confirmed via live debugging that the game's bloom/post-processing
+ *    pipeline writes alpha=1 into its final output regardless of the scene's
+ *    own transparency, so this canvas could never be visibly composited as a
+ *    DOM overlay behind the game's 3D canvas no matter how it was styled.
+ *    graphics.js instead reads its pixels into a THREE.CanvasTexture used as
+ *    the game's own scene.background. This canvas only needs to exist and
+ *    render — not be seen directly.
+ * 2. The control-panel UI, modeled visually on BrainBlur's `.skin-modal`
+ *    family (src/css/style.css), but trimmed to only what control-panel.js
+ *    actually uses (no search/tabs/gallery markup).
+ */
+
+#visualizer-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Webamp centers its window group within whatever element it's given —
+   anchor it to a small box in a top-right corner, clear of the ship/cockpit
+   model (which sits center-screen) and our own top-left control button. */
+#webamp-anchor {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 275px;
+  height: 116px;
+  pointer-events: none;
+}
+
+#webamp-anchor * {
+  pointer-events: auto;
+}
+
+/* Webamp appends its real player root (#webamp) directly to <body>, not
+   inside #webamp-anchor — the anchor above only controls its *position*
+   (Webamp centers its window group within whatever element it's given).
+   The game's HUD/overlay layers use z-index up to ~110 during gameplay (see
+   index.css), so #webamp's own default z-index:0 sits underneath all of
+   them and is invisible. Force it above the game's UI. */
+#webamp {
+  z-index: 1000 !important;
+}
+
+/* ========================================
+   Control panel toggle button
+   ======================================== */
+#btn-skybox-controls {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  background: rgba(25, 25, 40, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #e8e6f0;
+  font-size: 1.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+#btn-skybox-controls:hover {
+  border-color: #a855f7;
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.3);
+}
+
+/* ========================================
+   Control panel (BrainBlur .skin-modal family)
+   ======================================== */
+.skin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  transition: opacity 0.2s ease;
+}
+
+.skin-modal.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.skin-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.skin-modal-content {
+  position: relative;
+  margin: 70px 0 0 16px;
+  width: 280px;
+  background: rgba(15, 15, 25, 0.85);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5), 0 0 30px rgba(168, 85, 247, 0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #e8e6f0;
+}
+
+.skin-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.skin-modal-header h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #a855f7, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.skin-close-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  color: #a09bb5;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.skin-close-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e8e6f0;
+}
+
+.visualizer-panel-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.visualizer-preset-name {
+  font-size: 0.8rem;
+  color: #a09bb5;
+  text-align: center;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.visualizer-row {
+  display: flex;
+  gap: 8px;
+}
+
+.visualizer-row button {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #e8e6f0;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.visualizer-row button:hover {
+  border-color: #a855f7;
+  background: rgba(168, 85, 247, 0.15);
+}
+
+.visualizer-row button.active {
+  background: rgba(168, 85, 247, 0.3);
+  border-color: #a855f7;
+  color: #fff;
+}

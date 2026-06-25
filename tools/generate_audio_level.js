@@ -24,7 +24,7 @@
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { solveLevel, assembleFromSegments } from '../worldBuilder.js';
+import { solveLevel, assembleFromSegments, injectCheckpoints } from '../worldBuilder.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -262,8 +262,11 @@ function generate(a, levelIndex, seedSalt = 0) {
     },
   };
 
+  // Inject checkpoints and runways
+  injectCheckpoints(level);
+
   let solvable = null;
-  try { solvable = solveLevel({ rows, gravity, fuel, oxygen, fuelConsumptionRate: 25 }); }
+  try { solvable = solveLevel({ rows: level.rows, gravity, fuel, oxygen, fuelConsumptionRate: 25 }); }
   catch (e) { solvable = `error:${e.message}`; }
 
   return { level, secs, solvable, stats: { gravity, K: best.K, airtimeSec, jumpRows, totalRows, ...counters, oxygen, fuel } };

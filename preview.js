@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { LEGACY_MODEL_ALIASES } from './physics.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -33,28 +34,6 @@ import frigate5Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Sp
 import freeBattleTexUrl from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Texture/T_Spase_64.png';
 
 const MAJADROID_BASE = './SBS - Seamless Abstract Pack - 512x512/LowPoly-Spaceships-By-Majadroid';
-
-export const LEGACY_MODEL_ALIASES = {
-  corvette1: 'fighter',
-  ship1: 'fighter',
-  ship2: 'fighter',
-  
-  corvette2: 'scout',
-  corvette4: 'scout',
-  frigate4: 'scout',
-  
-  corvette3: 'cruiser',
-  frigate2: 'cruiser',
-  frigate3: 'cruiser',
-  ship3: 'cruiser',
-  
-  corvette5: 'hauler',
-  frigate1: 'hauler',
-  ship4: 'hauler',
-  
-  frigate5: 'dreadnought',
-  ship5: 'dreadnought'
-};
 
 export const SHIP_MODELS = {
   original: fighterObjUrl,
@@ -117,6 +96,15 @@ export const BASE_TEXTURES = {
   ship4: `${MAJADROID_BASE}/tex01-512.png`,
   ship5: `${MAJADROID_BASE}/tex01-512.png`
 };
+
+// Uniform fit scale for the preview: normalize by the model's LARGEST dimension
+// so every ship — wide, long, or tall — fills the same target size and stays
+// inside the fixed preview camera frustum. (Scaling by width alone made narrow
+// but long ships balloon past the camera and render blank.)
+export function computeFitScale(size, target = 1.6) {
+  const maxDim = Math.max(size.x || 0, size.y || 0, size.z || 0) || 1.0;
+  return target / maxDim;
+}
 
 const imageCache = {};
 
@@ -373,28 +361,29 @@ export class ShipPreviewEngine {
       onComplete(obj);
     };
 
+    // When a model file fails to load (e.g. a broken/WIP asset), show a visible
+    // placeholder so the preview is never silently blank, and log why.
+    const onLoadError = (err) => {
+      console.warn(`[ShipPreview] failed to load model "${modelName}" (${modelUrl}):`, err);
+      onComplete(this.createPlaceholderModel());
+    };
+
     const loadGeometry = (texture) => {
       if (modelUrl.toLowerCase().includes('.glb') || modelUrl.toLowerCase().includes('.gltf')) {
         const gltfLoader = new GLTFLoader();
         gltfLoader.load(modelUrl, (gltf) => {
           applyTextureToModel(texture, gltf.scene);
-        }, undefined, (err) => {
-          // Fallback / error catch
-        });
+        }, undefined, onLoadError);
       } else if (isFbx) {
         const fbxLoader = new FBXLoader();
         fbxLoader.load(modelUrl, (fbx) => {
           applyTextureToModel(texture, fbx);
-        }, undefined, (err) => {
-          // Fallback / error catch
-        });
+        }, undefined, onLoadError);
       } else {
         const objLoader = new OBJLoader();
         objLoader.load(modelUrl, (obj) => {
           applyTextureToModel(texture, obj);
-        }, undefined, (err) => {
-          // Fallback / error catch
-        });
+        }, undefined, onLoadError);
       }
     };
 
@@ -431,6 +420,22 @@ export class ShipPreviewEngine {
         loadGeometry(tex);
       });
     }
+  }
+
+  // A simple, always-renderable stand-in used when a model file fails to load,
+  // so the garage preview shows *something* recognisable instead of an empty
+  // viewport. Goes through the same centre/scale/frame path as a real model.
+  createPlaceholderModel() {
+    const group = new THREE.Group();
+    const mesh = new THREE.Mesh(
+      new THREE.ConeGeometry(0.5, 1.2, 4),
+      new THREE.MeshStandardMaterial({ color: 0x8844ff, roughness: 0.4, metalness: 0.3, wireframe: false })
+    );
+    mesh.rotation.x = Math.PI / 2; // point the cone "forward" like a ship nose
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    return group;
   }
 
   createPreviewShip(modelName, skinName, colorHex) {
@@ -481,7 +486,7 @@ export class ShipPreviewEngine {
         const size = new THREE.Vector3();
         box.getSize(size);
 
-        const scaleFactor = 1.4 / (size.x || 1.0);
+        const scaleFactor = computeFitScale(size);
         obj.scale.setScalar(scaleFactor);
 
         obj.updateMatrixWorld(true);
