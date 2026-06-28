@@ -2511,7 +2511,7 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
           : (railTheme ? railTheme.defaultColor.clone() : new THREE.Color(0.0, 0.8, 1.0));
         const stripW = 0.14;  // thin trim — not full column width
         const stripH = 0.10;
-        const stripGeom = new THREE.BoxGeometry(stripW, stripH, length);
+        const stripGeom = new THREE.BoxGeometry(stripW, stripH, length, 1, 1, depthSegments);
         const stripMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
           color: railColor,
           emissive: railColor,
