@@ -7,9 +7,9 @@
  *    pipeline writes alpha=1 into its final output regardless of the scene's
  *    own transparency, so this canvas could never be visibly composited as a
  *    DOM overlay behind the game's 3D canvas no matter how it was styled.
- *    graphics.js instead reads its pixels into a THREE.CanvasTexture used as
- *    the game's own scene.background. This canvas only needs to exist and
- *    render — not be seen directly.
+ *    graphics.js instead reads its pixels into a THREE texture used as the
+ *    game's own scene.background. This canvas only needs to exist and render
+ *    — not be seen directly.
  * 2. The control-panel UI, modeled visually on BrainBlur's `.skin-modal`
  *    family (src/css/style.css), but trimmed to only what control-panel.js
  *    actually uses (no search/tabs/gallery markup).

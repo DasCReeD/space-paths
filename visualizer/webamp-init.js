@@ -38,8 +38,12 @@ let webampInstance = null
  * @param {{ initialTracks?: Array }} options
  * @returns {Promise<Webamp>} the webamp instance
  */
+// Startup position for the main window, tuned via layoutDebugPanel.js at a
+// 2560-wide viewport (top-right, clear of the title card / crossbar).
+const WINDOW_LAYOUT = { main: { position: { x: 2024, y: 0 } } }
+
 export async function init(container, { initialTracks = [] } = {}) {
-  webampInstance = new Webamp({ initialTracks })
+  webampInstance = new Webamp({ initialTracks, windowLayout: WINDOW_LAYOUT })
 
   // Webamp with no skin renders correct-size/position DOM but paints
   // nothing (no sprite texture to draw with) — load a real skin so the
