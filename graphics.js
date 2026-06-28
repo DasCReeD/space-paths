@@ -218,6 +218,7 @@ export class GraphicsEngine {
     this.cockpitFov = 95;
     this.speedFovEnabled = false;
     this.speedFovMaxAdd = 14; // degrees added at max boost speed
+    this.speedCamPullback = 0.0; // units pulled back at max boost speed
 
     // 3. Add Premium Lighting — bright enough to see the road clearly
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.70);
@@ -1333,6 +1334,13 @@ export class GraphicsEngine {
 
     // 2. Smooth Chase Camera (with distance scaling and multiple camera modes)
     const scaledOffset = this.camOffset.clone();
+    
+    // Apply speed-dependent distance pullback
+    if (this.speedCamPullback) {
+      const speedRatioForCam = Math.min(1, Math.abs(physics.velocity.z) / (physics.maxSpeedBoost || 60));
+      scaledOffset.z += speedRatioForCam * this.speedCamPullback;
+    }
+
     scaledOffset.z *= this.followDistanceScale;
     scaledOffset.y *= (0.85 + 0.15 * this.followDistanceScale);
     scaledOffset.y += this.cameraHeightAdjust;

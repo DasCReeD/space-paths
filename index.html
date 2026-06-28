@@ -243,6 +243,23 @@
             <div id="status-slippery" class="status-indicator">SLP</div>
           </div>
         </div>
+
+        <!-- Multi-Level stats overlay -->
+        <div id="hud-multilevel-box" class="telemetry-box hidden" style="border-color: rgba(0, 255, 136, 0.3); height: auto; min-height: 45px; display: flex; flex-direction: column; gap: 4px; justify-content: center; pointer-events: none;">
+          <span class="cockpit-sublabel">RUN STATS</span>
+          <div id="hud-lives-row" class="hidden" style="font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: #ff007f; font-weight: 700; width: 100%; display: flex; justify-content: space-between; align-items: center;">
+            <span>LIVES:</span>
+            <span id="hud-lives-val">🚀🚀🚀</span>
+          </div>
+          <div id="hud-gates-row" class="hidden" style="font-family: 'Orbitron', sans-serif; font-size: 0.6rem; color: #8c8f99; width: 100%; display: flex; justify-content: space-between; align-items: center;">
+            <span>GATES:</span>
+            <div class="status-lights-row" style="gap: 5px;">
+              <div id="gate-light-a" class="status-indicator" style="padding: 2px 4px; font-size: 0.5rem; opacity: 0.3; border-color: #00ff88; color: #00ff88;">A</div>
+              <div id="gate-light-b" class="status-indicator" style="padding: 2px 4px; font-size: 0.5rem; opacity: 0.3; border-color: #00ff88; color: #00ff88;">B</div>
+              <div id="gate-light-c" class="status-indicator" style="padding: 2px 4px; font-size: 0.5rem; opacity: 0.3; border-color: #00ff88; color: #00ff88;">C</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -273,14 +290,26 @@
       
       <div class="xmb-crossbar xmb-focal-ps3" id="menu-xmb-crossbar">
         <div class="xmb-category-track" id="menu-xmb-category-track">
-          <div class="xmb-category" id="menu-xmb-cat-play">PLAY</div>
+          <div class="xmb-category" id="menu-xmb-cat-classic">CLASSIC</div>
+          <div class="xmb-category" id="menu-xmb-cat-flow">FLOW</div>
+          <div class="xmb-category" id="menu-xmb-cat-tower">TOWER</div>
           <div class="xmb-category" id="menu-xmb-cat-extras">EXTRAS</div>
         </div>
-        <div class="xmb-item-track" id="menu-xmb-item-track-play">
+        <div class="xmb-item-track" id="menu-xmb-item-track-classic">
           <button id="btn-play-standard" class="xmb-item btn btn-primary btn-glow">STANDARD PACK</button>
           <button id="btn-play-generated" class="xmb-item btn btn-secondary btn-glow">GENERATED WORLDS</button>
           <button id="btn-play-xmas" class="xmb-item btn btn-secondary btn-glow" style="display: none !important;">XMAS SPECIAL</button>
           <button id="btn-load-custom-level" class="xmb-item btn btn-secondary btn-glow">LOAD CUSTOM LEVEL</button>
+        </div>
+        <div class="xmb-item-track hidden" id="menu-xmb-item-track-flow">
+          <button id="btn-play-flow-standard" class="xmb-item btn btn-primary btn-glow">STANDARD PACK</button>
+          <button id="btn-play-flow-generated" class="xmb-item btn btn-secondary btn-glow">GENERATED WORLDS</button>
+          <button id="btn-play-flow-xmas" class="xmb-item btn btn-secondary btn-glow" style="display: none !important;">XMAS SPECIAL</button>
+        </div>
+        <div class="xmb-item-track hidden" id="menu-xmb-item-track-tower">
+          <button id="btn-play-tower-standard" class="xmb-item btn btn-primary btn-glow">STANDARD PACK</button>
+          <button id="btn-play-tower-generated" class="xmb-item btn btn-secondary btn-glow">GENERATED WORLDS</button>
+          <button id="btn-play-tower-xmas" class="xmb-item btn btn-secondary btn-glow" style="display: none !important;">XMAS SPECIAL</button>
         </div>
         <div class="xmb-item-track hidden" id="menu-xmb-item-track-extras">
           <button id="btn-open-editor" class="xmb-item btn btn-secondary btn-glow">LEVEL EDITOR</button>
@@ -328,6 +357,7 @@
           <button id="btn-settings-difficulty" class="xmb-item btn btn-info btn-glow settings-xmb-toggle">DIFFICULTY: EASY</button>
           <button id="btn-settings-rewind" class="xmb-item btn btn-primary btn-glow settings-xmb-toggle">REWIND: ON</button>
           <button id="btn-settings-lane-snap" class="xmb-item btn btn-info btn-glow settings-xmb-toggle">LANE SNAP: ON</button>
+          <button id="btn-settings-hardcore" class="xmb-item btn btn-danger btn-glow settings-xmb-toggle">HARDCORE MODE: OFF</button>
         </div>
 
         <div class="xmb-item-track settings-xmb-item-track hidden" id="settings-xmb-item-track-audio" data-category-items="audio">
@@ -394,6 +424,7 @@
 
         <div class="xmb-item-track settings-xmb-item-track hidden" id="settings-xmb-item-track-display" data-category-items="display">
           <button id="btn-settings-bottom-hud" class="xmb-item btn btn-info btn-glow settings-xmb-toggle">BOTTOM HUD: ON</button>
+          <button id="btn-settings-bezel" class="xmb-item btn btn-info btn-glow settings-xmb-toggle">COCKPIT REFLECTION: ON</button>
           <button id="btn-settings-collision-view" class="xmb-item btn btn-info btn-glow settings-xmb-toggle">COLLISION VIEW: OFF</button>
           <button id="btn-settings-picker" class="xmb-item btn btn-secondary btn-glow">HOVERCRAFT GARAGE</button>
           <button id="btn-settings-calibrator" class="xmb-item btn btn-secondary btn-glow">PHYSICS CALIBRATOR ⚙️</button>
@@ -720,6 +751,22 @@
                 <span id="val-cameraFOV" class="slider-value">95°</span>
               </div>
               <input type="range" id="input-cameraFOV" min="45" max="120" step="1" value="95">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">SPEED FOV PULLBACK</span>
+                <span id="val-speedFovMaxAdd" class="slider-value">14°</span>
+              </div>
+              <input type="range" id="input-speedFovMaxAdd" min="0" max="40" step="1" value="14">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-info">
+                <span class="slider-label">SPEED DISTANCE PULLBACK</span>
+                <span id="val-speedCamPullback" class="slider-value">0.00</span>
+              </div>
+              <input type="range" id="input-speedCamPullback" min="0.0" max="10.0" step="0.5" value="0.0">
             </div>
 
           </div>

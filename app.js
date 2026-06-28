@@ -308,10 +308,10 @@ class GameManager {
     // Initialize tunable physics preset profiles by loading from localStorage or falling back to defaults
     this.physicsPresets = { vga: {}, snappy: {}, lunar: {}, custom: {} };
     const basePresets = {
-      vga: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 12.0, steerAccel: 50.0, dragSteer: 40.0, laneSnapStrength: 4.0, easyCollisionBounceVel: 5.0, easyCollisionBounceDist: 0.8, bounceFactor: 1.0, jumpImpulse: 11.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 },
-      snappy: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.25, gravityFactor: 1.45, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 },
-      lunar: { maxSpeedNormal: 24, maxSpeedBoost: 50, accelForward: 12, decelBrakes: 25, dragZ: 2, maxSteerSpeed: 8, steerAccel: 15, dragSteer: 8, laneSnapStrength: 4.0, easyCollisionBounceVel: 8, easyCollisionBounceDist: 1.5, bounceFactor: 1.5, jumpImpulse: 7.5, jumpFactor: 1.0, gravityFactor: 0.45, fallGravityMultiplier: 1.15, variableJumpDampening: 0.90, coyoteTimeBuffer: 0.40, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 },
-      custom: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95 }
+      vga: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 12.0, steerAccel: 50.0, dragSteer: 40.0, laneSnapStrength: 4.0, easyCollisionBounceVel: 5.0, easyCollisionBounceDist: 0.8, bounceFactor: 1.0, jumpImpulse: 11.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95, speedFovMaxAdd: 14, speedCamPullback: 0.0 },
+      snappy: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.25, gravityFactor: 1.45, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95, speedFovMaxAdd: 14, speedCamPullback: 0.0 },
+      lunar: { maxSpeedNormal: 24, maxSpeedBoost: 50, accelForward: 12, decelBrakes: 25, dragZ: 2, maxSteerSpeed: 8, steerAccel: 15, dragSteer: 8, laneSnapStrength: 4.0, easyCollisionBounceVel: 8, easyCollisionBounceDist: 1.5, bounceFactor: 1.5, jumpImpulse: 7.5, jumpFactor: 1.0, gravityFactor: 0.45, fallGravityMultiplier: 1.15, variableJumpDampening: 0.90, coyoteTimeBuffer: 0.40, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95, speedFovMaxAdd: 14, speedCamPullback: 0.0 },
+      custom: { maxSpeedNormal: 32, maxSpeedBoost: 60, accelForward: 18, decelBrakes: 35, dragZ: 4, maxSteerSpeed: 10, steerAccel: 35, dragSteer: 28, laneSnapStrength: 4.0, easyCollisionBounceVel: 10, easyCollisionBounceDist: 1.2, bounceFactor: 1.0, jumpImpulse: 10.5, jumpFactor: 1.0, gravityFactor: 1.0, fallGravityMultiplier: 1.45, variableJumpDampening: 0.82, coyoteTimeBuffer: 0.25, cockpitOffsetX: 0.0, cockpitOffsetY: 0.0, cockpitOffsetZ: 0.0, showCockpitBezel: 1.0, damageModifier: 1.0, shipMass: 1.0, minDamageSpeed: 4.0, cameraHeight: -0.5, cameraPitchDeg: 5, cameraFOV: 95, speedFovMaxAdd: 14, speedCamPullback: 0.0 }
     };
 
     for (const key in basePresets) {
@@ -352,6 +352,8 @@ class GameManager {
       if (this.physicsPresets[key].cameraPitchDeg === undefined)  { this.physicsPresets[key].cameraPitchDeg  = 5;   camMigrated = true; }
       if (this.physicsPresets[key].cameraFOV === undefined)       { this.physicsPresets[key].cameraFOV       = 95;  camMigrated = true; }
       if (this.physicsPresets[key].cockpitFov === undefined)      { this.physicsPresets[key].cockpitFov      = 95;  camMigrated = true; }
+      if (this.physicsPresets[key].speedFovMaxAdd === undefined)  { this.physicsPresets[key].speedFovMaxAdd  = 14.0; camMigrated = true; }
+      if (this.physicsPresets[key].speedCamPullback === undefined) { this.physicsPresets[key].speedCamPullback = 0.0;  camMigrated = true; }
       if (camMigrated) {
         try { localStorage.setItem(`skyroads_physics_preset_${key}`, JSON.stringify(this.physicsPresets[key])); } catch (e) {}
       }
@@ -1127,6 +1129,12 @@ class GameManager {
     if (config.cockpitFov !== undefined) {
       this.graphics.setCockpitFOV(config.cockpitFov);
     }
+    if (config.speedFovMaxAdd !== undefined) {
+      this.graphics.speedFovMaxAdd = config.speedFovMaxAdd;
+    }
+    if (config.speedCamPullback !== undefined) {
+      this.graphics.speedCamPullback = config.speedCamPullback;
+    }
   }
 
   togglePhysicsCalibrator(forceState) {
@@ -1171,9 +1179,9 @@ class GameManager {
       if (readout) {
         if (param === 'showCockpitBezel') {
           readout.innerText = Number(config[param]) === 1 ? 'ON' : 'OFF';
-        } else if (param === 'cameraPitchDeg' || param === 'cameraFOV' || param === 'cockpitFov') {
+        } else if (param === 'cameraPitchDeg' || param === 'cameraFOV' || param === 'cockpitFov' || param === 'speedFovMaxAdd') {
           readout.innerText = `${Math.round(Number(config[param]))}°`;
-        } else if (param === 'cameraHeight') {
+        } else if (param === 'cameraHeight' || param === 'speedCamPullback') {
           readout.innerText = Number(config[param]).toFixed(2);
         } else {
           readout.innerText = Number(config[param]).toFixed(param.startsWith('cockpitOffset') || param === 'coyoteTimeBuffer' || param === 'variableJumpDampening' || param === 'gravityFactor' || param === 'fallGravityMultiplier' || param === 'bounceFactor' || param === 'dragZ' ? 2 : 1);
@@ -2880,7 +2888,7 @@ class GameManager {
         localStorage.setItem(`skyroads_physics_preset_${this.activePreset}`, JSON.stringify(this.physicsPresets[this.activePreset]));
         
         // Apply camera-specific params directly to graphics
-        if (param === 'cameraHeight' || param === 'cameraPitchDeg' || param === 'cameraFOV' || param === 'cockpitFov') {
+        if (param === 'cameraHeight' || param === 'cameraPitchDeg' || param === 'cameraFOV' || param === 'cockpitFov' || param === 'speedFovMaxAdd' || param === 'speedCamPullback') {
           this._applyCameraSettings(this.physicsPresets[this.activePreset]);
         }
 
@@ -2891,9 +2899,9 @@ class GameManager {
             readout.innerText = value === 1 ? 'ON' : 'OFF';
           } else if (param === 'cameraPitchDeg') {
             readout.innerText = `${Math.round(value)}°`;
-          } else if (param === 'cameraFOV' || param === 'cockpitFov') {
+          } else if (param === 'cameraFOV' || param === 'cockpitFov' || param === 'speedFovMaxAdd') {
             readout.innerText = `${Math.round(value)}°`;
-          } else if (param === 'cameraHeight') {
+          } else if (param === 'cameraHeight' || param === 'speedCamPullback') {
             readout.innerText = value.toFixed(2);
           } else {
             readout.innerText = value.toFixed(param.startsWith('cockpitOffset') || param === 'coyoteTimeBuffer' || param === 'variableJumpDampening' || param === 'gravityFactor' || param === 'fallGravityMultiplier' || param === 'bounceFactor' || param === 'dragZ' ? 2 : 1);
