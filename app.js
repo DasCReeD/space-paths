@@ -4111,7 +4111,9 @@ class GameManager {
 
       if (this.physics.triggerWallCollisionAudio) {
         if (this.wallScrapeSoundTimer <= 0) {
-          gameAudio.playWallCollision();
+          if (!this.physics.activeEffects.slippery) {
+            gameAudio.playWallCollision();
+          }
           this.wallScrapeSoundTimer = 0.22; // Throttle sound playback
           this.wallHits = (this.wallHits || 0) + 1; // Increment scrape count
         }
@@ -4122,7 +4124,9 @@ class GameManager {
       }
 
       if (this.physics.triggerLandingReboundAudio) {
-        gameAudio.playLandingRebound();
+        if (!this.physics.activeEffects.slippery) {
+          gameAudio.playLandingRebound();
+        }
         this.physics.triggerLandingReboundAudio = false;
       }
 
@@ -4134,7 +4138,9 @@ class GameManager {
       // Gentle thruster puff whoosh sound when player initiates steering
       const isSteering = this.keyboard.left || this.keyboard.right;
       if (isSteering && !this.wasSteeringLastFrame) {
-        gameAudio.playSteer();
+        if (!this.physics.activeEffects.slippery) {
+          gameAudio.playSteer();
+        }
       }
       this.wasSteeringLastFrame = isSteering;
 
