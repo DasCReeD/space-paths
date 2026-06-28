@@ -1276,6 +1276,22 @@ export class GraphicsEngine {
   update(physics, dt) {
     if (!this.shipMesh) return;
 
+    // Detect level height wraps (e.g. in Flow or Tower modes)
+    if (this.prevPhysicsY !== undefined) {
+      const deltaY = physics.position.y - this.prevPhysicsY;
+      if (Math.abs(deltaY) > 15.0) {
+        // Adjust camera actual position and look-at target by the wrap offset
+        this.camera.position.y += deltaY;
+        if (this.camLookTarget) {
+          this.camLookTarget.y += deltaY;
+        }
+        
+        // Also shift the fixed camera height tracker
+        this.lastOnGroundHeight += deltaY;
+      }
+    }
+    this.prevPhysicsY = physics.position.y;
+
     // Track the last ground height when on the ground to prevent retro camera drops during jumps
     if (physics.onGround) {
       this.lastOnGroundHeight = physics.groundHeight;
@@ -2047,6 +2063,7 @@ export class GraphicsEngine {
     this.particles = [];
     this.lastOnGroundHeight = 0.0;
     this.camLookTarget = null;
+    this.prevPhysicsY = undefined;
 
     // Clean up previous level scenery meshes to prevent memory leaks
     if (this.sceneryGroup) {
