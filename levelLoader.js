@@ -300,14 +300,14 @@ function getDeathBeamTexture() {
 function createDeathBeam(xPos, yTop, zPos) {
   const beamHeight = 16;
   const beamWidth = TILE_WIDTH * 0.7;
-  const mat = new THREE.MeshBasicMaterial({
+  const mat = applyCurvatureShader(new THREE.MeshBasicMaterial({
     map: getDeathBeamTexture(),
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     side: THREE.DoubleSide,
     fog: false
-  });
+  }));
   const group = new THREE.Group();
   for (let i = 0; i < 2; i++) {
     const geom = new THREE.PlaneGeometry(beamWidth, beamHeight);
@@ -1573,8 +1573,12 @@ function loadAndApplyObstacleModel(mesh, levelIndex, r, c, width, height, length
       }
     });
 
-    // Keep the original BoxGeometry visible — wrapper with OBJ model is a decorative child added on top
+    // Add the model wrapper and remove the parent BoxGeometry to prevent z-fighting
     mesh.add(wrapper);
+    if (mesh.geometry) {
+      mesh.geometry.dispose();
+    }
+    mesh.geometry = new THREE.BufferGeometry();
   };
 
   if (loadedObjCache.has(cacheKey)) {
@@ -1603,7 +1607,43 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
   const levelIndex = levelData && typeof levelData.level_index === 'number' ? levelData.level_index : (typeof window !== 'undefined' ? window.currentLevelIndex : null);
   const isGenerated = (levelData && levelData.isGenerated) || (levelIndex >= 61) || (typeof window !== 'undefined' && window.currentGamePack === 'generated');
 
-  if (tile.ramp) {
+  if (tile.isSuperJump) {
+    const baseColor = new THREE.Color(0xffd700); // Gold
+    const material = applyCurvatureShader(new THREE.MeshStandardMaterial({
+      color: baseColor,
+      emissive: baseColor,
+      emissiveIntensity: 2.0,
+      roughness: 0.1,
+      metalness: 0.8
+    }));
+    const geom = new THREE.BoxGeometry(TILE_WIDTH, 0.1, TILE_LENGTH);
+    adjustBoxUVs(geom, TILE_WIDTH, 0.1, TILE_LENGTH);
+    const mesh = new THREE.Mesh(geom, material);
+    mesh.position.set(xPos, 0.05, zPos - TILE_LENGTH / 2);
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    roadMeshes.push(mesh);
+
+    // Arrow pointing up
+    const arrowGeom = new THREE.ConeGeometry(0.3, 0.8, 4);
+    const arrowMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const arrowMesh = new THREE.Mesh(arrowGeom, arrowMat);
+    arrowMesh.position.set(xPos, 0.6, zPos - TILE_LENGTH / 2);
+    scene.add(arrowMesh);
+    roadMeshes.push(arrowMesh);
+
+    // Collidable box
+    collidables.push({
+      minX: xPos - TILE_WIDTH / 2,
+      maxX: xPos + TILE_WIDTH / 2,
+      minZ: zPos - TILE_LENGTH,
+      maxZ: zPos,
+      minY: 0,
+      maxY: 0.1,
+      isObstacle: false,
+      isFlatRoad: true,
+    });
+  } else if (tile.ramp) {
     const startY = tile.startY !== undefined ? tile.startY : 0.0;
     const endY = tile.endY !== undefined ? tile.endY : 1.0;
     const activeColor = tile.top_color !== undefined ? tile.top_color : 1;
@@ -2308,12 +2348,12 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
 
   const rendered = Array.from({ length: numRows }, () => new Uint8Array(ROAD_WIDTH_LANES));
 
-  // First process and filter out all ramps/tunnels, keeping track of them
+  // First process and filter out all ramps/tunnels and super jump pads, keeping track of them
   for (let r = 0; r < numRows; r++) {
     const row = rows[r];
     for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
       const tile = row[c];
-      if (tile && (tile.ramp || tile.tunnel)) {
+      if (tile && (tile.ramp || tile.tunnel || tile.isSuperJump)) {
         processTile(tile, r, c, palette, scene, collidables, specialTiles, roadMeshes, zOffset, levelData);
         rendered[r][c] = 1;
       }
@@ -2472,13 +2512,13 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
         const stripW = 0.14;  // thin trim — not full column width
         const stripH = 0.10;
         const stripGeom = new THREE.BoxGeometry(stripW, stripH, length);
-        const stripMat = new THREE.MeshStandardMaterial({
+        const stripMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
           color: railColor,
           emissive: railColor,
           emissiveIntensity: 0.8,  // scaled by distance falloff in graphics.js
           roughness: 0.05,
           metalness: 1.0,
-        });
+        }));
         // Position at the inner edge of the edge block (between edge zone and centre lane)
         const innerEdgeX = (c <= 1)
           ? xPos + width / 2 - stripW / 2   // left block → trim on its right edge
@@ -2929,16 +2969,22 @@ export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInf
   });
 }
 
-export function disposeUnusedThemes(activeThemeIndex) {
+export function disposeUnusedThemes(activeThemeIndexOrIndices) {
   const activeUrls = new Set();
-  const theme = THEMES[activeThemeIndex];
-  if (theme && theme.behaviors) {
-    for (const behaviorKey in theme.behaviors) {
-      const behavior = theme.behaviors[behaviorKey];
-      if (behavior) {
-        if (typeof behavior.map === 'string') activeUrls.add(behavior.map);
-        if (typeof behavior.normalMap === 'string') activeUrls.add(behavior.normalMap);
-        if (typeof behavior.decal === 'string') activeUrls.add(behavior.decal);
+  const indices = Array.isArray(activeThemeIndexOrIndices)
+    ? activeThemeIndexOrIndices
+    : [activeThemeIndexOrIndices];
+
+  for (const idx of indices) {
+    const theme = THEMES[idx];
+    if (theme && theme.behaviors) {
+      for (const behaviorKey in theme.behaviors) {
+        const behavior = theme.behaviors[behaviorKey];
+        if (behavior) {
+          if (typeof behavior.map === 'string') activeUrls.add(behavior.map);
+          if (typeof behavior.normalMap === 'string') activeUrls.add(behavior.normalMap);
+          if (typeof behavior.decal === 'string') activeUrls.add(behavior.decal);
+        }
       }
     }
   }
@@ -2957,10 +3003,15 @@ export function disposeUnusedThemes(activeThemeIndex) {
       'tunnel_diffuse.png',
       'tunnel_normal.png'
     ];
-    for (const assetName of assetNames) {
-      const url = getLevelAssetUrl(currentLevelIndex, assetName);
-      if (url) {
-        activeUrls.add(url);
+    const isMultiLevel = typeof window !== 'undefined' && window.app && (window.app.playStyle === 'flow' || window.app.playStyle === 'tower');
+    const lvlsToCheck = isMultiLevel ? [currentLevelIndex, currentLevelIndex + 1, currentLevelIndex + 2] : [currentLevelIndex];
+
+    for (const lvlIdx of lvlsToCheck) {
+      for (const assetName of assetNames) {
+        const url = getLevelAssetUrl(lvlIdx, assetName);
+        if (url) {
+          activeUrls.add(url);
+        }
       }
     }
   }
