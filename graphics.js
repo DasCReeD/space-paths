@@ -27,100 +27,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 // Image Based Lighting environment
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import fighterObjUrl from './fighter1.obj?url';
-import fighterClassUrl from './assets/custom/fighter.glb?url';
-import haulerClassUrl from './assets/custom/hauler.glb?url';
-import scoutClassUrl from './assets/custom/scout.glb?url';
-import dreadnoughtClassUrl from './assets/custom/dreadnought.glb?url';
-import cruiserClassUrl from './assets/custom/cruiser.glb?url';
-import racerClassUrl from './assets/custom/racer.glb?url';
-import hovdiClassUrl from './assets/custom/hovdi.glb?url';
-import uvMapUrl from './uvmap.jpg';
+import { SHIP_MODELS, SHIP_SKINS, SHIP_METRICS, BASE_TEXTURES, uvMapUrl } from './shipCatalog.js';
 import cityFbxUrl from './futuristic low poly city by niko.fbx?url';
-
-// Custom skin textures provided by user in fighter.zip
-import freelancerSkinUrl from './freelancer.jpg';
-import lordshadowSkinUrl from './lordshadow.jpg';
-import psionicSkinUrl from './psionic.jpg';
-import shadeeSkinUrl from './shadee.jpg';
-import thorSkinUrl from './thor.jpg';
-
-// Pack A: Battle Corvette & Frigate FBX models
-import corvette1Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Corvette_01.fbx?url';
-import corvette2Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Corvette_02.fbx?url';
-import corvette3Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Corvette_03.fbx?url';
-import corvette4Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Corvette_04.fbx?url';
-import corvette5Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Corvette_05.fbx?url';
-import frigate1Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Frigate_01.fbx?url';
-import frigate2Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Frigate_02.fbx?url';
-import frigate3Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Frigate_03.fbx?url';
-import frigate4Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Frigate_04.fbx?url';
-import frigate5Url from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Frigate_05.fbx?url';
-import freeBattleTexUrl from './SBS - Seamless Abstract Pack - 512x512/Free Battle Spaceship 3D Models/Texture/T_Spase_64.png';
-
-const MAJADROID_BASE = './SBS - Seamless Abstract Pack - 512x512/LowPoly-Spaceships-By-Majadroid';
-
-export const SHIP_MODELS = {
-  original: fighterObjUrl,
-  // Custom Hovercraft Classes
-  fighter: fighterClassUrl,
-  hauler: haulerClassUrl,
-  scout: scoutClassUrl,
-  dreadnought: dreadnoughtClassUrl,
-  cruiser: cruiserClassUrl,
-  racer: racerClassUrl,
-  hovdi: hovdiClassUrl
-};
-
-export const SHIP_SKINS = {
-  // Classic skins kept for test compliance
-  default: uvMapUrl,
-  freelancer: freelancerSkinUrl,
-  lordshadow: lordshadowSkinUrl,
-  psionic: psionicSkinUrl,
-  shadee: shadeeSkinUrl,
-  thor: thorSkinUrl,
-  
-  // Premium skins
-  spaceship_hull: spaceshipHullPlatingUrl,
-  road_metallic: roadMetallicUrl,
-  
-  // Majadroid skins
-  skin1: `${MAJADROID_BASE}/tex01-512.png`,
-  skin2: `${MAJADROID_BASE}/tex02-512.png`,
-  skin3: `${MAJADROID_BASE}/tex03-512.png`,
-  skin4: `${MAJADROID_BASE}/tex04-512.png`
-};
-
-export const SHIP_METRICS = {
-  original: { offset: 0.25, height: 0.20, rotationY: -Math.PI / 2 },
-  fighter: { offset: 0.25, height: 0.20, rotationY: -Math.PI / 2 },
-  hauler: { offset: 0.38, height: 0.22, rotationY: -Math.PI / 2 },
-  scout: { offset: 0.30, height: 0.16, rotationY: -Math.PI / 2 },
-  dreadnought: { offset: 0.42, height: 0.21, rotationY: -Math.PI / 2 },
-  cruiser: { offset: 0.26, height: 0.18, rotationY: -Math.PI / 2 },
-  racer: { offset: 0.30, height: 0.18, rotationY: 0 },
-  hovdi: { offset: 0.30, height: 0.20, rotationY: -Math.PI / 2 }
-};
-
-export const BASE_TEXTURES = {
-  corvette1: freeBattleTexUrl,
-  corvette2: freeBattleTexUrl,
-  corvette3: freeBattleTexUrl,
-  corvette4: freeBattleTexUrl,
-  corvette5: freeBattleTexUrl,
-  frigate1: freeBattleTexUrl,
-  frigate2: freeBattleTexUrl,
-  frigate3: freeBattleTexUrl,
-  frigate4: freeBattleTexUrl,
-  frigate5: freeBattleTexUrl,
-  
-  ship1: `${MAJADROID_BASE}/tex01-512.png`,
-  ship2: `${MAJADROID_BASE}/tex01-512.png`,
-  ship3: `${MAJADROID_BASE}/tex01-512.png`,
-  ship4: `${MAJADROID_BASE}/tex01-512.png`,
-  ship5: `${MAJADROID_BASE}/tex01-512.png`
-};
 
 const imageCache = {};
 
@@ -2292,28 +2200,27 @@ export class GraphicsEngine {
   }
 
   /**
-   * Uses the Butterchurn visualizer's own canvas as the scene background,
-   * read in each frame as a CanvasTexture.
+   * Wires the THREE-native Milkdrop visualizer (visualizer/milkdrop/) as the
+   * scene background and wall-mode texture.
+   *
+   * @param {THREE.Texture} outputTexture - the visualizer's render-target
+   *   texture, already living in THIS renderer's context. No upload, no copy,
+   *   no cross-context transfer — it's a normal THREE texture we sample
+   *   directly. (Butterchurn was dropped precisely because its output lived in
+   *   a separate GL context; this renderer draws into our own render targets.)
+   * @param {() => void} renderFrameFn - engine.js's `renderFrame`; draws one
+   *   feedback frame into that texture (via THREE setRenderTarget ping-pong,
+   *   restoring setRenderTarget(null) when done). Called once per game frame
+   *   in render() BEFORE the composer, so the texture is current.
    *
    * Not composited as a separate DOM overlay: the bloom/post-processing
-   * pipeline below always writes alpha=1 in its final output regardless of
-   * the scene's own transparency, confirmed via live debugging (a hardcoded
-   * solid-color test block rendered into a separate overlay canvas but never
-   * appeared on screen, even though the renderer's own clear alpha was 0).
-   * Reading the visualizer's pixels into this scene's own background sidesteps
-   * that entirely — single WebGL context, no cross-canvas compositing.
+   * pipeline always writes alpha=1 regardless of scene transparency (confirmed
+   * via live debugging), so a DOM canvas behind the game canvas can't show
+   * through. Using the visualizer as this scene's own background sidesteps it.
    */
-  setVisualizerCanvas(canvasEl) {
-    this.visualizerCanvasEl = canvasEl;
-    this.visualizerTexture = new THREE.CanvasTexture(canvasEl);
-    this.visualizerTexture.colorSpace = THREE.SRGBColorSpace;
-    // Default CanvasTexture filtering is mipmapped — with needsUpdate set
-    // every frame (see render() below), that forces a full mipmap chain
-    // rebuild every frame at full screen resolution, which is brutally
-    // expensive. A flat background quad never needs mipmaps.
-    this.visualizerTexture.generateMipmaps = false;
-    this.visualizerTexture.minFilter = THREE.LinearFilter;
-    this.visualizerTexture.magFilter = THREE.LinearFilter;
+  setVisualizerRenderer(outputTexture, renderFrameFn) {
+    this._renderVisualizerFrame = renderFrameFn;
+    this.visualizerTexture = outputTexture; // a WebGLRenderTarget texture (Linear, no mipmaps)
     this.scene.background = this.visualizerTexture;
     // Tunable wall params — live-adjustable via setVisualizerWallParams(), see settings sliders.
     this.visualizerWallParams = { angleDeg: 45, halfTrack: 9, height: 300, nearZ: 30 };
@@ -2495,16 +2402,12 @@ export class GraphicsEngine {
   }
 
   render() {
-    if (this.visualizerTexture) {
-      // The visualizer canvas only actually repaints at ~30fps (see
-      // visualizer/engine.js) — re-uploading the same unchanged pixels into
-      // this texture on every one of the game's own frames (90-144fps) pays
-      // the upload's cross-context sync cost for nothing. Match its cadence.
-      const now = performance.now();
-      if (!this._lastVisualizerUpload || now - this._lastVisualizerUpload >= 1000 / 30) {
-        this._lastVisualizerUpload = now;
-        this.visualizerTexture.needsUpdate = true;
-      }
+    if (this._renderVisualizerFrame) {
+      // Draw one Milkdrop feedback frame into the visualizer's own THREE
+      // render target (pure THREE setRenderTarget ping-pong; it restores
+      // setRenderTarget(null) when done). Its output texture is sampled as
+      // scene.background / wall map below — all in this context, no transfer.
+      this._renderVisualizerFrame();
     }
     if (this.composer) {
       this.composer.render();

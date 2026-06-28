@@ -59,7 +59,7 @@
 | [app.js](../app.js) | 111 KB | ~2,797 | GameManager — state machine, UI, game loop, input, garage, settings, XMB menu wiring |
 | [xmbMenu.js](../xmbMenu.js) | ~13 KB | ~360 | `CrossbarController` — shared PS3-XMB crossbar engine (state, tween, input, render) |
 | [menuConfig.js](../menuConfig.js) | ~10 KB | ~210 | Pure-data menu trees (main/settings/garage/gamepad) + `buildLevelSelectConfig` |
-| [visualizer/](../visualizer/) | — | — | Webamp + Butterchurn music visualizer; preset controls exposed to the XMB Settings menu |
+| [visualizer/](../visualizer/) | — | — | Webamp + a THREE-native Milkdrop renderer (`milkdrop/`, replaced Butterchurn); preset controls exposed to the XMB Settings menu. See [visualizer-milkdrop.md](visualizer-milkdrop.md) |
 | [graphics.js](../graphics.js) | 93 KB | ~1,800 | Three.js rendering, particles, skybox, theming, ship models |
 | [levelLoader.js](../levelLoader.js) | 88 KB | ~2,200 | Level geometry builder, themed textures, async building |
 | [index.css](../index.css) | 78 KB | ~3,145 | Retro-futuristic glassmorphism design system |
@@ -73,7 +73,8 @@
 | [editor.html](../editor.html) | 27 KB | ~750 | Editor UI Structure — viewport layouts, controls sidebar |
 | [editor.css](../editor.css) | 25 KB | ~850 | Editor Design System — glassmorphic sidebar, multi-viewport split |
 | [touchControls.js](../touchControls.js) | 24 KB | ~752 | Touch input manager — individual button system |
-| [preview.js](../preview.js) | 23 KB | ~600 | Ship garage preview engine (isolated Three.js scene) |
+| [preview.js](../preview.js) | 20 KB | ~590 | Ship garage preview engine (isolated Three.js scene) |
+| [shipCatalog.js](../shipCatalog.js) | 4 KB | ~94 | Shared model/skin catalog module used by graphics.js and preview.js |
 | [oplSynth.js](../oplSynth.js) | 19 KB | ~637 | OPL2 FM synthesis (Yamaha YM3812) + LZS decompressor |
 | [generate_textures.js](../generate_textures.js) | 18 KB | ~511 | Procedural PNG texture generator (standalone Node.js) |
 | [editorState.js](../editorState.js) | 17 KB | ~450 | Editor document state, undo/redo manager, level translation |
@@ -192,15 +193,17 @@
 
 ## visualizer/ — Music Visualizer & XMB Controls
 
-**Purpose:** Webamp (playback + playlist) + a standalone Butterchurn render engine fed by Webamp's analyser; output canvas is read by `graphics.js` as a `CanvasTexture` (sky/wall visualizer). Its preset-control state machine is now surfaced inside the **Settings → VISUALIZER** XMB category (the old floating panel was removed).
+**Purpose:** Webamp (playback + playlist) + a **THREE-native Milkdrop renderer** (`visualizer/milkdrop/`) fed by Webamp's analyser. The renderer draws into THREE render targets in the game's own WebGL context; `graphics.js` samples its output texture as the sky/wall visualizer (no cross-context copy). Replaced the old Butterchurn integration — see [docs/visualizer-milkdrop.md](visualizer-milkdrop.md) for the full architecture and *why* (Butterchurn's separate GL context stalled the game). Preset controls are surfaced inside the **Settings → VISUALIZER** XMB category.
 
 | File | Purpose |
 |------|---------|
-| `visualizer/index.js` | `initVisualizer({initialTracks})` → `{ webamp, controls, canvas, dispose }` |
-| `visualizer/controls.js` | `createControls()` → `controls`: `prev/next`, `toggleLocked`, `toggleFavoriteCurrent`, `toggleTransitionMode`, `setWebampVisible`, `getPresetInfo()→{index,name,total,isFavorite,isLocked,transitionMode}`, `onChange(fn)` |
-| `visualizer/engine.js` | Employs an asynchronous, fetch-on-demand architecture to load presets at runtime by calling `fetch('./visualizer-presets/[file].json')` to prevent bundling bloat. Integrates with Butterchurn and controls bloom. |
-| `visualizer/control-panel.js` | (legacy) floating panel — **no longer mounted**; controls live in the Settings menu |
+| `visualizer/index.js` | `initVisualizer({initialTracks, threeRenderer})` → `{ webamp, controls, outputTexture, renderFrame, dispose }` |
+| `visualizer/controls.js` | `createControls()` → `controls`: `prev/next`, `toggleLocked`, `toggleFavoriteCurrent`, `toggleTransitionMode`, `setWebampVisible`, `getPresetInfo()→{index,name,total,isFavorite,isLocked,transitionMode}`, `onChange(fn)` (unchanged) |
+| `visualizer/engine.js` | Orchestrates the native renderer. Keeps `getPresetKeys/getCurrentIndex/loadPresetByIndex/loadRandomPreset/dispose` for controls; adds `initEngine(threeRenderer,…)→{outputTexture}` + `renderFrame()`. Presets still fetched on demand: `fetch('./visualizer-presets/[file].json')`. |
+| `visualizer/milkdrop/` | The native renderer: `equations.js` (preset-eq helpers + `new Function` compiler), `audioLevels.js` (bass/mid/treb + attack smoothing), `shaders.js` (default warp+comp GLSL), `renderer.js` (`MilkdropRenderer`: ping-pong feedback + basic-waveform seed + comp). Ported from Butterchurn (MIT). |
+| `visualizer/control-panel.js` | **DELETED** (legacy panel) — controls live in XMB Settings menu |
 | `visualizer/presets.js` | Generated index array of 179 pre-converted Waveform preset metadata entries: `{ name, file }`. |
+| `visualizer/butterchurn-worker.js` | **DELETED** (legacy WebGL worker) — superseded by native `milkdrop/` renderer |
 | `webamp-init.js`, `style.css` | Webamp bootstrap and layout styles |
 
 
@@ -229,10 +232,10 @@
 | `GraphicsEngine.createWhitecapGrid()` | method | Builds 64×48 receding spectrum grid (LineSegments + Points) |
 | `GraphicsEngine.updateWhitecapGrid(physics, dt)` | method | Pushes FFT snapshot every 50 ms, updates vertex positions/colors per preset |
 | `GraphicsEngine.dispose()` | method | Cleanup GPU resources |
-| `SHIP_MODELS` | const object | Model catalog: fighter, hauler, scout, dreadnought, cruiser, racer |
-| `SHIP_SKINS` | const object | Skin texture catalog: default, freelancer, lordshadow, psionic, shadee, thor |
-| `SHIP_METRICS` | const object | Per-model scale/offset positioning metrics |
-| `BASE_TEXTURES` | const object | Named texture presets (hull, road, skins) |
+| `SHIP_MODELS` | const object | Model catalog (imported from `shipCatalog.js`) |
+| `SHIP_SKINS` | const object | Skin texture catalog (imported from `shipCatalog.js`) |
+| `SHIP_METRICS` | const object | Per-model scale/offset positioning metrics (imported from `shipCatalog.js`) |
+| `BASE_TEXTURES` | const object | Named texture presets (imported from `shipCatalog.js`) |
 | `LEGACY_MODEL_ALIASES` | const object | Legacy model name → current model mappings |
 
 **Key internal fields (visualizer):**
@@ -414,17 +417,35 @@
 | `.setSkin(skinName)` | method | Switch base skin texture |
 | `.startRotation()` / `.stopRotation()` | methods | Auto-rotate animation |
 | `.dispose()` | method | Cleanup GPU resources |
-| `SHIP_MODELS` | const object | Model catalog (duplicated from graphics.js) |
-| `SHIP_SKINS` | const object | Skin catalog (duplicated from graphics.js) |
-| `SHIP_METRICS` | const object | Positioning metrics (duplicated from graphics.js) |
-| `BASE_TEXTURES` | const object | Texture presets (duplicated from graphics.js) |
-| `LEGACY_MODEL_ALIASES` | const object | Legacy mappings (duplicated from graphics.js) |
+| `SHIP_MODELS` | const object | Model catalog (imported from `shipCatalog.js`) |
+| `SHIP_SKINS` | const object | Skin catalog (imported from `shipCatalog.js`) |
+| `SHIP_METRICS` | const object | Positioning metrics (imported from `shipCatalog.js`) |
+| `BASE_TEXTURES` | const object | Texture presets (imported from `shipCatalog.js`) |
+| `LEGACY_MODEL_ALIASES` | const object | Legacy mappings |
 
 **Dependencies:**
 - `three` (+ OBJLoader, FBXLoader, GLTFLoader)
 - Ship model GLB files, skin texture JPGs
 
-> **Note:** 5 constant objects are duplicated between `preview.js` and `graphics.js`. These should be extracted to a shared `shipCatalog.js` module.
+> **Note:** 5 constant objects were previously duplicated between `preview.js` and `graphics.js`. They have been extracted to a shared `shipCatalog.js` module.
+
+---
+
+## shipCatalog.js
+
+**Purpose:** Shared ship catalog definitions. Centralizes 3D model paths, skin texture paths, accent color definitions, and rendering metrics to prevent duplication between the main rendering engine and the garage preview scene.
+
+**Stats:** ~94 lines · 4 KB
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `SHIP_MODELS` | const object | File paths to 7 hovercraft 3D models (original + GLBs) |
+| `SHIP_SKINS` | const object | File paths to 12 skin textures (6 classic + 2 premium + 4 Majadroid) |
+| `SHIP_METRICS` | const object | Positional offset, height, and Y-rotation alignment metrics per ship model |
+| `BASE_TEXTURES` | const object | Base texture paths for corvette and frigate FBX models |
+| `uvMapUrl` | const string | Default ship texture mapping URL (exported for fallback skins) |
+
+**Dependencies:** None (import-only static asset URLs via Vite)
 
 ---
 

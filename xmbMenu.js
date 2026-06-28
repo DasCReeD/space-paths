@@ -22,9 +22,7 @@ const ACTIVE_OPACITY = 1.0;
 const INACTIVE_SCALE = 0.75;
 const INACTIVE_OPACITY = 0.6;
 
-function clamp(v, lo, hi) {
-  return Math.max(lo, Math.min(hi, v));
-}
+
 
 // Opacity for a vertical-column item `d` rows away from the focused row. The
 // row immediately adjacent to focus drops well below half so that when it sits
@@ -65,7 +63,7 @@ class AxisTween {
   // Read the interpolated value at time `now` without mutating state.
   valueAt(now) {
     if (this.duration <= 0) return this.to;
-    const t = clamp((now - this.startTime) / this.duration, 0, 1);
+    const t = Math.max(0, Math.min(1, (now - this.startTime) / this.duration));
     return this.from + (this.to - this.from) * easeOutCubic(t);
   }
 

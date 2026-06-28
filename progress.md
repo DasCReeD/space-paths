@@ -1,6 +1,25 @@
 # SkyRoads WebGL — Progress Log
 
-> **Last updated:** 2026-06-25
+> **Last updated:** 2026-06-28
+
+---
+
+## 2026-06-28 — Code Cleanup, Deduplication, & Dependency Removal
+
+Cleaned up visualizer remnants, removed unused dependencies, resolved ship constant duplication, and optimized menu math.
+
+**Visualizer & Dependency Cleanups**
+- Completely removed the unused NPM `butterchurn` dependency from `package.json` and ran `npm install` to update the package lockfile.
+- Deleted obsolete off-screen WebGL worker script `visualizer/butterchurn-worker.js`.
+- Deleted legacy floating visualizer UI panel `visualizer/control-panel.js` (superseded by XMB Settings integration).
+- Deleted obsolete patch file `patches/butterchurn+3.0.0-beta.5.patch`.
+
+**Ship Constant Deduplication**
+- Created a new shared catalog module `shipCatalog.js` to house `SHIP_MODELS`, `SHIP_SKINS`, `SHIP_METRICS`, `BASE_TEXTURES`, and `uvMapUrl`.
+- Updated `graphics.js` and `preview.js` to import their configurations from `shipCatalog.js`, removing about 150 lines of duplicate code.
+
+**Math Simplification**
+- Removed the custom `clamp` helper function in `xmbMenu.js` and replaced it with native `Math.max`/`Math.min` inline calls.
 
 ---
 
@@ -213,6 +232,6 @@ core, furnace, glitch, pulse, ridge, shallows, spire, thrill, tundra, void
 | VRAM garbage collection & memory optimization | P1 | ⏳ Planned |
 | E2E browser testing with Playwright | P1 | ⏳ Planned |
 | World Builder UI (in-game level editor) | P2 | ⏳ Planned |
-| Extract shared `shipCatalog.js` module | P2 | ⏳ Planned |
+| Extract shared `shipCatalog.js` module | P2 | ✅ Completed |
 | Module splitting (app.js, graphics.js, levelLoader.js) | P2 | ⏳ Planned |
 
