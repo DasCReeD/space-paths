@@ -103,6 +103,8 @@ export class PhysicsEngine {
   constructor() {
     this.position = new THREE.Vector3(0, 0.2, 0); // Start at lane 3 (x=0), on the ground
     this.velocity = new THREE.Vector3(0, 0, 0);
+    this.playStyle = 'classic';
+    this.activeLevelIndex = 0;
     
     // Physics constants
     this.maxSpeedNormal = 32.0; // Z speed in units/s
@@ -409,6 +411,17 @@ export class PhysicsEngine {
       }
     }
 
+    // Super Jump Pad collision in Tower Mode
+    if (this.playStyle === 'tower') {
+      const isUnderSuperJump = this.checkSuperJumpTile(this.position.x, this.position.z);
+      if (isUnderSuperJump && this.onGround && !this.isDead) {
+        this.velocity.y = 28.0; 
+        this.onGround = false;
+        this.canDoubleJump = true;
+        this.triggerJumpAudio = true;
+      }
+    }
+
     // 5. Jump & Gravity
     // Coyote time / Near-ground jump buffer (allows jumping when falling within 0.25 units of a valid ground block)
     // coyoteTimeBuffer setting defines the vertical near-ground distance threshold for jumping
@@ -452,6 +465,7 @@ export class PhysicsEngine {
     }
 
     // 6. Update Position
+    const prevY = this.position.y;
     this.position.x += this.velocity.x * dt;
     this.position.y += this.velocity.y * dt;
     this.position.z += this.velocity.z * dt;
@@ -759,7 +773,9 @@ export class PhysicsEngine {
 
         // Check if we are landing on top of the tile
         const fallingDown = this.velocity.y <= 0;
-        const aboveBlockTop = shipBox.minY >= block.maxY - 0.25 && shipBox.minY <= block.maxY + 0.15;
+        const aboveBlockTop = (prevY >= block.maxY && this.position.y <= block.maxY) ||
+                              (prevY > block.maxY - 0.25 && this.position.y <= block.maxY) ||
+                              (shipBox.minY >= block.maxY - 0.25 && shipBox.minY <= block.maxY + 0.15);
 
         if (fallingDown && aboveBlockTop) {
           this.position.y = block.maxY;
@@ -797,7 +813,10 @@ export class PhysicsEngine {
       // Check if we landed on standard flat ground.
       // Only snap when ship is CLOSE to ground level (within 0.5 units),
       // not when it has already fallen deep below the road.
-      if (withinTrackWidth && !this.onGround && this.velocity.y <= 0.0 && this.position.y <= 0.0 && this.position.y > -0.5) {
+      const crossedGround = (prevY >= 0.0 && this.position.y <= 0.0);
+      const nearGround = (prevY > -0.25 && this.position.y <= 0.0) ||
+                         (this.position.y <= 0.0 && this.position.y > -0.5);
+      if (withinTrackWidth && !this.onGround && this.velocity.y <= 0.0 && (crossedGround || nearGround)) {
         // Verify we aren't falling through a gap in the road
         const tileExists = this.checkTileExists(this.position.x, this.position.z);
         if (tileExists) {
@@ -885,10 +904,16 @@ export class PhysicsEngine {
       }
       deathY = Math.min(-4.0, minRoadY - 4.0);
     }
+    this.deathY = deathY;
+    const canFallBelow = (this.playStyle === 'flow') || (this.playStyle === 'tower' && this.activeLevelIndex > 0);
     if (this.position.y < deathY) {
-      this.isDead = true;
-      this.deathReason = 'FELL OFF ROAD';
-      this.velocity.set(0, -15, 0);
+      if (canFallBelow) {
+        // Do not die; app.js will handle the wrapping/falling transition.
+      } else {
+        this.isDead = true;
+        this.deathReason = 'FELL OFF ROAD';
+        this.velocity.set(0, -15, 0);
+      }
     }
   }
 
@@ -909,6 +934,22 @@ export class PhysicsEngine {
       return tile !== null;
     }
     return true; // Fallback: assume tile exists if data unavailable
+  }
+
+  checkSuperJumpTile(x, z) {
+    const maxLeft = -TOTAL_ROAD_WIDTH / 2;
+    const absZ = -z;
+    const rIdx = Math.floor(absZ / TILE_LENGTH);
+    const cIdx = Math.floor((x - maxLeft) / TILE_WIDTH);
+
+    if (rIdx < 0 || cIdx < 0 || cIdx >= ROAD_WIDTH_LANES) return false;
+
+    const originalLevelData = window.currentLevelData;
+    if (originalLevelData && originalLevelData.rows[rIdx]) {
+      const tile = originalLevelData.rows[rIdx][cIdx];
+      return tile && !!tile.isSuperJump;
+    }
+    return false;
   }
 
   // Ship bounding box
