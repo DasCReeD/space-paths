@@ -79,6 +79,11 @@ class GameManager {
     this.ghostElapsed = 0;
     this._ghostSampleAccum = 0;
 
+    // Multi-level systems configuration
+    this.playStyle = 'classic'; // 'classic', 'flow', 'tower'
+    this.activeLevelIndex = 0; // 0, 1, 2
+    this.hardcoreModeEnabled = false;
+
     // Road names in original order for display polish.
     // The original game groups its 30 roads into 10 worlds of 3 roads each
     // (see the original level-select screenshots: world heading + Road 1/2/3).
@@ -211,10 +216,10 @@ class GameManager {
         url,
         defaultName: SYNTHWAVE_TRACK_NAMES[i]
       }));
-      initVisualizer({ initialTracks }).then(({ webamp, canvas, controls }) => {
+      initVisualizer({ initialTracks, threeRenderer: this.graphics.renderer }).then(({ webamp, outputTexture, renderFrame, controls }) => {
         this.webampInstance = webamp;
         this.visualizerControls = controls; // consumed by the Settings VISUALIZER category
-        this.graphics.setVisualizerCanvas(canvas);
+        this.graphics.setVisualizerRenderer(outputTexture, renderFrame);
         this.graphics.setVisualizerWallMode(this.visualizerWallMode);
         const savedAngle = localStorage.getItem('skyroads_wall_angle');
         const savedSpread = localStorage.getItem('skyroads_wall_spread');
@@ -289,6 +294,10 @@ class GameManager {
     // Load persisted collision view setting from localStorage
     this.collisionViewEnabled = localStorage.getItem('skyroads_collision_view') === 'true';
     this.updateCollisionViewToggleBtn();
+
+    // Load persisted tower hardcore setting from localStorage
+    this.hardcoreModeEnabled = localStorage.getItem('skyroads_hardcore_mode') === 'true';
+    this.updateHardcoreToggleBtn();
 
     // Sync slider value with loaded volume
     const sliderSfxVolume = document.getElementById('slider-settings-sfx-volume');
@@ -782,6 +791,29 @@ class GameManager {
     this.updateBottomHudToggleBtn();
   }
 
+  toggleCockpitBezel() {
+    const preset = this.physicsPresets[this.activePreset];
+    if (preset) {
+      const nextVal = Number(preset.showCockpitBezel) === 1 ? 0.0 : 1.0;
+      preset.showCockpitBezel = nextVal;
+      this.physics.settings.showCockpitBezel = nextVal;
+      localStorage.setItem(`skyroads_physics_preset_${this.activePreset}`, JSON.stringify(preset));
+      const calibratorSlider = document.getElementById('input-showCockpitBezel');
+      if (calibratorSlider) {
+        calibratorSlider.value = nextVal;
+        const readout = document.getElementById('val-showCockpitBezel');
+        if (readout) readout.innerText = nextVal === 1 ? 'ON' : 'OFF';
+      }
+      this.updateCockpitBezelToggleBtn();
+    }
+  }
+
+  updateCockpitBezelToggleBtn() {
+    const preset = this.physicsPresets[this.activePreset];
+    const isEnabled = preset ? Number(preset.showCockpitBezel) === 1 : true;
+    this._setToggleBtnState('btn-settings-bezel', isEnabled, 'COCKPIT REFLECTION');
+  }
+
   toggleCollisionView() {
     const nextState = !this.collisionViewEnabled;
     this.toggleSceneCollisionView(nextState);
@@ -801,6 +833,7 @@ class GameManager {
       'toggle-difficulty': () => this.toggleDifficulty(),
       'toggle-rewind-on-death': () => this.toggleRewindOnDeath(),
       'toggle-lane-snap': () => this.toggleLaneSnap(),
+      'toggle-tower-hardcore': () => this.toggleTowerHardcore(),
       'adjust-sfx-volume': (dir) => this.adjustSfxVolume(dir),
       'toggle-starfield': () => this.toggleStarfield(),
       'toggle-speed-fov': () => this.toggleSpeedFov(),
@@ -817,6 +850,7 @@ class GameManager {
       'toggle-stick-throttle': () => this.toggleStickThrottle(),
       'open-gamepad-config': () => this.openGamepadConfig(),
       'toggle-bottom-hud': () => this.toggleBottomHud(),
+      'toggle-cockpit-bezel': () => this.toggleCockpitBezel(),
       'toggle-collision-view': () => this.toggleCollisionView(),
       'open-ship-picker': () => this.openShipPicker(),
       'open-physics-calibrator': () => this.togglePhysicsCalibrator(true),
@@ -872,6 +906,11 @@ class GameManager {
       case 'boat-throttle': return this.physics.boatThrottleEnabled ? 'ON' : 'OFF';
       case 'stick-throttle': return this.keyboard.touchJoystickThrottleEnabled ? 'ON' : 'OFF';
       case 'bottom-hud': return this.bottomHudEnabled ? 'ON' : 'OFF';
+      case 'cockpit-bezel': {
+        const preset = this.physicsPresets[this.activePreset];
+        const val = preset ? preset.showCockpitBezel : 1.0;
+        return Number(val) === 1 ? 'ON' : 'OFF';
+      }
       case 'collision-view': return this.collisionViewEnabled ? 'ON' : 'OFF';
       default: return '';
     }
@@ -898,7 +937,12 @@ class GameManager {
     };
 
     const categories = settingsConfig.categories.map(cat => {
-      const items = cat.items.map(item => {
+      let catItems = [...cat.items];
+      const hasHardcoreBtn = document.getElementById('btn-settings-hardcore') !== null;
+      if (cat.id === 'game' && hasHardcoreBtn) {
+        catItems.push({ id: 'tower-hardcore', label: 'Hardcore Mode', kind: 'action', actionKey: 'toggle-tower-hardcore' });
+      }
+      const items = catItems.map(item => {
         const live = { ...item };
         const fn = this._resolveSettingsAction(item.actionKey);
         if (item.kind === 'slider') {
@@ -929,7 +973,7 @@ class GameManager {
       if (gameCategory) {
         gameCategory.items = [
           { id: 'resume', label: 'Resume Road', kind: 'action', onConfirm: () => { gameAudio.playClick(); this.toggleSettingsMenu(); } },
-          { id: 'retry', label: 'Retry Road', kind: 'action', onConfirm: () => { gameAudio.playClick(); this.startLevel(this.currentLevelIndex); } },
+          { id: 'retry', label: 'Retry Road', kind: 'action', onConfirm: () => { gameAudio.playClick(); this.retryCurrentLevelOrGroup(); } },
           { id: 'quit', label: 'Quit to Menu', kind: 'action', onConfirm: () => { gameAudio.playClick(); this.returnToMenu(); } },
           ...gameCategory.items
         ];
@@ -964,7 +1008,7 @@ class GameManager {
       starfield: 'btn-settings-starfield', 'speed-fov': 'btn-settings-speed-fov', 'ghost-racer': 'btn-settings-ghost', 'visualizer-mode': 'btn-settings-visualizer-mode',
       'wall-angle': 'item-settings-wall-angle', 'wall-spread': 'item-settings-wall-spread', 'wall-height': 'item-settings-wall-height', 'star-size': 'item-settings-star-size', 'star-density': 'item-settings-star-density',
       'mouse-play': 'btn-settings-mouse', 'touch-hud': 'btn-settings-touch', 'boat-throttle': 'btn-settings-boat-throttle', 'stick-throttle': 'btn-settings-stick-throttle', 'gamepad-config': 'btn-settings-gamepad',
-      'bottom-hud': 'btn-settings-bottom-hud', 'collision-view': 'btn-settings-collision-view', 'hovercraft-garage': 'btn-settings-picker',
+      'bottom-hud': 'btn-settings-bottom-hud', 'cockpit-bezel': 'btn-settings-bezel', 'collision-view': 'btn-settings-collision-view', 'hovercraft-garage': 'btn-settings-picker',
       'physics-calibrator': 'btn-settings-calibrator', 'close-settings': 'btn-settings-close',
       preset: 'item-settings-vis-preset', lock: 'btn-settings-vis-lock', favorite: 'btn-settings-vis-fav', mode: 'btn-settings-vis-mode', webamp: 'btn-settings-vis-webamp'
     };
@@ -1064,6 +1108,7 @@ class GameManager {
       this.physics.settings[param] = config[param];
     }
     this._applyCameraSettings(config);
+    this.updateCockpitBezelToggleBtn();
   }
 
   _applyCameraSettings(config) {
@@ -1330,9 +1375,18 @@ class GameManager {
    */
   setupXmbMenus() {
     const actionHandlers = {
-      'play-standard': () => { gameAudio.playClick(); this.showLevelSelection('standard'); },
-      'play-generated': () => { gameAudio.playClick(); this.showLevelSelection('generated'); },
-      'play-xmas': () => { gameAudio.playClick(); this.showLevelSelection('xmas'); },
+      'play-standard': () => { gameAudio.playClick(); this.setPlayStyle('classic'); this.showLevelSelection('standard'); },
+      'play-generated': () => { gameAudio.playClick(); this.setPlayStyle('classic'); this.showLevelSelection('generated'); },
+      'play-xmas': () => { gameAudio.playClick(); this.setPlayStyle('classic'); this.showLevelSelection('xmas'); },
+      'play-classic-standard': () => { gameAudio.playClick(); this.setPlayStyle('classic'); this.showLevelSelection('standard'); },
+      'play-classic-generated': () => { gameAudio.playClick(); this.setPlayStyle('classic'); this.showLevelSelection('generated'); },
+      'play-classic-xmas': () => { gameAudio.playClick(); this.setPlayStyle('classic'); this.showLevelSelection('xmas'); },
+      'play-flow-standard': () => { gameAudio.playClick(); this.setPlayStyle('flow'); this.showLevelSelection('standard'); },
+      'play-flow-generated': () => { gameAudio.playClick(); this.setPlayStyle('flow'); this.showLevelSelection('generated'); },
+      'play-flow-xmas': () => { gameAudio.playClick(); this.setPlayStyle('flow'); this.showLevelSelection('xmas'); },
+      'play-tower-standard': () => { gameAudio.playClick(); this.setPlayStyle('tower'); this.showLevelSelection('standard'); },
+      'play-tower-generated': () => { gameAudio.playClick(); this.setPlayStyle('tower'); this.showLevelSelection('generated'); },
+      'play-tower-xmas': () => { gameAudio.playClick(); this.setPlayStyle('tower'); this.showLevelSelection('xmas'); },
       'load-custom-level': () => {
         gameAudio.playClick();
         const loader = document.getElementById('game-custom-level-loader');
@@ -1348,19 +1402,74 @@ class GameManager {
       generated: document.getElementById('btn-play-generated'),
       xmas: document.getElementById('btn-play-xmas'),
       'load-custom-level': document.getElementById('btn-load-custom-level'),
+      'flow-standard': document.getElementById('btn-play-flow-standard'),
+      'flow-generated': document.getElementById('btn-play-flow-generated'),
+      'flow-xmas': document.getElementById('btn-play-flow-xmas'),
+      'tower-standard': document.getElementById('btn-play-tower-standard'),
+      'tower-generated': document.getElementById('btn-play-tower-generated'),
+      'tower-xmas': document.getElementById('btn-play-tower-xmas'),
       'level-editor': document.getElementById('btn-open-editor'),
       'hovercraft-garage': document.getElementById('btn-open-picker'),
       'how-to-play': document.getElementById('btn-how-to')
     };
+
+    const hasFlow = document.getElementById('menu-xmb-cat-flow') !== null;
+    let localCategories = [...mainMenuConfig.categories];
+    
+    if (hasFlow) {
+      localCategories = [
+        {
+          id: 'classic',
+          label: 'CLASSIC',
+          items: [
+            { id: 'standard', label: 'Standard Pack', kind: 'action', actionKey: 'play-classic-standard' },
+            { id: 'generated', label: 'Generated Worlds', kind: 'action', actionKey: 'play-classic-generated' },
+            { id: 'xmas', label: 'Xmas Special', kind: 'action', actionKey: 'play-classic-xmas' },
+            { id: 'load-custom-level', label: 'Load Custom Level', kind: 'action', actionKey: 'load-custom-level' }
+          ]
+        },
+        {
+          id: 'flow',
+          label: 'FLOW (GROUPED)',
+          items: [
+            { id: 'flow-standard', label: 'Standard Pack', kind: 'action', actionKey: 'play-flow-standard' },
+            { id: 'flow-generated', label: 'Generated Worlds', kind: 'action', actionKey: 'play-flow-generated' },
+            { id: 'flow-xmas', label: 'Xmas Special', kind: 'action', actionKey: 'play-flow-xmas' }
+          ]
+        },
+        {
+          id: 'tower',
+          label: 'TOWER (STACK)',
+          items: [
+            { id: 'tower-standard', label: 'Standard Pack', kind: 'action', actionKey: 'play-tower-standard' },
+            { id: 'tower-generated', label: 'Generated Worlds', kind: 'action', actionKey: 'play-tower-generated' },
+            { id: 'tower-xmas', label: 'Xmas Special', kind: 'action', actionKey: 'play-tower-xmas' }
+          ]
+        },
+        {
+          id: 'extras',
+          label: 'EXTRAS',
+          items: [
+            { id: 'level-editor', label: 'Level Editor', kind: 'action', actionKey: 'open-editor' },
+            { id: 'hovercraft-garage', label: 'Hovercraft Garage', kind: 'action', actionKey: 'open-ship-picker' },
+            { id: 'how-to-play', label: 'How To Play', kind: 'action', actionKey: 'open-how-to' }
+          ]
+        }
+      ];
+    }
+
     const mainMenuCategoryEls = {
       play: document.getElementById('menu-xmb-cat-play'),
+      classic: document.getElementById('menu-xmb-cat-classic') || document.getElementById('menu-xmb-cat-play'),
+      flow: document.getElementById('menu-xmb-cat-flow'),
+      tower: document.getElementById('menu-xmb-cat-tower'),
       extras: document.getElementById('menu-xmb-cat-extras')
     };
 
     // Clone the static config and attach `el`/`onConfirm` per item — menuConfig.js
     // stays a pure-data module, so the DOM/function wiring happens here instead.
     const mainMenuConfigWired = {
-      categories: mainMenuConfig.categories.map(cat => ({
+      categories: localCategories.map(cat => ({
         ...cat,
         el: mainMenuCategoryEls[cat.id] || null,
         // Drop items whose button is hidden (e.g. xmas pack with display:none)
@@ -1372,24 +1481,27 @@ class GameManager {
             onConfirm: actionHandlers[item.actionKey]
           }))
           .filter(item => item.el && item.el.style.display !== 'none')
-      }))
+      })).filter(cat => cat.el !== null)
     };
 
-    const menuItemTrackPlay = document.getElementById('menu-xmb-item-track-play');
+    const menuItemTrackClassic = document.getElementById('menu-xmb-item-track-classic') || document.getElementById('menu-xmb-item-track-play');
+    const menuItemTrackFlow = document.getElementById('menu-xmb-item-track-flow');
+    const menuItemTrackTower = document.getElementById('menu-xmb-item-track-tower');
     const menuItemTrackExtras = document.getElementById('menu-xmb-item-track-extras');
     const menuCategoryTrack = document.getElementById('menu-xmb-category-track');
 
     const mainMenuController = new CrossbarController(mainMenuConfigWired, {
       categoryTrackEl: menuCategoryTrack,
-      itemTrackEl: menuItemTrackPlay,
+      itemTrackEl: menuItemTrackClassic,
       leftAlignItems: true
     });
 
-    // The two categories use separate item-track elements (PLAY's buttons vs
-    // EXTRAS' buttons are different DOM subtrees), so when the category
-    // changes we swap which track is visible/mounted instead of having one
-    // track contain both lists at once.
-    const menuItemTracksByCategory = { play: menuItemTrackPlay, extras: menuItemTrackExtras };
+    const menuItemTracksByCategory = {
+      classic: menuItemTrackClassic,
+      flow: menuItemTrackFlow,
+      tower: menuItemTrackTower,
+      extras: menuItemTrackExtras
+    };
     const syncMainMenuItemTrack = () => {
       const activeCat = mainMenuController.activeCategory;
       Object.entries(menuItemTracksByCategory).forEach(([catId, trackEl]) => {
@@ -1692,7 +1804,7 @@ class GameManager {
         label: 'PAUSED',
         items: [
           { id: 'resume', label: 'Resume', kind: 'action', el: document.getElementById('btn-pause-resume'), onConfirm: () => { gameAudio.playClick(); this.resumeGame(); } },
-          { id: 'retry', label: 'Retry', kind: 'action', el: document.getElementById('btn-pause-retry'), onConfirm: () => { gameAudio.playClick(); this.startLevel(this.currentLevelIndex); } },
+          { id: 'retry', label: 'Retry', kind: 'action', el: document.getElementById('btn-pause-retry'), onConfirm: () => { gameAudio.playClick(); this.retryCurrentLevelOrGroup(); } },
           { id: 'boat-throttle', label: 'Boat Throttle', kind: 'action', el: document.getElementById('btn-pause-toggle-boat-throttle'), onConfirm: () => {
               gameAudio.playClick();
               this.physics.boatThrottleEnabled = !this.physics.boatThrottleEnabled;
@@ -1704,7 +1816,7 @@ class GameManager {
               if (confirm("Reset all edits to this level? This cannot be undone.")) {
                 InGameEditor.resetLevelOverrides(this, this.currentPack, this.currentLevelIndex);
                 this.resumeGame();
-                this.startLevel(this.currentLevelIndex);
+                this.retryCurrentLevelOrGroup();
               }
             } },
           { id: 'quit', label: 'Quit to Main Menu', kind: 'action', el: document.getElementById('btn-pause-quit'), onConfirm: () => { gameAudio.playClick(); this.returnToMenu(); } }
@@ -1724,7 +1836,7 @@ class GameManager {
         id: 'death',
         label: 'YOU DIED',
         items: [
-          { id: 'retry', label: 'Try Again', kind: 'action', el: document.getElementById('btn-death-retry'), onConfirm: () => { gameAudio.playClick(); this.startLevel(this.currentLevelIndex); } },
+          { id: 'retry', label: 'Try Again', kind: 'action', el: document.getElementById('btn-death-retry'), onConfirm: () => { gameAudio.playClick(); this.retryCurrentLevelOrGroup(); } },
           { id: 'menu', label: 'Back to Menu', kind: 'action', el: document.getElementById('btn-death-menu'), onConfirm: () => { gameAudio.playClick(); this.returnToMenu(); } }
         ]
       }]
@@ -1886,18 +1998,75 @@ class GameManager {
     // Menu triggers
     document.getElementById('btn-play-standard').addEventListener('click', () => {
       gameAudio.playClick();
+      this.setPlayStyle('classic');
       this.showLevelSelection('standard');
     });
 
     document.getElementById('btn-play-generated').addEventListener('click', () => {
       gameAudio.playClick();
+      this.setPlayStyle('classic');
       this.showLevelSelection('generated');
     });
 
     document.getElementById('btn-play-xmas').addEventListener('click', () => {
       gameAudio.playClick();
+      this.setPlayStyle('classic');
       this.showLevelSelection('xmas');
     });
+
+    const btnPlayFlowStandard = document.getElementById('btn-play-flow-standard');
+    if (btnPlayFlowStandard) {
+      btnPlayFlowStandard.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.setPlayStyle('flow');
+        this.showLevelSelection('standard');
+      });
+    }
+
+    const btnPlayFlowGenerated = document.getElementById('btn-play-flow-generated');
+    if (btnPlayFlowGenerated) {
+      btnPlayFlowGenerated.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.setPlayStyle('flow');
+        this.showLevelSelection('generated');
+      });
+    }
+
+    const btnPlayFlowXmas = document.getElementById('btn-play-flow-xmas');
+    if (btnPlayFlowXmas) {
+      btnPlayFlowXmas.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.setPlayStyle('flow');
+        this.showLevelSelection('xmas');
+      });
+    }
+
+    const btnPlayTowerStandard = document.getElementById('btn-play-tower-standard');
+    if (btnPlayTowerStandard) {
+      btnPlayTowerStandard.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.setPlayStyle('tower');
+        this.showLevelSelection('standard');
+      });
+    }
+
+    const btnPlayTowerGenerated = document.getElementById('btn-play-tower-generated');
+    if (btnPlayTowerGenerated) {
+      btnPlayTowerGenerated.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.setPlayStyle('tower');
+        this.showLevelSelection('generated');
+      });
+    }
+
+    const btnPlayTowerXmas = document.getElementById('btn-play-tower-xmas');
+    if (btnPlayTowerXmas) {
+      btnPlayTowerXmas.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.setPlayStyle('tower');
+        this.showLevelSelection('xmas');
+      });
+    }
 
     const btnLoadCustomLevel = document.getElementById('btn-load-custom-level');
     const customLevelLoader = document.getElementById('game-custom-level-loader');
@@ -2036,7 +2205,7 @@ class GameManager {
           InGameEditor.resetLevelOverrides(this, this.currentPack, this.currentLevelIndex);
           // Re-load the level
           this.resumeGame();
-          this.startLevel(this.currentLevelIndex);
+          this.retryCurrentLevelOrGroup();
         }
       });
     }
@@ -2158,7 +2327,7 @@ class GameManager {
     // Death / Victory screen retry triggers
     document.getElementById('btn-death-retry').addEventListener('click', () => {
       gameAudio.playClick();
-      this.startLevel(this.currentLevelIndex);
+      this.retryCurrentLevelOrGroup();
     });
 
     document.getElementById('btn-death-menu').addEventListener('click', () => {
@@ -2224,7 +2393,7 @@ class GameManager {
     if (btnSettingsRetry) {
       btnSettingsRetry.addEventListener('click', () => {
         gameAudio.playClick();
-        this.startLevel(this.currentLevelIndex);
+        this.retryCurrentLevelOrGroup();
       });
     }
 
@@ -2422,6 +2591,14 @@ class GameManager {
         this.bottomHudEnabled = !this.bottomHudEnabled;
         localStorage.setItem('skyroads_bottom_hud', this.bottomHudEnabled);
         this.updateBottomHudToggleBtn();
+      });
+    }
+
+    const btnSettingsBezel = document.getElementById('btn-settings-bezel');
+    if (btnSettingsBezel) {
+      btnSettingsBezel.addEventListener('click', () => {
+        gameAudio.playClick();
+        this.toggleCockpitBezel();
       });
     }
 
@@ -2749,7 +2926,7 @@ class GameManager {
     if (btnPauseRetry) {
       btnPauseRetry.addEventListener('click', () => {
         gameAudio.playClick();
-        this.startLevel(this.currentLevelIndex);
+        this.retryCurrentLevelOrGroup();
       });
     }
 
@@ -2852,14 +3029,14 @@ class GameManager {
     // If no target specified, just hide everything (return to gameplay)
     if (!screenId) {
       // Restore touch controls when returning to active gameplay
-      if (this.keyboard.touchControlsEnabled && this.gameState === 'playing') {
+      if (this.touchManager && this.keyboard.touchControlsEnabled && this.gameState === 'playing') {
         this.touchManager.show();
       }
       return;
     }
 
     // An overlay is opening — hide touch buttons so they don't intercept taps
-    this.touchManager.hide();
+    if (this.touchManager) this.touchManager.hide();
 
     // Show target screen
     const target = document.getElementById(screenId);
@@ -2926,7 +3103,9 @@ class GameManager {
     const levels = await loadLevelPack(packName);
 
     this.gameState = 'level_select';
-    const packTitle = packName === 'standard' ? 'STANDARD PACK' : (packName === 'xmas' ? 'XMAS SPECIAL' : 'GENERATED PACK');
+    let packTitle = packName === 'standard' ? 'STANDARD PACK' : (packName === 'xmas' ? 'XMAS SPECIAL' : 'GENERATED PACK');
+    if (this.playStyle === 'flow') packTitle += ' (FLOW)';
+    if (this.playStyle === 'tower') packTitle += ' (TOWER)';
     document.getElementById('level-pack-title').innerText = packTitle;
 
     let names;
@@ -2938,11 +3117,20 @@ class GameManager {
       names = this.generatedRoadNames;
     }
 
-    // Build the decade-grouped XMB crossbar: horizontal = "Levels 1-10" etc.,
-    // vertical = the (<=10) levels in that group. buildLevelSelectConfig (tested
-    // in menuConfig) does the group-of-10 math; we just attach DOM + onConfirm.
-    const labels = levels.map((_, idx) => names[idx] || `ROAD ${idx}`);
-    const cfg = buildLevelSelectConfig(labels);
+    let labels;
+    let cfg;
+    if (this.playStyle === 'classic') {
+      labels = levels.map((_, idx) => names[idx] || `ROAD ${idx}`);
+      cfg = buildLevelSelectConfig(labels);
+    } else {
+      labels = [];
+      const worldName = this.playStyle === 'flow' ? 'WORLD' : 'TOWER';
+      for (let i = 0; i < 10; i++) {
+        const firstLevelName = names[i * 3];
+        labels.push(`${worldName} ${i + 1}: ${firstLevelName ? firstLevelName.toUpperCase() : `SECTOR ${i + 1}`}`);
+      }
+      cfg = buildLevelSelectConfig(labels);
+    }
     // Infinite Road is the first item of the first decade group (replaces the
     // old standalone START INFINITE ROAD button).
     if (cfg.categories[0]) {
@@ -2998,14 +3186,17 @@ class GameManager {
         const absIdx = parseInt(item.actionKey.replace('play-level-', ''), 10);
         const numLabel = document.createElement('div');
         numLabel.className = 'level-num';
-        numLabel.innerText = absIdx;
+        numLabel.innerText = this.playStyle === 'classic' ? absIdx : absIdx + 1;
         const nameLabel = document.createElement('div');
         nameLabel.className = 'level-name';
         nameLabel.innerText = labels[absIdx];
         btn.appendChild(numLabel);
         btn.appendChild(nameLabel);
 
-        const bestScore = localStorage.getItem(`skyroads_best_score_${packName}_${absIdx}`);
+        const scoreKey = this.playStyle === 'classic'
+          ? `skyroads_best_score_${packName}_${absIdx}`
+          : `skyroads_best_score_${this.playStyle}_${packName}_${absIdx}`;
+        const bestScore = localStorage.getItem(scoreKey);
         if (bestScore) {
           const scoreBadge = document.createElement('div');
           scoreBadge.className = 'level-best-score';
@@ -3013,7 +3204,14 @@ class GameManager {
           btn.appendChild(scoreBadge);
         }
 
-        const start = () => { gameAudio.playClick(); this.startLevel(absIdx); };
+        const start = () => {
+          gameAudio.playClick();
+          if (this.playStyle === 'classic') {
+            this.startLevel(absIdx);
+          } else {
+            this.startGroup(absIdx);
+          }
+        };
         btn.addEventListener('click', start); // mouse/touch still works
         item.el = btn;
         item.label = ''; // the button carries its own num/name; no duplicate label span
@@ -3139,8 +3337,50 @@ class GameManager {
 
     return { spawnX, spawnY, spawnZ };
   }
+  clearAllLevelGeometry() {
+    // 1. Clear standard single-level meshes
+    if (this.levelInfo && this.levelInfo.roadMeshes) {
+      this.levelInfo.roadMeshes.forEach(mesh => {
+        this.graphics.scene.remove(mesh);
+        mesh.traverse((node) => {
+          if (node.geometry) node.geometry.dispose();
+          if (node.material) {
+            if (Array.isArray(node.material)) {
+              node.material.forEach(m => m.dispose());
+            } else {
+              node.material.dispose();
+            }
+          }
+        });
+      });
+      this.levelInfo.roadMeshes = [];
+    }
+
+    // 2. Clear multi-level groups
+    const groups = [this.levelGroupA, this.levelGroupB, this.levelGroupC];
+    groups.forEach((group, idx) => {
+      if (group) {
+        this.graphics.scene.remove(group);
+        group.traverse((node) => {
+          if (node.geometry) node.geometry.dispose();
+          if (node.material) {
+            if (Array.isArray(node.material)) {
+              node.material.forEach(m => m.dispose());
+            } else {
+              node.material.dispose();
+            }
+          }
+        });
+        if (idx === 0) this.levelGroupA = null;
+        if (idx === 1) this.levelGroupB = null;
+        if (idx === 2) this.levelGroupC = null;
+      }
+    });
+  }
 
   async startLevel(index, opts = {}) {
+    this.clearAllLevelGeometry();
+
     if (this.keyboard && typeof this.keyboard.resetKeys === 'function') {
       this.keyboard.resetKeys();
     }
@@ -3239,21 +3479,6 @@ class GameManager {
     await new Promise((resolve) => {
       this.graphics.loadLevelSceneryModels(index, resolve);
     });
-    if (this.levelInfo && this.levelInfo.roadMeshes) {
-      this.levelInfo.roadMeshes.forEach(mesh => {
-        this.graphics.scene.remove(mesh);
-        mesh.traverse((node) => {
-          if (node.geometry) node.geometry.dispose();
-          if (node.material) {
-            if (Array.isArray(node.material)) {
-              node.material.forEach(m => m.dispose());
-            } else {
-              node.material.dispose();
-            }
-          }
-        });
-      });
-    }
     const activeThemeIdx = getActiveThemeIndex(this.currentLevelData);
     disposeUnusedThemes(activeThemeIdx);
 
@@ -3333,10 +3558,12 @@ class GameManager {
     if (btnInGamePause) btnInGamePause.classList.remove('hidden');
 
     // Toggle Mobile Touch controls HUD visibility
-    if (this.keyboard.touchControlsEnabled) {
-      this.touchManager.show();
-    } else {
-      this.touchManager.hide();
+    if (this.touchManager) {
+      if (this.keyboard.touchControlsEnabled) {
+        this.touchManager.show();
+      } else {
+        this.touchManager.hide();
+      }
     }
 
     // 6. Trigger Continuous Sound Hum
@@ -3540,6 +3767,14 @@ class GameManager {
       this.physics.isTransitioning = false;
       this.infiniteLevelTransitioning = false;
     }, 3750);
+  }
+
+  retryCurrentLevelOrGroup() {
+    if (this.playStyle === 'flow' || this.playStyle === 'tower') {
+      this.startGroup(this.currentWorldIndex);
+    } else {
+      this.startLevel(this.currentLevelIndex);
+    }
   }
 
   animate(timestamp) {
@@ -3749,21 +3984,31 @@ class GameManager {
         // 1. Advance Physics Engine (DT capped internally to prevent tunneling)
         this.physics.update(dt, this.keyboard, this.levelInfo);
 
-        // Check if player crossed/went through any checkpoints in generated levels
-        if (this.levelInfo && this.levelInfo.checkpoints && this.levelInfo.checkpoints.length > 0) {
-          const nextCheckpointIdx = this.lastCheckpointPassed === null ? 0 : this.lastCheckpointPassed + 1;
+        // Multi-level height transitions
+        if (this.playStyle === 'flow' || this.playStyle === 'tower') {
+          this.checkMultiLevelHeightTransitions();
+        }
+
+        // Check if player crossed/went through any checkpoints in generated levels (none in Tower Mode)
+        if (this.playStyle !== 'tower' && this.levelInfo && this.levelInfo.checkpoints && this.levelInfo.checkpoints.length > 0) {
+          const lastPassed = this.playStyle === 'flow' ? this.lastPassedCheckpointList[this.activeLevelIndex] : this.lastCheckpointPassed;
+          const nextCheckpointIdx = lastPassed === null ? 0 : lastPassed + 1;
           if (nextCheckpointIdx < this.levelInfo.checkpoints.length) {
             const checkpoint = this.levelInfo.checkpoints[nextCheckpointIdx];
             // Since Z moves negatively as the ship drives forward, check if we crossed checkpoint.z
             if (this.physics.position.z <= checkpoint.z) {
-              this.lastCheckpointPassed = nextCheckpointIdx;
+              if (this.playStyle === 'flow') {
+                this.lastPassedCheckpointList[this.activeLevelIndex] = nextCheckpointIdx;
+              } else {
+                this.lastCheckpointPassed = nextCheckpointIdx;
+              }
               
               // Verify the ship actually went THROUGH the arch (X within [-9, 9], Y within [baseY - 0.5, baseY + 6.5])
               const passedX = this.physics.position.x >= -9.0 && this.physics.position.x <= 9.0;
               const passedY = this.physics.position.y >= checkpoint.baseY - 0.5 && this.physics.position.y <= checkpoint.baseY + 6.5;
               
               if (passedX && passedY) {
-                this.activeCheckpoint = {
+                const cpObj = {
                   index: nextCheckpointIdx,
                   fuel: this.physics.fuel,
                   oxygen: this.physics.oxygen,
@@ -3775,6 +4020,13 @@ class GameManager {
                     z: checkpoint.z - 8.0 // 8 units ahead of checkpoint on flat runway
                   }
                 };
+
+                if (this.playStyle === 'flow') {
+                  this.activeCheckpointList[this.activeLevelIndex] = cpObj;
+                  this.activeCheckpoint = cpObj;
+                } else {
+                  this.activeCheckpoint = cpObj;
+                }
                 
                 // Play refill chime and trigger visual notification
                 if (typeof gameAudio.playRefill === 'function') {
@@ -3886,9 +4138,11 @@ class GameManager {
       }
       this.wasSteeringLastFrame = isSteering;
 
-      // 6. Check success condition (crossed Z-line)
+      // 6. Check success condition (finish line crossing)
       if (!this.physics.isDead && this.physics.position.z <= this.levelInfo.finishZ + SHIP_LENGTH / 2) {
-        if (this.isInfiniteMode) {
+        if (this.playStyle === 'flow' || this.playStyle === 'tower') {
+          this.handleMultiLevelFinishCross();
+        } else if (this.isInfiniteMode) {
           this.triggerInfiniteLevelTransition();
         } else {
           this.handleSuccess();
@@ -4058,59 +4312,213 @@ class GameManager {
     if (this.ghost) this.ghost.stopRecording();
 
     this.gameState = 'death';
-    gameAudio.stopEngine();
-    gameAudio.playExplosion();
-    this.graphics.triggerExplosion(this.physics.position);
+    try {
+      gameAudio.stopEngine();
+    } catch (e) {
+      console.warn("Failed to stop engine sound on death:", e);
+    }
+    try {
+      gameAudio.playExplosion();
+    } catch (e) {
+      console.warn("Failed to play explosion sound on death:", e);
+    }
+    try {
+      this.graphics.triggerExplosion(this.physics.position);
+    } catch (e) {
+      console.warn("Failed to trigger visual explosion on death:", e);
+    }
+
+    if (this.playStyle === 'flow' || this.playStyle === 'tower') {
+      // Decrement lives in Tower mode
+      if (this.playStyle === 'tower') {
+        this.lives--;
+        this.updateLivesHUD();
+        
+        if (this.lives <= 0) {
+          setTimeout(() => {
+            if (this.gameState !== 'death') return;
+            const titleEl = document.getElementById('death-screen-title');
+            if (titleEl) titleEl.innerText = "GAME OVER";
+            this.showScreen('death-screen');
+          }, 1500);
+          return;
+        }
+      }
+
+      // Auto-respawn after delay
+      setTimeout(() => {
+        try {
+          if (this.gameState !== 'death') return;
+
+          if (this.graphics.shipMesh) this.graphics.shipMesh.visible = true;
+          this.clearExplosionParticles();
+
+          let targetLevelIndex = this.activeLevelIndex;
+          let respawnCheckpoint = null;
+
+          if (this.playStyle === 'tower' && this.hardcoreModeEnabled) {
+            targetLevelIndex = 0;
+          } else {
+            respawnCheckpoint = this.activeCheckpointList[this.activeLevelIndex];
+          }
+
+          this.activeLevelIndex = targetLevelIndex;
+          this.physics.activeLevelIndex = targetLevelIndex;
+
+          if (!this.groupLevelInfos) {
+            throw new Error("groupLevelInfos is undefined");
+          }
+          this.levelInfo = this.groupLevelInfos[targetLevelIndex];
+          this.currentLevelData = this.groupLevelsData[targetLevelIndex];
+          window.currentLevelData = this.groupLevelsData[targetLevelIndex];
+          window.currentLevelIndex = this.currentWorldIndex * 3 + targetLevelIndex;
+
+          const H = 25.0;
+          if (this.levelGroupA && this.levelGroupB && this.levelGroupC) {
+            this.levelGroupA.position.y = ( ( (0 - targetLevelIndex + 1) % 3 + 3) % 3 - 1 ) * H;
+            this.levelGroupB.position.y = ( ( (1 - targetLevelIndex + 1) % 3 + 3) % 3 - 1 ) * H;
+            this.levelGroupC.position.y = ( ( (2 - targetLevelIndex + 1) % 3 + 3) % 3 - 1 ) * H;
+          }
+
+          if (respawnCheckpoint) {
+            this.physics.position.set(
+              respawnCheckpoint.position.x,
+              respawnCheckpoint.position.y,
+              respawnCheckpoint.position.z
+            );
+            this.physics.groundHeight = respawnCheckpoint.position.y - 0.3;
+            this.physics.fuel = respawnCheckpoint.fuel;
+            this.physics.oxygen = respawnCheckpoint.oxygen;
+            this.physics.score = respawnCheckpoint.score;
+            this.totalTime = respawnCheckpoint.time;
+          } else {
+            const { spawnX, spawnY, spawnZ } = this.findSafeSpawnPosition();
+            this.physics.position.set(spawnX, spawnY, spawnZ);
+            this.physics.groundHeight = spawnY - 0.3;
+            this.physics.fuel = this.levelInfo ? this.levelInfo.fuel : 5000;
+            this.physics.oxygen = this.levelInfo ? this.levelInfo.oxygen : 100;
+            if (this.playStyle === 'tower' && targetLevelIndex === 0) {
+              this.physics.score = 0;
+              this.totalTime = 0;
+            }
+          }
+
+          if (this.physics.health !== undefined) {
+            this.physics.health = 100.0;
+          }
+          this.physics.onGround = false;
+          this.physics.velocity.set(0, 0, 0);
+
+          this.physics.activeEffects = {
+            boost: false,
+            superBoost: false,
+            sticky: false,
+            slippery: false,
+            burning: false,
+            highJump: false
+          };
+
+          this.physics.isDead = false;
+          this.physics.deathReason = '';
+          this.activeCheckpoint = respawnCheckpoint;
+
+          gameAudio.startEngine();
+          this.gameState = 'playing';
+          this.showScreen('');
+        } catch (err) {
+          console.error("Error inside multi-level respawn handler:", err);
+          // Safe recovery fallback to prevent softlock/freeze
+          this.physics.isDead = false;
+          this.physics.activeEffects = {
+            boost: false,
+            superBoost: false,
+            sticky: false,
+            slippery: false,
+            burning: false,
+            highJump: false
+          };
+          this.gameState = 'playing';
+          this.showScreen('');
+        }
+      }, 1500);
+      return;
+    }
 
     // If checkpoint is active, perform auto-respawn after explosion delay
     if (this.activeCheckpoint) {
       setTimeout(() => {
-        if (this.gameState !== 'death') return; // State changed (e.g. exited to menu)
+        try {
+          if (this.gameState !== 'death') return; // State changed (e.g. exited to menu)
 
-        // Restore ship physics
-        this.physics.position.set(
-          this.activeCheckpoint.position.x,
-          this.activeCheckpoint.position.y,
-          this.activeCheckpoint.position.z
-        );
-        this.physics.onGround = true;
-        this.physics.groundHeight = this.activeCheckpoint.position.y - 0.3;
-        this.physics.velocity.set(0, 0, 0);
+          // Restore ship physics
+          this.physics.position.set(
+            this.activeCheckpoint.position.x,
+            this.activeCheckpoint.position.y,
+            this.activeCheckpoint.position.z
+          );
+          this.physics.onGround = true;
+          this.physics.groundHeight = this.activeCheckpoint.position.y - 0.3;
+          this.physics.velocity.set(0, 0, 0);
 
-        // Restore resources & health
-        this.physics.fuel = this.activeCheckpoint.fuel;
-        this.physics.oxygen = this.activeCheckpoint.oxygen;
-        if (this.physics.health !== undefined) {
-          this.physics.health = 100.0;
-        }
-
-        // Restore score and elapsed time
-        this.physics.score = this.activeCheckpoint.score;
-        this.totalTime = this.activeCheckpoint.time;
-
-        // Reset death states
-        this.physics.isDead = false;
-        this.physics.deathReason = '';
-
-        // Make ship visible again and clear explosion particles
-        if (this.graphics.shipMesh) this.graphics.shipMesh.visible = true;
-        if (this.graphics.particles) {
-          for (const p of this.graphics.particles) {
-            this.graphics.scene.remove(p.mesh);
-            if (p.mesh.geometry) p.mesh.geometry.dispose();
-            if (p.mesh.material) p.mesh.material.dispose();
+          // Restore resources & health
+          this.physics.fuel = this.activeCheckpoint.fuel;
+          this.physics.oxygen = this.activeCheckpoint.oxygen;
+          if (this.physics.health !== undefined) {
+            this.physics.health = 100.0;
           }
-          this.graphics.particles = [];
-        }
 
-        // Restart sound and resume gameplay
-        gameAudio.startEngine();
-        this.gameState = 'playing';
-        this.showScreen(''); // Hide all screens/menus
-        
-        // Trim history to match checkpoint start
-        if (this.stateHistory) {
-          this.stateHistory = this.stateHistory.filter(snap => snap.timestamp <= this.activeCheckpoint.time * 1000);
+          // Restore score and elapsed time
+          this.physics.score = this.activeCheckpoint.score;
+          this.totalTime = this.activeCheckpoint.time;
+
+          // Reset active effects
+          this.physics.activeEffects = {
+            boost: false,
+            superBoost: false,
+            sticky: false,
+            slippery: false,
+            burning: false,
+            highJump: false
+          };
+
+          // Reset death states
+          this.physics.isDead = false;
+          this.physics.deathReason = '';
+
+          // Make ship visible again and clear explosion particles
+          if (this.graphics.shipMesh) this.graphics.shipMesh.visible = true;
+          if (this.graphics.particles) {
+            for (const p of this.graphics.particles) {
+              this.graphics.scene.remove(p.mesh);
+              if (p.mesh.geometry) p.mesh.geometry.dispose();
+              if (p.mesh.material) p.mesh.material.dispose();
+            }
+            this.graphics.particles = [];
+          }
+
+          // Restart sound and resume gameplay
+          gameAudio.startEngine();
+          this.gameState = 'playing';
+          this.showScreen(''); // Hide all screens/menus
+          
+          // Trim history to match checkpoint start
+          if (this.stateHistory) {
+            this.stateHistory = this.stateHistory.filter(snap => snap.timestamp <= this.activeCheckpoint.time * 1000);
+          }
+        } catch (err) {
+          console.error("Error inside classic checkpoint respawn handler:", err);
+          // Safe recovery fallback to prevent softlock/freeze
+          this.physics.isDead = false;
+          this.physics.activeEffects = {
+            boost: false,
+            superBoost: false,
+            sticky: false,
+            slippery: false,
+            burning: false,
+            highJump: false
+          };
+          this.gameState = 'playing';
+          this.showScreen('');
         }
       }, 1500);
       return;
@@ -4358,7 +4766,9 @@ class GameManager {
     const submitBtn = document.getElementById('btn-score-submit');
     const inputBox = document.getElementById('leaderboard-input-box');
 
-    const leaderboardKey = `skyroads_leaderboard_${this.currentPack}_${this.currentLevelIndex}`;
+    const leaderboardKey = this.playStyle === 'classic'
+      ? `skyroads_leaderboard_${this.currentPack}_${this.currentLevelIndex}`
+      : `skyroads_leaderboard_${this.playStyle}_${this.currentPack}_${this.currentWorldIndex}`;
     
     // Defensive leaderboard list loader
     const getLeaderboardList = () => {
@@ -4510,7 +4920,9 @@ class GameManager {
         localStorage.setItem(leaderboardKey, JSON.stringify(top5));
 
         // Save as Personal Best
-        const bestScoreKey = `skyroads_best_score_${this.currentPack}_${this.currentLevelIndex}`;
+        const bestScoreKey = this.playStyle === 'classic'
+          ? `skyroads_best_score_${this.currentPack}_${this.currentLevelIndex}`
+          : `skyroads_best_score_${this.playStyle}_${this.currentPack}_${this.currentWorldIndex}`;
         const previousBest = parseInt(localStorage.getItem(bestScoreKey) || '0', 10);
         if (finalScore > previousBest) {
           localStorage.setItem(bestScoreKey, String(finalScore));
@@ -4857,6 +5269,385 @@ class GameManager {
         }
       }
     });
+  }
+
+  setPlayStyle(style) {
+    this.playStyle = style;
+    this.physics.playStyle = style;
+  }
+
+  toggleTowerHardcore(forcedValue) {
+    const nextState = forcedValue !== undefined ? forcedValue : !this.hardcoreModeEnabled;
+    this.hardcoreModeEnabled = nextState;
+    localStorage.setItem('skyroads_hardcore_mode', nextState ? 'true' : 'false');
+    this.updateHardcoreToggleBtn();
+    if (typeof gameAudio.playClick === 'function') gameAudio.playClick();
+  }
+
+  updateHardcoreToggleBtn() {
+    const btn = document.getElementById('btn-settings-hardcore');
+    if (btn) {
+      btn.innerText = `HARDCORE MODE: ${this.hardcoreModeEnabled ? 'ON' : 'OFF'}`;
+      btn.classList.toggle('btn-danger', this.hardcoreModeEnabled);
+      btn.classList.toggle('btn-info', !this.hardcoreModeEnabled);
+    }
+  }
+
+  updateLivesHUD() {
+    const valEl = document.getElementById('hud-lives-val');
+    if (valEl) {
+      valEl.innerText = '🚀'.repeat(Math.max(0, this.lives));
+    }
+  }
+
+  updateGatesHUD() {
+    ['a', 'b', 'c'].forEach((lvlLetter, idx) => {
+      const el = document.getElementById(`gate-light-${lvlLetter}`);
+      if (el) {
+        el.classList.toggle('active', !!this.clearedGates[idx]);
+      }
+    });
+  }
+
+  async startGroup(worldIdx) {
+    this.currentWorldIndex = worldIdx;
+    this.activeLevelIndex = 0;
+    this.physics.activeLevelIndex = 0;
+
+    const packLevels = getCachedPack(this.currentPack);
+    const lvlA = JSON.parse(JSON.stringify(packLevels[worldIdx * 3]));
+    const lvlB = JSON.parse(JSON.stringify(packLevels[worldIdx * 3 + 1]));
+    const lvlC = JSON.parse(JSON.stringify(packLevels[worldIdx * 3 + 2]));
+
+    const maxLen = Math.max(lvlA.rows.length, lvlB.rows.length, lvlC.rows.length);
+    [lvlA, lvlB, lvlC].forEach(lvl => {
+      const diff = maxLen - lvl.rows.length;
+      if (diff > 0) {
+        const roadColor = lvl.roadColor || 1;
+        for (let i = 0; i < diff; i++) {
+          const row = Array.from({ length: 7 }, (_, c) => {
+            if (c >= 1 && c <= 5) {
+              return {
+                top_color: 0,
+                bottom_color: roadColor,
+                full: false,
+                half: false,
+                tunnel: false,
+                low3: 1,
+                val: 0
+              };
+            }
+            return null;
+          });
+          lvl.rows.push(row);
+        }
+      }
+    });
+
+    if (this.playStyle === 'tower') {
+      [lvlA, lvlB].forEach((lvl) => {
+        let padsPlaced = 0;
+        if (lvl.checkpoints) {
+          lvl.checkpoints.forEach(cp => {
+            if (padsPlaced < 2 && lvl.rows[cp.row] && lvl.rows[cp.row][3]) {
+              lvl.rows[cp.row][3].isSuperJump = true;
+              padsPlaced++;
+            }
+          });
+        }
+        for (let r = 20; r < lvl.rows.length - 20 && padsPlaced < 2; r++) {
+          const row = lvl.rows[r];
+          if (row && row[3] && row[3].top_color === 0 && !row[3].ramp && !row[3].tunnel && !row[3].full && !row[3].half) {
+            row[3].isSuperJump = true;
+            padsPlaced++;
+          }
+        }
+      });
+    }
+
+    this.groupLevelsData = [lvlA, lvlB, lvlC];
+
+    this.gameState = 'loading';
+    this.showScreen('loading-screen');
+    document.getElementById('loading-progress-bar').style.width = '0%';
+
+    this.graphics.clearLevel();
+
+    await new Promise((resolve) => {
+      this.graphics.loadLevelSceneryModels(worldIdx * 3, resolve);
+    });
+
+    const activeThemeIdxs = [
+      getActiveThemeIndex(lvlA),
+      getActiveThemeIndex(lvlB),
+      getActiveThemeIndex(lvlC)
+    ];
+    disposeUnusedThemes(activeThemeIdxs);
+
+    this.clearAllLevelGeometry();
+
+    this.levelGroupA = new THREE.Group();
+    this.levelGroupB = new THREE.Group();
+    this.levelGroupC = new THREE.Group();
+    this.graphics.scene.add(this.levelGroupA);
+    this.graphics.scene.add(this.levelGroupB);
+    this.graphics.scene.add(this.levelGroupC);
+
+    this.levelGroupA.position.y = 0.0;
+    this.levelGroupB.position.y = 25.0;
+    this.levelGroupC.position.y = -25.0;
+
+    const onProgress = (percent) => {
+      document.getElementById('loading-progress-bar').style.width = `${percent}%`;
+    };
+
+    document.getElementById('loading-status').innerText = 'Building Level A...';
+    this.infoA = await buildLevelAsync(lvlA, this.levelGroupA, onProgress);
+
+    document.getElementById('loading-status').innerText = 'Building Level B...';
+    this.infoB = await buildLevelAsync(lvlB, this.levelGroupB, onProgress);
+
+    document.getElementById('loading-status').innerText = 'Building Level C...';
+    this.infoC = await buildLevelAsync(lvlC, this.levelGroupC, onProgress);
+
+    this.groupLevelInfos = [this.infoA, this.infoB, this.infoC];
+    this.levelInfo = this.infoA;
+
+    this.currentLevelData = lvlA;
+    window.currentLevelData = lvlA;
+    window.currentGamePack = this.currentPack;
+    window.currentLevelIndex = worldIdx * 3;
+
+    this.graphics.spawnCityScenery(this.levelInfo.trackLength);
+
+    this.physics.playStyle = this.playStyle;
+    this.physics.activeLevelIndex = 0;
+
+    if (this.playStyle === 'tower') {
+      this.lives = 3;
+      this.updateLivesHUD();
+    }
+
+    this.physics.reset(this.levelInfo.fuel, this.levelInfo.oxygen);
+
+    const { spawnX, spawnY, spawnZ } = this.findSafeSpawnPosition();
+    this.physics.position.set(spawnX, spawnY, spawnZ);
+    this.physics.groundHeight = spawnY - 0.3;
+    this.physics.onGround = false;
+
+    this.clearedGates = [false, false, false];
+    this.lastPassedCheckpointList = [null, null, null];
+    this.activeCheckpointList = [null, null, null];
+    this.activeCheckpoint = null;
+    this.lastCheckpointPassed = null;
+    this.clearSequence = [];
+
+    this.totalTime = 0.0;
+    this.speedAccumulator = 0.0;
+    this.speedTicks = 0;
+    this.wallHits = 0;
+
+    const packNameEl = document.getElementById('hud-pack-name');
+    if (packNameEl) {
+      packNameEl.innerText = `${this.currentPack.toUpperCase()} (${this.playStyle.toUpperCase()})`;
+    }
+    const roadNameEl = document.getElementById('hud-road-name');
+    if (roadNameEl) {
+      roadNameEl.innerText = `WORLD ${worldIdx + 1}`;
+    }
+
+    const gravityVal = this.currentLevelData.gravity ? ((this.currentLevelData.gravity - 3) * 100) : 500;
+    const gravityTextEl = document.getElementById('hud-gravity-text');
+    if (gravityTextEl) gravityTextEl.innerText = String(gravityVal).padStart(4, '0');
+
+    // Show Run Stats box and correct rows
+    const multilevelBox = document.getElementById('hud-multilevel-box');
+    if (multilevelBox) {
+      multilevelBox.classList.remove('hidden');
+      const livesRow = document.getElementById('hud-lives-row');
+      const gatesRow = document.getElementById('hud-gates-row');
+      if (livesRow) livesRow.classList.toggle('hidden', this.playStyle !== 'tower');
+      if (gatesRow) gatesRow.classList.toggle('hidden', this.playStyle !== 'flow');
+      this.updateGatesHUD();
+    }
+
+    if (this.bottomHudEnabled) {
+      document.getElementById('hud').classList.remove('hidden');
+    } else {
+      document.getElementById('hud').classList.add('hidden');
+    }
+
+    this.gameState = 'playing';
+    this.showScreen('');
+  }
+
+  checkMultiLevelHeightTransitions() {
+    const H = 25.0;
+    const wrapThreshold = this.physics.deathY !== undefined ? this.physics.deathY : -4.0;
+    if (this.physics.position.y < wrapThreshold) {
+      if (this.playStyle === 'flow') {
+        let nextIdx = (this.activeLevelIndex - 1 + 3) % 3;
+        
+        this.physics.position.y += H;
+        if (this.physics.groundHeight !== undefined) this.physics.groundHeight += H;
+        this.physics.velocity.y = -3.0; // Dampen fall velocity on transition
+        
+        this.activeLevelIndex = nextIdx;
+        this.physics.activeLevelIndex = nextIdx;
+        this.levelInfo = this.groupLevelInfos[nextIdx];
+        this.currentLevelData = this.groupLevelsData[nextIdx];
+        window.currentLevelData = this.groupLevelsData[nextIdx];
+        window.currentLevelIndex = this.currentWorldIndex * 3 + nextIdx;
+        
+        this.levelGroupA.position.y = ( ( (0 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+        this.levelGroupB.position.y = ( ( (1 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+        this.levelGroupC.position.y = ( ( (2 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+        
+        this.activeCheckpoint = this.activeCheckpointList[nextIdx];
+        this.lastCheckpointPassed = this.lastPassedCheckpointList[nextIdx];
+
+        if (typeof gameAudio.playClick === 'function') gameAudio.playClick();
+      } else if (this.playStyle === 'tower') {
+        if (this.activeLevelIndex > 0) {
+          let nextIdx = this.activeLevelIndex - 1;
+          
+          this.physics.position.y += H;
+          if (this.physics.groundHeight !== undefined) this.physics.groundHeight += H;
+          this.physics.velocity.y = -3.0; // Dampen fall velocity on transition
+          
+          this.activeLevelIndex = nextIdx;
+          this.physics.activeLevelIndex = nextIdx;
+          this.levelInfo = this.groupLevelInfos[nextIdx];
+          this.currentLevelData = this.groupLevelsData[nextIdx];
+          window.currentLevelData = this.groupLevelsData[nextIdx];
+          window.currentLevelIndex = this.currentWorldIndex * 3 + nextIdx;
+          
+          this.levelGroupA.position.y = ( ( (0 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+          this.levelGroupB.position.y = ( ( (1 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+          this.levelGroupC.position.y = ( ( (2 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+          
+          if (typeof gameAudio.playClick === 'function') gameAudio.playClick();
+        }
+      }
+    } else if (this.playStyle === 'tower' && this.physics.position.y > H / 2) {
+      if (this.activeLevelIndex < 2) {
+        let nextIdx = this.activeLevelIndex + 1;
+        
+        this.physics.position.y -= H;
+        if (this.physics.groundHeight !== undefined) this.physics.groundHeight -= H;
+        
+        this.activeLevelIndex = nextIdx;
+        this.physics.activeLevelIndex = nextIdx;
+        this.levelInfo = this.groupLevelInfos[nextIdx];
+        this.currentLevelData = this.groupLevelsData[nextIdx];
+        window.currentLevelData = this.groupLevelsData[nextIdx];
+        window.currentLevelIndex = this.currentWorldIndex * 3 + nextIdx;
+        
+        this.levelGroupA.position.y = ( ( (0 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+        this.levelGroupB.position.y = ( ( (1 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+        this.levelGroupC.position.y = ( ( (2 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+        
+        if (typeof gameAudio.playCheckpoint === 'function') gameAudio.playCheckpoint();
+        this.showTransitionNotification(nextIdx);
+      }
+    }
+  }
+
+  handleMultiLevelFinishCross() {
+    if (this.playStyle === 'flow') {
+      this.clearedGates[this.activeLevelIndex] = true;
+      this.updateGatesHUD();
+
+      const allCleared = this.clearedGates.every(g => g === true);
+      if (allCleared) {
+        let bonus = 0;
+        if (this.wallHits === 0) {
+          bonus += 5000;
+          this.showMessage("FLAWLESS BONUS: +5000!");
+        }
+        if (this.clearSequence && this.clearSequence.join(',') === '0,1,2') {
+          bonus += 3000;
+          this.showMessage("ORDER BONUS: +3000!");
+        }
+        this.physics.score = (this.physics.score || 0) + bonus;
+        
+        this.handleSuccess();
+      } else {
+        const nextIdx = (this.activeLevelIndex + 1) % 3;
+        this.clearSequence = this.clearSequence || [];
+        this.clearSequence.push(this.activeLevelIndex);
+        
+        this.transitionToLevelStart(nextIdx);
+      }
+    } else if (this.playStyle === 'tower') {
+      if (this.activeLevelIndex === 2) {
+        this.handleSuccess();
+      } else {
+        const nextIdx = this.activeLevelIndex + 1;
+        this.transitionToLevelStart(nextIdx);
+      }
+    }
+  }
+
+  transitionToLevelStart(nextIdx) {
+    if (typeof gameAudio.playCheckpoint === 'function') gameAudio.playCheckpoint();
+
+    this.activeLevelIndex = nextIdx;
+    this.physics.activeLevelIndex = nextIdx;
+    this.levelInfo = this.groupLevelInfos[nextIdx];
+    this.currentLevelData = this.groupLevelsData[nextIdx];
+    window.currentLevelData = this.groupLevelsData[nextIdx];
+    window.currentLevelIndex = this.currentWorldIndex * 3 + nextIdx;
+
+    const H = 25.0;
+    this.levelGroupA.position.y = ( ( (0 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+    this.levelGroupB.position.y = ( ( (1 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+    this.levelGroupC.position.y = ( ( (2 - nextIdx + 1) % 3 + 3) % 3 - 1 ) * H;
+
+    const { spawnX, spawnY, spawnZ } = this.findSafeSpawnPosition();
+    this.physics.position.set(spawnX, spawnY, spawnZ);
+    this.physics.groundHeight = spawnY - 0.3;
+    this.physics.velocity.set(0, 0, this.physics.velocity.z);
+    
+    this.physics.fuel = Math.min(this.levelInfo.fuel, this.physics.fuel + 100.0);
+    this.physics.oxygen = this.levelInfo.oxygen;
+    this.physics.onGround = false;
+
+    this.showTransitionNotification(nextIdx);
+  }
+
+  showTransitionNotification(nextIdx) {
+    const notifyEl = document.getElementById('checkpoint-notify');
+    if (notifyEl) {
+      const levelNames = ['A', 'B', 'C'];
+      notifyEl.querySelector('.checkpoint-text').innerText = `TRANSITION TO LEVEL ${levelNames[nextIdx]}!`;
+      notifyEl.classList.add('active');
+      setTimeout(() => {
+        notifyEl.classList.remove('active');
+      }, 2000);
+    }
+  }
+
+  showMessage(msg) {
+    const notifyEl = document.getElementById('checkpoint-notify');
+    if (notifyEl) {
+      notifyEl.querySelector('.checkpoint-text').innerText = msg;
+      notifyEl.classList.add('active');
+      setTimeout(() => {
+        notifyEl.classList.remove('active');
+      }, 2500);
+    }
+  }
+
+  clearExplosionParticles() {
+    if (this.graphics.particles) {
+      for (const p of this.graphics.particles) {
+        this.graphics.scene.remove(p.mesh);
+        if (p.mesh.geometry) p.mesh.geometry.dispose();
+        if (p.mesh.material) p.mesh.material.dispose();
+      }
+      this.graphics.particles = [];
+    }
   }
 }
 
