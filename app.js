@@ -4172,6 +4172,9 @@ class GameManager {
       this.graphics.render();
 
     } else {
+      if (this.gameState === 'death') {
+        this.graphics.update(this.physics, dt);
+      }
       // Spin stars background slightly while in menus for dynamic feel
       if (this.graphics.starField) {
         this.graphics.starField.rotation.y += 0.02 * dt;
@@ -4702,12 +4705,21 @@ class GameManager {
    * current pack, or returns to the menu if this was the last level. */
   goToNextRoadOrMenu() {
     gameAudio.playClick();
-    const nextIdx = this.currentLevelIndex + 1;
     const packLevels = getCachedPack(this.currentPack);
-    if (nextIdx < packLevels.length) {
-      this.startLevel(nextIdx);
+    if (this.playStyle === 'flow' || this.playStyle === 'tower') {
+      const nextWorldIdx = this.currentWorldIndex + 1;
+      if (nextWorldIdx * 3 < packLevels.length) {
+        this.startGroup(nextWorldIdx);
+      } else {
+        this.returnToMenu();
+      }
     } else {
-      this.returnToMenu();
+      const nextIdx = this.currentLevelIndex + 1;
+      if (nextIdx < packLevels.length) {
+        this.startLevel(nextIdx);
+      } else {
+        this.returnToMenu();
+      }
     }
   }
 
@@ -4965,7 +4977,12 @@ class GameManager {
 
     // Hide next button if it was the last road
     const packLevels = getCachedPack(this.currentPack);
-    const isLastRoad = this.currentLevelIndex + 1 >= packLevels.length;
+    let isLastRoad = false;
+    if (this.playStyle === 'flow' || this.playStyle === 'tower') {
+      isLastRoad = (this.currentWorldIndex + 1) * 3 >= packLevels.length;
+    } else {
+      isLastRoad = this.currentLevelIndex + 1 >= packLevels.length;
+    }
     if (isLastRoad) {
       document.getElementById('btn-success-next').classList.add('hidden');
     } else {
@@ -5587,7 +5604,10 @@ class GameManager {
         
         this.handleSuccess();
       } else {
-        const nextIdx = (this.activeLevelIndex + 1) % 3;
+        let nextIdx = (this.activeLevelIndex + 1) % 3;
+        while (this.clearedGates[nextIdx]) {
+          nextIdx = (nextIdx + 1) % 3;
+        }
         this.clearSequence = this.clearSequence || [];
         this.clearSequence.push(this.activeLevelIndex);
         

@@ -55,6 +55,9 @@
 | 21 | SynthwaveSequencer — 12 procedural synthwave tracks with chord progressions | ✅ DONE |
 | 22 | Visualizer Preset Variety — 179 Cream-of-the-Crop Waveform presets with fetch-on-demand | ✅ DONE |
 | 23 | Live UI layout debug panel — drag-to-reposition menu/title-card/HUD overlays | ✅ DONE |
+| 24 | Extract shared `shipCatalog.js` from graphics.js/preview.js | ✅ DONE |
+| 25 | Shape-aware procedural neon and biome textures (levels 61-90) | ✅ DONE |
+| 26 | Flow/Tower Mode intra-group and next-group transition routing | ✅ DONE |
 
 ---
 
@@ -62,12 +65,11 @@
 
 | # | Milestone | Status | Priority |
 |---|-----------|--------|----------|
-| 24 | VRAM garbage collection & memory optimization | ⏳ Planned | P1 |
-| 25 | E2E browser testing with Playwright | ⏳ Planned | P1 |
-| 26 | Audio-driven level generator (offline tool, baked JSON) | ⏳ Planned | P2 |
-| 27 | World Builder UI (in-game level editor) | ⏳ Planned | P2 |
-| 28 | Extract shared `shipCatalog.js` from graphics.js/preview.js | ⏳ Planned | P2 |
-| 29 | Module splitting (app.js, graphics.js, levelLoader.js) | ⏳ Planned | P2 |
+| 27 | VRAM garbage collection & memory optimization | ⏳ Planned | P1 |
+| 28 | E2E browser testing with Playwright | ⏳ Planned | P1 |
+| 29 | Audio-driven level generator (offline tool, baked JSON) | ⏳ Planned | P2 |
+| 30 | World Builder UI (in-game level editor) | ⏳ Planned | P2 |
+| 31 | Module splitting (app.js, graphics.js, levelLoader.js) | ⏳ Planned | P2 |
 
 ---
 
@@ -129,11 +131,11 @@ interface WorldBuilder {
 
 ## Git Branching
 
-| Branch | Commits | Status | Description |
-|--------|---------|--------|-------------|
-| `main` | 33 | Stable | Production branch, deploys to GitHub Pages |
-| `feature/visual-ui-overhaul` | 27 | Merged | Completed visual UI overhaul, PBR textures, ship models |
-| `subagent-*` | 27 | Stale | Teamwork preview branch (mirrors feature branch) |
+| Branch | Status | Description |
+|--------|--------|-------------|
+| `main` | Stable | Production branch, deploys to GitHub Pages |
+| `feature/visual-ui-overhaul` | Deleted | Cleaned up (fully merged) |
+| `subagent-*` | Deleted | Cleaned up (fully merged) |
 
 ### Remotes
 - `origin/main` — Primary repository

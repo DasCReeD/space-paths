@@ -628,8 +628,8 @@ body, html {
    right beside the list instead of stranded in the far corner. Scoped to
    #level-screen only — main menu / settings keep the original focal point. */
 #level-crossbar.xmb-focal-ps3 {
-  --xmb-focal-x: 8%;
-  --xmb-item-y: 10%;
+  --xmb-focal-x: 22.53%;
+  --xmb-item-y: 18.12%;
 }
 
 /* ── Live title card ──────────────────────────────────────────────────────
@@ -638,8 +638,8 @@ body, html {
    keyboard navigation stays on the crossbar. */
 #level-title-card.ltc {
   position: absolute;
-  left: 22%;
-  top: 16%;
+  left: 32.78%;
+  top: 28.42%;
   width: min(64%, 900px);
   max-height: 69%;
   display: flex;
@@ -2270,8 +2270,8 @@ body, html {
 /* FPS performance counter — top-right corner below fullscreen button */
 .fps-counter {
   position: fixed;
-  top: 60px;
-  right: 8px;
+  top: 34px;
+  right: 91px;
   color: #00ffcc;
   font-family: 'Orbitron', monospace;
   font-size: 11px;

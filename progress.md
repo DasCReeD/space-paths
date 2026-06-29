@@ -223,6 +223,25 @@ core, furnace, glitch, pulse, ridge, shallows, spire, thrill, tundra, void
 | assets.test.js | ✅ |
 | analyze.test.js | ✅ |
 
+
+---
+
+## 2026-06-29 — Procedural Biome Reskinning & Flow Mode Transition Fixes
+
+Integrated dynamic, shape-aware procedural textures for levels 61-90 and fixed gameplay flow transitions.
+
+**Procedural Level Reskinning**
+- Created `getBiomeProceduralTexture()` in `levelLoader.js` to dynamically render custom canvas patterns (Void, Ridge, Thrill, Core, Glitch, Tundra, Furnace, Shallows, Spire, Pulse) mapping palette variables from `BIOME_COLOR_PROFILES`.
+- Updated `adjustBoxUVs` in `levelLoader.js` to stretch UV mapping (`0` to `1`) on generated levels (61-90) to eliminate block seams.
+- Wired materials in `createTileMaterial()` to load procedural maps and configure lighting properties (roughness, metalness) tailored per biome.
+
+**Death Animation Fix**
+- Updated the main game loop in `app.js` to continue calling `this.graphics.update(...)` during the `death` state, letting explosion particles animate and fade instead of freezing.
+
+**Flow/Tower Transition Bug Fixes**
+- Updated intra-world level completion transitions in `app.js` to skip completed stages in Flow Mode and advance sequentially to the next remaining uncleared gate.
+- Updated success screen "Next Road" actions in `app.js` to transition to the start of the next 3-level world group using `startGroup` in Flow and Tower Modes, instead of single-level indexes.
+
 ---
 
 ## Future Work
