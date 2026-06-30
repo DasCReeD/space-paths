@@ -12,6 +12,13 @@ export const SHIP_WIDTH = 0.6;
 export const SHIP_HEIGHT = 0.4;
 export const SHIP_LENGTH = 1.8;
 
+// Collision width is DECOUPLED from the visual width (SHIP_WIDTH drives the wing/model
+// geometry). The hitbox is deliberately narrower than the wingspan so that a wing tip
+// visually grazing an obstacle is forgiven instead of killing you — this is what makes
+// threading tunnels and brushing past blocks feel fair rather than punishing. Total
+// hitbox = 0.44 (≈0.22 half-width), well under a 2.0 lane so there's real clearance.
+export const SHIP_COLLISION_WIDTH = 0.44;
+
 // Old/imported model & class names mapped to the current ship roster — shared by every
 // module that resolves a saved/legacy ship name (was duplicated 4x across the codebase).
 export const LEGACY_MODEL_ALIASES = {
@@ -348,8 +355,18 @@ export class PhysicsEngine {
 
     // 4. Steering (Left / Right along X axis)
     let steeringDrag = this.dragSteer;
+    let steerAccel = this.steerAccel;
+    let steerLerp = 15.0;
     if (this.activeEffects.slippery) {
-      steeringDrag = 1.0; // minimal friction, drift!
+      // Ice: lateral momentum is CONSERVED. Zero release-drag means letting go of the
+      // controls does not bleed off sideways speed — once you're sliding you keep sliding.
+      // Low accel + slow lerp mean changing your lateral velocity (building it OR reversing
+      // it) takes sustained input, so to stop a slide you must hold counter-steer for a
+      // while — or hit an obstacle. (The old impl bled momentum via release-drag, so ice
+      // didn't feel slidey.)
+      steeringDrag = 0.0;
+      steerAccel = this.steerAccel * 0.30;
+      steerLerp = 3.0;
     }
 
     if (keyboard.mouseControlsEnabled || keyboard.touchControlsEnabled) {
@@ -385,13 +402,21 @@ export class PhysicsEngine {
         }
       }
 
-      this.velocity.x += (targetSteerSpeed - this.velocity.x) * 15.0 * dt;
+      const laneSnapping = keyboard.touchControlsEnabled && keyboard.laneSnapEnabled && !activeSteering && this.onGround && !this.isDead;
+      if (this.activeEffects.slippery && !activeSteering && !laneSnapping) {
+        // Ice + no input: conserve lateral momentum (steeringDrag is 0 on ice, so the
+        // slide carries on instead of lerping back to centre).
+        if (this.velocity.x > 0) this.velocity.x = Math.max(0, this.velocity.x - steeringDrag * dt);
+        else if (this.velocity.x < 0) this.velocity.x = Math.min(0, this.velocity.x + steeringDrag * dt);
+      } else {
+        this.velocity.x += (targetSteerSpeed - this.velocity.x) * steerLerp * dt;
+      }
     } else {
       if (keyboard.left) {
-        this.velocity.x -= this.steerAccel * dt;
+        this.velocity.x -= steerAccel * dt;
         if (this.velocity.x < -this.maxSteerSpeed) this.velocity.x = -this.maxSteerSpeed;
       } else if (keyboard.right) {
-        this.velocity.x += this.steerAccel * dt;
+        this.velocity.x += steerAccel * dt;
         if (this.velocity.x > this.maxSteerSpeed) this.velocity.x = this.maxSteerSpeed;
       } else {
         // Bring steering velocity back to 0
@@ -587,7 +612,7 @@ export class PhysicsEngine {
               );
 
               if (!isOnAdjacentRamp) {
-                const halfW = SHIP_WIDTH / 2;
+                const halfW = SHIP_COLLISION_WIDTH / 2;
                 if (this.position.x > blockCenterX) {
                   this.position.x = block.maxX + halfW + 0.01;
                 } else {
@@ -729,7 +754,7 @@ export class PhysicsEngine {
                 }
               } else {
                 // Side wall collision -> Push ship out of the block and slide!
-                const halfW = SHIP_WIDTH / 2;
+                const halfW = SHIP_COLLISION_WIDTH / 2;
                 const shipCenterX = this.position.x;
                 const blockCenterX = (block.minX + block.maxX) / 2;
 
@@ -954,7 +979,7 @@ export class PhysicsEngine {
 
   // Ship bounding box
   getShipBox() {
-    const halfW = SHIP_WIDTH / 2;
+    const halfW = SHIP_COLLISION_WIDTH / 2;
     const halfH = SHIP_HEIGHT / 2;
     const halfL = SHIP_LENGTH / 2;
     return {

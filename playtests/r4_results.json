@@ -1,0 +1,676 @@
+{
+  "fix1_visuals_top_1024": {
+    "categoryIndex": 2,
+    "itemIndex": 0,
+    "activeCategory": "visuals",
+    "activeItem": "starfield",
+    "itemCount": 9
+  },
+  "fix1_step1_1024": {
+    "activeLabel": "SPEED FOV: OFF",
+    "catRect": {
+      "top": 250,
+      "bottom": 270
+    },
+    "activeRect": {
+      "top": 292,
+      "bottom": 348
+    },
+    "catOverlapsActiveItem": false,
+    "items": []
+  },
+  "fix1_step2_1024": {
+    "activeLabel": "GHOST RACER: ON",
+    "catRect": {
+      "top": 250,
+      "bottom": 270
+    },
+    "activeRect": {
+      "top": 292,
+      "bottom": 348
+    },
+    "catOverlapsActiveItem": false,
+    "items": []
+  },
+  "fix1_step3_1024": {
+    "activeLabel": "VIS MODE: SKY",
+    "catRect": {
+      "top": 250,
+      "bottom": 270
+    },
+    "activeRect": {
+      "top": 292,
+      "bottom": 348
+    },
+    "catOverlapsActiveItem": false,
+    "items": []
+  },
+  "fix1_step4_1024": {
+    "activeLabel": "WALL ANGLE\n            \n            45",
+    "catRect": {
+      "top": 250,
+      "bottom": 270
+    },
+    "activeRect": {
+      "top": 292,
+      "bottom": 348
+    },
+    "catOverlapsActiveItem": false,
+    "items": []
+  },
+  "fix1_step5_1024": {
+    "activeLabel": "WALL SPREAD\n            \n            9",
+    "catRect": {
+      "top": 250,
+      "bottom": 270
+    },
+    "activeRect": {
+      "top": 292,
+      "bottom": 348
+    },
+    "catOverlapsActiveItem": false,
+    "items": []
+  },
+  "fix1_step6_1024": {
+    "activeLabel": "WALL HEIGHT\n            \n            300",
+    "catRect": {
+      "top": 250,
+      "bottom": 270
+    },
+    "activeRect": {
+      "top": 292,
+      "bottom": 348
+    },
+    "catOverlapsActiveItem": false,
+    "items": []
+  },
+  "fix1_step7_1024": {
+    "activeLabel": "STAR SIZE\n            \n            100",
+    "catRect": {
+      "top": 250,
+      "bottom": 270
+    },
+    "activeRect": {
+      "top": 292,
+      "bottom": 348
+    },
+    "catOverlapsActiveItem": false,
+    "items": []
+  },
+  "fix1_step8_1024": {
+    "activeLabel": "STAR DENSITY\n            \n            1500",
+    "catRect": {
+      "top": 250,
+      "bottom": 270
+    },
+    "activeRect": {
+      "top": 292,
+      "bottom": 348
+    },
+    "catOverlapsActiveItem": false,
+    "items": []
+  },
+  "fix1_clip_1024": [
+    {
+      "id": "settings-xmb-cat-visuals",
+      "cls": "xmb-category",
+      "top": 250,
+      "left": 412,
+      "bottom": 270,
+      "right": 612,
+      "vw": 1024,
+      "vh": 640,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    },
+    {
+      "id": "item-settings-star-density",
+      "cls": "xmb-item settings-xmb-slider",
+      "top": 292,
+      "left": 391,
+      "bottom": 348,
+      "right": 633,
+      "vw": 1024,
+      "vh": 640,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "fix1_step1_1366": {
+    "activeLabel": "SPEED FOV: OFF",
+    "catRect": {
+      "top": 314,
+      "bottom": 334
+    },
+    "activeRect": {
+      "top": 356,
+      "bottom": 412
+    },
+    "catOverlapsActiveItem": false
+  },
+  "fix1_step2_1366": {
+    "activeLabel": "GHOST RACER: ON",
+    "catRect": {
+      "top": 314,
+      "bottom": 334
+    },
+    "activeRect": {
+      "top": 356,
+      "bottom": 412
+    },
+    "catOverlapsActiveItem": false
+  },
+  "fix1_step3_1366": {
+    "activeLabel": "VIS MODE: SKY",
+    "catRect": {
+      "top": 314,
+      "bottom": 334
+    },
+    "activeRect": {
+      "top": 356,
+      "bottom": 412
+    },
+    "catOverlapsActiveItem": false
+  },
+  "fix1_step4_1366": {
+    "activeLabel": "WALL ANGLE\n            \n            45",
+    "catRect": {
+      "top": 314,
+      "bottom": 334
+    },
+    "activeRect": {
+      "top": 356,
+      "bottom": 412
+    },
+    "catOverlapsActiveItem": false
+  },
+  "fix1_step5_1366": {
+    "activeLabel": "WALL SPREAD\n            \n            9",
+    "catRect": {
+      "top": 314,
+      "bottom": 334
+    },
+    "activeRect": {
+      "top": 356,
+      "bottom": 412
+    },
+    "catOverlapsActiveItem": false
+  },
+  "fix1_step6_1366": {
+    "activeLabel": "WALL HEIGHT\n            \n            300",
+    "catRect": {
+      "top": 314,
+      "bottom": 334
+    },
+    "activeRect": {
+      "top": 356,
+      "bottom": 412
+    },
+    "catOverlapsActiveItem": false
+  },
+  "fix1_step7_1366": {
+    "activeLabel": "STAR SIZE\n            \n            100",
+    "catRect": {
+      "top": 314,
+      "bottom": 334
+    },
+    "activeRect": {
+      "top": 356,
+      "bottom": 412
+    },
+    "catOverlapsActiveItem": false
+  },
+  "fix1_step8_1366": {
+    "activeLabel": "STAR DENSITY\n            \n            1500",
+    "catRect": {
+      "top": 314,
+      "bottom": 334
+    },
+    "activeRect": {
+      "top": 356,
+      "bottom": 412
+    },
+    "catOverlapsActiveItem": false
+  },
+  "fix1_clip_1366": [
+    {
+      "id": "settings-xmb-cat-visuals",
+      "cls": "xmb-category",
+      "top": 314,
+      "left": 583,
+      "bottom": 334,
+      "right": 783,
+      "vw": 1366,
+      "vh": 768,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    },
+    {
+      "id": "item-settings-star-density",
+      "cls": "xmb-item settings-xmb-slider",
+      "top": 356,
+      "left": 562,
+      "bottom": 412,
+      "right": 804,
+      "vw": 1366,
+      "vh": 768,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "fix2_title_rect": {
+    "found": true,
+    "top": 40,
+    "bottom": 87,
+    "left": 40,
+    "right": 1880,
+    "width": 1840,
+    "height": 47
+  },
+  "fix2_content_rect": {
+    "found": true,
+    "top": 112,
+    "bottom": 734,
+    "left": 40,
+    "right": 1880,
+    "width": 1840,
+    "height": 622
+  },
+  "fix2_crossbar_rect": {
+    "found": true,
+    "top": 764,
+    "bottom": 1040,
+    "left": 40,
+    "right": 1880,
+    "width": 1840,
+    "height": 276
+  },
+  "fix2_understood_btn_rect": {
+    "found": true,
+    "top": 874,
+    "bottom": 930,
+    "left": 862.9765625,
+    "right": 1057.0234375,
+    "text": "UNDERSTOODUNDERSTOOD"
+  },
+  "fix2_clip": [
+    {
+      "id": "btn-how-to-back",
+      "cls": "xmb-item btn btn-primary btn-glow",
+      "top": 874,
+      "left": 863,
+      "bottom": 930,
+      "right": 1057,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "fix2_overlap_title_crossbar": {
+    "found": true,
+    "overlap": false,
+    "aHidden": false,
+    "bHidden": false,
+    "ra": {
+      "x": 40,
+      "y": 40,
+      "w": 1840,
+      "h": 47
+    },
+    "rb": {
+      "x": 40,
+      "y": 764,
+      "w": 1840,
+      "h": 276
+    }
+  },
+  "fix2_overlap_content_crossbar": {
+    "found": true,
+    "overlap": false,
+    "aHidden": false,
+    "bHidden": false,
+    "ra": {
+      "x": 40,
+      "y": 112,
+      "w": 1840,
+      "h": 622
+    },
+    "rb": {
+      "x": 40,
+      "y": 764,
+      "w": 1840,
+      "h": 276
+    }
+  },
+  "fix2_title_rect_1366": {
+    "found": true,
+    "top": 22,
+    "bottom": 69,
+    "left": 40,
+    "right": 1326,
+    "width": 1286,
+    "height": 47
+  },
+  "fix2_understood_btn_rect_1366": {
+    "found": true,
+    "top": 746,
+    "bottom": 746,
+    "left": 40,
+    "right": 1326,
+    "width": 1286,
+    "height": 0
+  },
+  "regress_garage_item_opacities": [
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item model-option"
+    },
+    {
+      "opacity": "0.6",
+      "cls": "xmb-item garage-item model-option"
+    },
+    {
+      "opacity": "0.6",
+      "cls": "xmb-item garage-item model-option"
+    },
+    {
+      "opacity": "0.6",
+      "cls": "xmb-item garage-item model-option"
+    },
+    {
+      "opacity": "0.6",
+      "cls": "xmb-item garage-item model-option"
+    },
+    {
+      "opacity": "0.6",
+      "cls": "xmb-item garage-item model-option"
+    },
+    {
+      "opacity": "0.6",
+      "cls": "xmb-item garage-item model-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item texture-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item color-preset-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item color-preset-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item color-preset-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item color-preset-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item color-preset-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item color-preset-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item color-preset-option"
+    },
+    {
+      "opacity": "1",
+      "cls": "xmb-item garage-item"
+    }
+  ],
+  "regress_success_columns": {
+    "found": true,
+    "top": 131.390625,
+    "bottom": 411.390625,
+    "left": 600,
+    "right": 1320,
+    "width": 720,
+    "height": 280
+  },
+  "regress_success_crossbar": {
+    "found": true,
+    "top": 441.390625,
+    "bottom": 1040,
+    "left": 40,
+    "right": 1880,
+    "width": 1840,
+    "height": 598.609375
+  },
+  "regress_success_clip": [
+    {
+      "id": "btn-success-next",
+      "cls": "xmb-item btn btn-primary btn-glow",
+      "top": 713,
+      "left": 802,
+      "bottom": 769,
+      "right": 942,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "regress_menu-screen": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "play",
+    "activeItem": "standard",
+    "itemCount": 3
+  },
+  "regress_menu-screen_clip": [
+    {
+      "id": "menu-xmb-cat-play",
+      "cls": "xmb-category",
+      "top": 470,
+      "left": 860,
+      "bottom": 490,
+      "right": 1060,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    },
+    {
+      "id": "btn-play-standard",
+      "cls": "xmb-item btn btn-primary btn-glow",
+      "top": 512,
+      "left": 845,
+      "bottom": 568,
+      "right": 1075,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "regress_pause-screen": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "pause",
+    "activeItem": "resume",
+    "itemCount": 5
+  },
+  "regress_pause-screen_clip": [
+    {
+      "id": "btn-pause-resume",
+      "cls": "xmb-item btn btn-primary btn-glow",
+      "top": 512,
+      "left": 891,
+      "bottom": 568,
+      "right": 1029,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "regress_death-screen": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "death",
+    "activeItem": "retry",
+    "itemCount": 2
+  },
+  "regress_death-screen_clip": [
+    {
+      "id": "btn-death-retry",
+      "cls": "xmb-item btn btn-primary btn-glow",
+      "top": 512,
+      "left": 879,
+      "bottom": 568,
+      "right": 1041,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "regress_gamepad-config-screen": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "gamepad-config",
+    "activeItem": "forward",
+    "itemCount": 8
+  },
+  "regress_gamepad-config-screen_clip": [
+    {
+      "id": "btn-map-forward",
+      "cls": "xmb-item",
+      "top": 512,
+      "left": 825,
+      "bottom": 568,
+      "right": 1095,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "regress_settings_clip": [
+    {
+      "id": "settings-xmb-cat-controls",
+      "cls": "xmb-category",
+      "top": 470,
+      "left": 860,
+      "bottom": 490,
+      "right": 1060,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    },
+    {
+      "id": "btn-settings-mouse",
+      "cls": "xmb-item btn btn-info btn-glow settings-xmb-toggle",
+      "top": 512,
+      "left": 839,
+      "bottom": 568,
+      "right": 1081,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "regress_level_screen": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "group-0",
+    "activeItem": "infinite",
+    "itemCount": 11
+  },
+  "regress_level_first_item": "∞INFINITE ROAD",
+  "regress_level_clip": [
+    {
+      "id": "",
+      "cls": "xmb-category",
+      "top": 470,
+      "left": 860,
+      "bottom": 490,
+      "right": 1060,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    },
+    {
+      "id": "",
+      "cls": "xmb-item level-item-infinite",
+      "top": 512,
+      "left": 899,
+      "bottom": 568,
+      "right": 1021,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "regress_level_labels_walked": [
+    "∞INFINITE ROAD",
+    "0DEMO ROAD",
+    "1RED HEAT",
+    "2ROAD 2",
+    "3ROAD 3",
+    "4ROAD 4",
+    "5ROAD 5",
+    "6ROAD 6",
+    "7ROAD 7",
+    "8ROAD 8",
+    "9ROAD 9",
+    "9ROAD 9"
+  ]
+}

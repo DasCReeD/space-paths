@@ -7,7 +7,9 @@ import {
   ROAD_WIDTH_LANES,
   TOTAL_ROAD_WIDTH,
   getLevelObjUrl,
-  getLevelAssetUrl
+  getLevelAssetUrl,
+  buildDeckCeilingLight,
+  buildDeckPillars
 } from '../levelLoader.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -697,6 +699,78 @@ describe('buildLevel', () => {
     it('should return null or undefined for non-existent assets', () => {
       expect(getLevelObjUrl(999, 'nonexistent.obj')).toBeNull();
       expect(getLevelAssetUrl(999, 'nonexistent.png')).toBeNull();
+    });
+  });
+
+  // ── Flow/Tower deck ceiling lighting ──────────────────────────────────
+
+  describe('buildDeckCeilingLight', () => {
+    function makeGroup() {
+      const g = new THREE.Group();
+      vi.spyOn(g, 'add');
+      return g;
+    }
+
+    it('adds light rails + rungs into the deck group, tagged for cleanup', () => {
+      const group = makeGroup();
+      buildDeckCeilingLight(group, 80); // 20 tiles long
+      expect(group.children.length).toBeGreaterThan(2); // 2 rails + several rungs
+      expect(group.children.every((m) => m.userData.isDeckCeilingLight)).toBe(true);
+    });
+
+    it('length-segments the rails so they bend with the curvature shader', () => {
+      const group = makeGroup();
+      buildDeckCeilingLight(group, 80);
+      const rails = group.children.filter((m) => m.geometry.parameters.depth === 80);
+      expect(rails.length).toBe(2);
+      // one depth segment per tile (80 / TILE_LENGTH = 20), never a single chord
+      expect(rails[0].geometry.parameters.depthSegments).toBe(80 / TILE_LENGTH);
+    });
+
+    it('disables frustum culling (curvature invalidates the static AABB)', () => {
+      const group = makeGroup();
+      buildDeckCeilingLight(group, 80);
+      expect(group.children.every((m) => m.frustumCulled === false)).toBe(true);
+    });
+
+    it('no-ops on a missing group or non-positive length', () => {
+      expect(() => buildDeckCeilingLight(null, 80)).not.toThrow();
+      const group = makeGroup();
+      buildDeckCeilingLight(group, 0);
+      expect(group.children.length).toBe(0);
+    });
+  });
+
+  // ── Flow/Tower connecting pillars ─────────────────────────────────────
+
+  describe('buildDeckPillars', () => {
+    function makeGroup() {
+      return new THREE.Group();
+    }
+
+    it('raises paired left/right pillars along the deck, tagged for cleanup', () => {
+      const group = makeGroup();
+      buildDeckPillars(group, 80); // 20 tiles, spacingRows 4 → ~5 pillar rows
+      expect(group.children.length).toBeGreaterThan(0);
+      expect(group.children.every((m) => m.userData.isDeckPillar)).toBe(true);
+      // column + trim per side, both sides → multiple of 4 per pillar row
+      expect(group.children.length % 4).toBe(0);
+    });
+
+    it('columns span the deck gap and sit just outside the road, culling disabled', () => {
+      const group = makeGroup();
+      buildDeckPillars(group, 80, { height: 25 });
+      const columns = group.children.filter((m) => m.geometry.parameters.height === 25);
+      expect(columns.length).toBeGreaterThan(0);
+      expect(columns.every((m) => Math.abs(m.position.x) > TOTAL_ROAD_WIDTH / 2)).toBe(true);
+      expect(columns.every((m) => m.frustumCulled === false)).toBe(true);
+    });
+
+    it('no-ops on a missing group or non-positive length', () => {
+      expect(() => buildDeckPillars(null, 80)).not.toThrow();
+      const group = makeGroup();
+      buildDeckPillars(group, 0);
+      expect(group.children.length).toBe(0);
     });
   });
 });

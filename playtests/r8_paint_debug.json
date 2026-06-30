@@ -1,0 +1,135 @@
+{
+  "trackRect": {
+    "top": 616.5,
+    "left": 688.65625,
+    "width": 300,
+    "height": 442
+  },
+  "trackDisplay": "flex",
+  "trackFlexDir": "column",
+  "trackWidth": "300px",
+  "items": [
+    {
+      "outerHTML_trunc": "<div class=\"xmb-item garage-item color-preset-option active\" data-color=\"#ffffff\" style=\"background: rgb(255, 255, 255); border: 2px dashed rgb(255, 0, 127); position: relative; transform: scale(1); o",
+      "rect": {
+        "top": 616.5,
+        "left": 688.65625,
+        "width": 32,
+        "height": 50
+      },
+      "display": "flex",
+      "position": "relative",
+      "thumbRect": {
+        "top": 624.5,
+        "left": 702.65625,
+        "width": 34,
+        "height": 34
+      },
+      "nameText": "NO OVERLAY",
+      "nameDisplay": "block"
+    },
+    {
+      "outerHTML_trunc": "<div class=\"xmb-item garage-item color-preset-option\" data-color=\"#ff007f\" style=\"background: rgb(255, 0, 127); transform: scale(0.75); opacity: 0.38;\" title=\"CYBER PINK\"><span class=\"garage-item-name",
+      "rect": {
+        "top": 678.75,
+        "left": 688.65625,
+        "width": 24,
+        "height": 37.5
+      },
+      "display": "flex",
+      "position": "relative",
+      "thumbRect": null,
+      "nameText": "CYBER PINK",
+      "nameDisplay": "block"
+    },
+    {
+      "outerHTML_trunc": "<div class=\"xmb-item garage-item color-preset-option\" data-color=\"#00ffff\" style=\"background: rgb(0, 255, 255); transform: scale(0.75); opacity: 0.22;\" title=\"NEON CYAN\"><span class=\"garage-item-name\"",
+      "rect": {
+        "top": 734.75,
+        "left": 688.65625,
+        "width": 24,
+        "height": 37.5
+      },
+      "display": "flex",
+      "position": "relative",
+      "thumbRect": null,
+      "nameText": "NEON CYAN",
+      "nameDisplay": "block"
+    },
+    {
+      "outerHTML_trunc": "<div class=\"xmb-item garage-item color-preset-option\" data-color=\"#39ff14\" style=\"background: rgb(57, 255, 20); transform: scale(0.75); opacity: 0.13;\" title=\"ELECTRIC LIME\"><span class=\"garage-item-n",
+      "rect": {
+        "top": 790.75,
+        "left": 688.65625,
+        "width": 24,
+        "height": 37.5
+      },
+      "display": "flex",
+      "position": "relative",
+      "thumbRect": null,
+      "nameText": "ELECTRIC LIME",
+      "nameDisplay": "block"
+    },
+    {
+      "outerHTML_trunc": "<div class=\"xmb-item garage-item color-preset-option\" data-color=\"#ffaa00\" style=\"background: rgb(255, 170, 0); transform: scale(0.75); opacity: 0.08;\" title=\"SUN GOLD\"><span class=\"garage-item-name\">",
+      "rect": {
+        "top": 846.75,
+        "left": 688.65625,
+        "width": 24,
+        "height": 37.5
+      },
+      "display": "flex",
+      "position": "relative",
+      "thumbRect": null,
+      "nameText": "SUN GOLD",
+      "nameDisplay": "block"
+    },
+    {
+      "outerHTML_trunc": "<div class=\"xmb-item garage-item color-preset-option\" data-color=\"#ff3300\" style=\"background: rgb(255, 51, 0); transform: scale(0.75); opacity: 0.08;\" title=\"BURN ORANGE\"><span class=\"garage-item-name",
+      "rect": {
+        "top": 902.75,
+        "left": 688.65625,
+        "width": 24,
+        "height": 37.5
+      },
+      "display": "flex",
+      "position": "relative",
+      "thumbRect": null,
+      "nameText": "BURN ORANGE",
+      "nameDisplay": "block"
+    },
+    {
+      "outerHTML_trunc": "<div class=\"xmb-item garage-item color-preset-option\" data-color=\"#8a2be2\" style=\"background: rgb(138, 43, 226); transform: scale(0.75); opacity: 0.08;\" title=\"DEEP INDIGO\"><span class=\"garage-item-na",
+      "rect": {
+        "top": 958.75,
+        "left": 688.65625,
+        "width": 24,
+        "height": 37.5
+      },
+      "display": "flex",
+      "position": "relative",
+      "thumbRect": null,
+      "nameText": "DEEP INDIGO",
+      "nameDisplay": "block"
+    },
+    {
+      "outerHTML_trunc": "<div class=\"xmb-item garage-item\" id=\"garage-custom-color-item\" data-action=\"open-custom-color-picker\" title=\"CUSTOM COLOR\" style=\"transform: scale(0.75); opacity: 0.08;\">\n              <div class=\"xm",
+      "rect": {
+        "top": 1014.75,
+        "left": 688.65625,
+        "width": 225,
+        "height": 37.5
+      },
+      "display": "flex",
+      "position": "relative",
+      "thumbRect": {
+        "top": 1020.75,
+        "left": 698.40625,
+        "width": 25.5,
+        "height": 25.5
+      },
+      "nameText": "CUSTOM COLOR",
+      "nameDisplay": "block"
+    }
+  ]
+}

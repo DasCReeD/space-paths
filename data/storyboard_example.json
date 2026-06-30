@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "levelIndex": 62,
+  "biome": "void",
+  "title": "Waveform Highway",
+  "targetRows": 340,
+  "signatureMechanic": "rhythmic equalizer-bar slalom walls (every 8 rows) with guardrails that follow the sweep, building to one big void jump as the drop",
+  "intent": "The track should feel like it is dancing to a beat: a sweeping S-curve slalom locked to the 8-row rhythm builds tension, eases for one breath, then commits to a single telegraphed void jump that is the unmistakable drop.",
+  "beats": [
+    {
+      "id": "intro",
+      "kind": "intro",
+      "label": "Sound Check",
+      "span": [0.0, 0.10],
+      "mechanics": ["runway"],
+      "intensityTarget": 0.12,
+      "telegraph": "open flat runway; nothing to dodge — establish baseline speed",
+      "notes": "safe accel runway; player reads the violet road and pink borders before anything happens"
+    },
+    {
+      "id": "teach",
+      "kind": "teach",
+      "label": "First Bars",
+      "span": [0.10, 0.34],
+      "mechanics": ["drift_curve", "slalom"],
+      "intensityTarget": 0.38,
+      "telegraph": "guardrails lead the sweep; walls snap to the 8-row phrase so the cadence is learnable",
+      "notes": "rhythm 8: introduce the equalizer-bar slalom uncombined and at moderate amplitude (A5 safe-intro)"
+    },
+    {
+      "id": "rising",
+      "kind": "rising",
+      "label": "Build",
+      "span": [0.34, 0.56],
+      "mechanics": ["slalom", "mixed"],
+      "intensityTarget": 0.62,
+      "telegraph": "tighter slalom amplitude; rails stay but obstacles appear between bars",
+      "notes": "escalate the same rhythm; combine slalom with light obstacles — no new lethal mechanic"
+    },
+    {
+      "id": "breather",
+      "kind": "breather",
+      "label": "The Pause",
+      "span": [0.56, 0.66],
+      "mechanics": ["runway"],
+      "intensityTarget": 0.20,
+      "telegraph": "walls fall away, road widens — visible calm before the drop",
+      "notes": "A4 sawtooth trough: a real sub-threshold breather so the climax lands"
+    },
+    {
+      "id": "climax",
+      "kind": "climax",
+      "label": "The Drop",
+      "span": [0.66, 0.90],
+      "mechanics": ["launch_jump"],
+      "intensityTarget": 0.96,
+      "telegraph": "boost runway + ramp marker a full phrase (8 rows) before the gap; the void gap is visually unmistakable",
+      "notes": "single dominant late peak (A6): boost runway -> ramp -> void gap -> refill safeLanding island. riskReward boost on the line, >=3 flat clean landing rows after"
+    },
+    {
+      "id": "resolution",
+      "kind": "resolution",
+      "label": "Fade Out",
+      "span": [0.90, 1.0],
+      "mechanics": ["runway"],
+      "intensityTarget": 0.10,
+      "telegraph": "open runway to the finish",
+      "notes": "safe outro; let the player exhale after the drop"
+    }
+  ],
+  "successCriteria": {
+    "climax": "the void jump must be the single hardest and most-telegraphed moment; it must be player-caused (commit the boost) not just a dense cluster",
+    "fairness": "every slalom wall must read one phrase (8 rows) ahead at maxSpeedNormal; the void gap must not be hidden behind a crest",
+    "arc": "intensity must visibly dip in the breather (~0.56-0.66) before climbing to the climax; the rhythm should read as deliberate, not random walls"
+  }
+}

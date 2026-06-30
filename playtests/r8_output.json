@@ -1,0 +1,2411 @@
+{
+  "1920x1080": {
+    "title_rect": {
+      "found": true,
+      "top": 179.5,
+      "bottom": 226.5,
+      "left": 40,
+      "right": 1060,
+      "width": 1020,
+      "height": 47,
+      "opacity": "1",
+      "text": "HOVERCRAFT GARAGE"
+    },
+    "title_glyph": {
+      "found": true,
+      "left": 339.390625,
+      "right": 760.59375,
+      "top": 179.5,
+      "bottom": 215.5,
+      "text": "HOVERCRAFT GARAGE"
+    },
+    "gear_rect": {
+      "found": true,
+      "top": 20,
+      "bottom": 66,
+      "left": 20,
+      "right": 66,
+      "width": 46,
+      "height": 46,
+      "opacity": "1",
+      "text": ""
+    },
+    "back_btn_rect": {
+      "found": true,
+      "top": 179.5,
+      "bottom": 206.5,
+      "left": 116,
+      "right": 195.40625,
+      "width": 79.40625,
+      "height": 27,
+      "opacity": "1",
+      "text": "← BACK"
+    },
+    "title_vs_gear_overlap": false,
+    "back_vs_gear_overlap": false,
+    "viewport_height": 1080,
+    "title_visible_in_viewport": true,
+    "container_rect": {
+      "found": true,
+      "top": 266.5,
+      "bottom": 826.5,
+      "left": 40,
+      "right": 1060,
+      "width": 1020,
+      "height": 560,
+      "opacity": "1",
+      "text": "HULLHULL\n            SKIN\n            PAINT\n          \n\n          \n            \n              ▲\n            STARFIRE FIGHTERSTARFIRE FIGHTER\n            \n              ▲\n            HOVERCRAFT HAULER\n            \n              ▲\n            HOVERCRAFT SCOUT\n            \n              ▲\n            HOVERCRAFT DREADNOUGHT\n            \n              ▲\n            HOVERCRAFT CRUISER\n            \n              ▲\n            COMBAT RACER\n            \n              ▲\n            HOVDI CONCEPT\n          \n\n          \n            \n              \n            TECHNICAL UV LAYOUT\n            \n              \n            WEATHERED COPPER FIGHTER\n            \n              \n            CARBON STEEL PLATING\n            \n              \n            HEXAGON ENERGY SHIELDS\n            \n              \n            STEALTH FOREST CAMO\n            \n              \n            HIGH-VOLTAGE GOLD CIRCUITRY\n            \n              \n            DARK RIVETED METALLIC ARMOR\n            \n              \n            INDUSTRIAL CORRUGATED STEEL\n            \n              \n            MAJADROID SPACE PATTERN 1\n            \n              \n            MAJADROID SPACE PATTERN 2\n            \n              \n            MAJADROID SPACE PATTERN 3\n            \n              \n            MAJADROID SPACE PATTERN 4\n          \n\n          \n            \n              ×\n            NO OVERLAY\n            CYBER PINK\n            NEON CYAN\n            ELECTRIC LIME\n            SUN GOLD\n            BURN ORANGE\n            DEEP INDIGO\n            \n              ✎\n            CUSTOM COLOR"
+    },
+    "hull_rows_step0": {
+      "found": true,
+      "trackRect": {
+        "top": 616.5,
+        "bottom": 1002.5,
+        "left": 688.65625,
+        "right": 988.65625
+      },
+      "items": [
+        {
+          "model": "original",
+          "name": "STARFIRE FIGHTER",
+          "focused": true,
+          "top": 616.5,
+          "bottom": 666.5,
+          "left": 688.65625,
+          "right": 988.65625,
+          "opacity": "1"
+        },
+        {
+          "model": "hauler",
+          "name": "HOVERCRAFT HAULER",
+          "focused": false,
+          "top": 678.75,
+          "bottom": 716.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.38"
+        },
+        {
+          "model": "scout",
+          "name": "HOVERCRAFT SCOUT",
+          "focused": false,
+          "top": 734.75,
+          "bottom": 772.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.22"
+        },
+        {
+          "model": "dreadnought",
+          "name": "HOVERCRAFT DREADNOUGHT",
+          "focused": false,
+          "top": 790.75,
+          "bottom": 828.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.13"
+        },
+        {
+          "model": "cruiser",
+          "name": "HOVERCRAFT CRUISER",
+          "focused": false,
+          "top": 846.75,
+          "bottom": 884.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.08"
+        },
+        {
+          "model": "racer",
+          "name": "COMBAT RACER",
+          "focused": false,
+          "top": 902.75,
+          "bottom": 940.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.08"
+        },
+        {
+          "model": "hovdi",
+          "name": "HOVDI CONCEPT",
+          "focused": false,
+          "top": 958.75,
+          "bottom": 996.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.08"
+        }
+      ]
+    },
+    "preview_step0": {
+      "found": true,
+      "rect": {
+        "top": 268.5,
+        "bottom": 1020.5,
+        "left": 42,
+        "right": 591,
+        "width": 549,
+        "height": 752
+      },
+      "nonEmptyPixelRatio": 0
+    },
+    "hull_walk": [
+      {
+        "step": 1,
+        "expectedModel": "hauler",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 560.5,
+            "bottom": 946.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 566.75,
+              "bottom": 604.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": true,
+              "top": 616.5,
+              "bottom": 666.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 678.75,
+              "bottom": 716.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 734.75,
+              "bottom": 772.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 790.75,
+              "bottom": 828.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 846.75,
+              "bottom": 884.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 902.75,
+              "bottom": 940.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 268.5,
+            "bottom": 1020.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 752
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 2,
+        "expectedModel": "scout",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 504.5,
+            "bottom": 890.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 510.75,
+              "bottom": 548.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 566.75,
+              "bottom": 604.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": true,
+              "top": 616.5,
+              "bottom": 666.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 678.75,
+              "bottom": 716.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 734.75,
+              "bottom": 772.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 790.75,
+              "bottom": 828.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 846.75,
+              "bottom": 884.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 268.5,
+            "bottom": 1020.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 752
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 3,
+        "expectedModel": "dreadnought",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 448.5,
+            "bottom": 834.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 454.75,
+              "bottom": 492.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 510.75,
+              "bottom": 548.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 566.75,
+              "bottom": 604.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": true,
+              "top": 616.5,
+              "bottom": 666.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 678.75,
+              "bottom": 716.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 734.75,
+              "bottom": 772.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 790.75,
+              "bottom": 828.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 268.5,
+            "bottom": 1020.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 752
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 4,
+        "expectedModel": "cruiser",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 392.5,
+            "bottom": 778.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 398.75,
+              "bottom": 436.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 454.75,
+              "bottom": 492.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 510.75,
+              "bottom": 548.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 566.75,
+              "bottom": 604.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": true,
+              "top": 616.5,
+              "bottom": 666.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 678.75,
+              "bottom": 716.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 734.75,
+              "bottom": 772.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 268.5,
+            "bottom": 1020.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 752
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 5,
+        "expectedModel": "racer",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 336.5,
+            "bottom": 722.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 342.75,
+              "bottom": 380.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 398.75,
+              "bottom": 436.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 454.75,
+              "bottom": 492.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 510.75,
+              "bottom": 548.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 566.75,
+              "bottom": 604.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": true,
+              "top": 616.5,
+              "bottom": 666.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 678.75,
+              "bottom": 716.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 268.5,
+            "bottom": 1020.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 752
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 6,
+        "expectedModel": "hovdi",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 280.5,
+            "bottom": 666.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 286.75,
+              "bottom": 324.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 342.75,
+              "bottom": 380.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 398.75,
+              "bottom": 436.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 454.75,
+              "bottom": 492.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 510.75,
+              "bottom": 548.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 566.75,
+              "bottom": 604.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": true,
+              "top": 616.5,
+              "bottom": 666.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 268.5,
+            "bottom": 1020.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 752
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      }
+    ],
+    "skin_rows": {
+      "found": true,
+      "count": 12,
+      "names": [
+        "TECHNICAL UV LAYOUT",
+        "WEATHERED COPPER FIGHTER",
+        "CARBON STEEL PLATING",
+        "HEXAGON ENERGY SHIELDS",
+        "STEALTH FOREST CAMO",
+        "HIGH-VOLTAGE GOLD CIRCUITRY",
+        "DARK RIVETED METALLIC ARMOR",
+        "INDUSTRIAL CORRUGATED STEEL",
+        "MAJADROID SPACE PATTERN 1",
+        "MAJADROID SPACE PATTERN 2",
+        "MAJADROID SPACE PATTERN 3",
+        "MAJADROID SPACE PATTERN 4"
+      ]
+    },
+    "active_category_after_1_right": "skin",
+    "active_category_after_2_right": "paint",
+    "paint_rows": {
+      "found": true,
+      "count": 8,
+      "rows": [
+        {
+          "name": "NO OVERLAY",
+          "hasSwatch": true,
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "name": "CYBER PINK",
+          "hasSwatch": false,
+          "bg": "rgb(255, 0, 127)"
+        },
+        {
+          "name": "NEON CYAN",
+          "hasSwatch": false,
+          "bg": "rgb(0, 255, 255)"
+        },
+        {
+          "name": "ELECTRIC LIME",
+          "hasSwatch": false,
+          "bg": "rgb(57, 255, 20)"
+        },
+        {
+          "name": "SUN GOLD",
+          "hasSwatch": false,
+          "bg": "rgb(255, 170, 0)"
+        },
+        {
+          "name": "BURN ORANGE",
+          "hasSwatch": false,
+          "bg": "rgb(255, 51, 0)"
+        },
+        {
+          "name": "DEEP INDIGO",
+          "hasSwatch": false,
+          "bg": "rgb(138, 43, 226)"
+        },
+        {
+          "name": "CUSTOM COLOR",
+          "hasSwatch": true,
+          "bg": null
+        }
+      ]
+    },
+    "paint_before_down": "NO OVERLAY",
+    "paint_after_down": "CYBER PINK"
+  },
+  "1366x768": {
+    "title_rect": {
+      "found": true,
+      "top": 34.5,
+      "bottom": 81.5,
+      "left": 40,
+      "right": 1060,
+      "width": 1020,
+      "height": 47,
+      "opacity": "1",
+      "text": "HOVERCRAFT GARAGE"
+    },
+    "title_glyph": {
+      "found": true,
+      "left": 339.390625,
+      "right": 760.59375,
+      "top": 34.5,
+      "bottom": 70.5,
+      "text": "HOVERCRAFT GARAGE"
+    },
+    "gear_rect": {
+      "found": true,
+      "top": 20,
+      "bottom": 66,
+      "left": 20,
+      "right": 66,
+      "width": 46,
+      "height": 46,
+      "opacity": "1",
+      "text": ""
+    },
+    "back_btn_rect": {
+      "found": true,
+      "top": 34.5,
+      "bottom": 61.5,
+      "left": 116,
+      "right": 195.40625,
+      "width": 79.40625,
+      "height": 27,
+      "opacity": "1",
+      "text": "← BACK"
+    },
+    "title_vs_gear_overlap": false,
+    "back_vs_gear_overlap": false,
+    "viewport_height": 768,
+    "title_visible_in_viewport": true,
+    "container_rect": {
+      "found": true,
+      "top": 121.5,
+      "bottom": 659.5,
+      "left": 40,
+      "right": 1060,
+      "width": 1020,
+      "height": 538,
+      "opacity": "1",
+      "text": "HULLHULL\n            SKIN\n            PAINT\n          \n\n          \n            \n              ▲\n            STARFIRE FIGHTERSTARFIRE FIGHTER\n            \n              ▲\n            HOVERCRAFT HAULER\n            \n              ▲\n            HOVERCRAFT SCOUT\n            \n              ▲\n            HOVERCRAFT DREADNOUGHT\n            \n              ▲\n            HOVERCRAFT CRUISER\n            \n              ▲\n            COMBAT RACER\n            \n              ▲\n            HOVDI CONCEPT\n          \n\n          \n            \n              \n            TECHNICAL UV LAYOUT\n            \n              \n            WEATHERED COPPER FIGHTER\n            \n              \n            CARBON STEEL PLATING\n            \n              \n            HEXAGON ENERGY SHIELDS\n            \n              \n            STEALTH FOREST CAMO\n            \n              \n            HIGH-VOLTAGE GOLD CIRCUITRY\n            \n              \n            DARK RIVETED METALLIC ARMOR\n            \n              \n            INDUSTRIAL CORRUGATED STEEL\n            \n              \n            MAJADROID SPACE PATTERN 1\n            \n              \n            MAJADROID SPACE PATTERN 2\n            \n              \n            MAJADROID SPACE PATTERN 3\n            \n              \n            MAJADROID SPACE PATTERN 4\n          \n\n          \n            \n              ×\n            NO OVERLAY\n            CYBER PINK\n            NEON CYAN\n            ELECTRIC LIME\n            SUN GOLD\n            BURN ORANGE\n            DEEP INDIGO\n            \n              ✎\n            CUSTOM COLOR"
+    },
+    "hull_rows_step0": {
+      "found": true,
+      "trackRect": {
+        "top": 362.5,
+        "bottom": 748.5,
+        "left": 688.65625,
+        "right": 988.65625
+      },
+      "items": [
+        {
+          "model": "original",
+          "name": "STARFIRE FIGHTER",
+          "focused": true,
+          "top": 362.5,
+          "bottom": 412.5,
+          "left": 688.65625,
+          "right": 988.65625,
+          "opacity": "1"
+        },
+        {
+          "model": "hauler",
+          "name": "HOVERCRAFT HAULER",
+          "focused": false,
+          "top": 424.75,
+          "bottom": 462.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.38"
+        },
+        {
+          "model": "scout",
+          "name": "HOVERCRAFT SCOUT",
+          "focused": false,
+          "top": 480.75,
+          "bottom": 518.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.22"
+        },
+        {
+          "model": "dreadnought",
+          "name": "HOVERCRAFT DREADNOUGHT",
+          "focused": false,
+          "top": 536.75,
+          "bottom": 574.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.13"
+        },
+        {
+          "model": "cruiser",
+          "name": "HOVERCRAFT CRUISER",
+          "focused": false,
+          "top": 592.75,
+          "bottom": 630.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.08"
+        },
+        {
+          "model": "racer",
+          "name": "COMBAT RACER",
+          "focused": false,
+          "top": 648.75,
+          "bottom": 686.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.08"
+        },
+        {
+          "model": "hovdi",
+          "name": "HOVDI CONCEPT",
+          "focused": false,
+          "top": 704.75,
+          "bottom": 742.25,
+          "left": 688.65625,
+          "right": 913.65625,
+          "opacity": "0.08"
+        }
+      ]
+    },
+    "preview_step0": {
+      "found": true,
+      "rect": {
+        "top": 123.5,
+        "bottom": 657.5,
+        "left": 42,
+        "right": 591,
+        "width": 549,
+        "height": 534
+      },
+      "nonEmptyPixelRatio": 0
+    },
+    "hull_walk": [
+      {
+        "step": 1,
+        "expectedModel": "hauler",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 306.5,
+            "bottom": 692.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 312.75,
+              "bottom": 350.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": true,
+              "top": 362.5,
+              "bottom": 412.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 424.75,
+              "bottom": 462.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 480.75,
+              "bottom": 518.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 536.75,
+              "bottom": 574.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 592.75,
+              "bottom": 630.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 648.75,
+              "bottom": 686.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 123.5,
+            "bottom": 657.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 534
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 2,
+        "expectedModel": "scout",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 250.5,
+            "bottom": 636.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 256.75,
+              "bottom": 294.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 312.75,
+              "bottom": 350.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": true,
+              "top": 362.5,
+              "bottom": 412.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 424.75,
+              "bottom": 462.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 480.75,
+              "bottom": 518.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 536.75,
+              "bottom": 574.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 592.75,
+              "bottom": 630.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 123.5,
+            "bottom": 657.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 534
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 3,
+        "expectedModel": "dreadnought",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 194.5,
+            "bottom": 580.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 200.75,
+              "bottom": 238.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 256.75,
+              "bottom": 294.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 312.75,
+              "bottom": 350.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": true,
+              "top": 362.5,
+              "bottom": 412.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 424.75,
+              "bottom": 462.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 480.75,
+              "bottom": 518.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 536.75,
+              "bottom": 574.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 123.5,
+            "bottom": 657.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 534
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 4,
+        "expectedModel": "cruiser",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 138.5,
+            "bottom": 524.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 144.75,
+              "bottom": 182.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 200.75,
+              "bottom": 238.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 256.75,
+              "bottom": 294.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 312.75,
+              "bottom": 350.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": true,
+              "top": 362.5,
+              "bottom": 412.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 424.75,
+              "bottom": 462.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 480.75,
+              "bottom": 518.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 123.5,
+            "bottom": 657.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 534
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 5,
+        "expectedModel": "racer",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 82.5,
+            "bottom": 468.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 88.75,
+              "bottom": 126.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 144.75,
+              "bottom": 182.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 200.75,
+              "bottom": 238.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 256.75,
+              "bottom": 294.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 312.75,
+              "bottom": 350.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": true,
+              "top": 362.5,
+              "bottom": 412.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 424.75,
+              "bottom": 462.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 123.5,
+            "bottom": 657.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 534
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 6,
+        "expectedModel": "hovdi",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 26.5,
+            "bottom": 412.5,
+            "left": 688.65625,
+            "right": 988.65625
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 32.75,
+              "bottom": 70.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 88.75,
+              "bottom": 126.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 144.75,
+              "bottom": 182.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.08"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 200.75,
+              "bottom": 238.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.13"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 256.75,
+              "bottom": 294.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.22"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 312.75,
+              "bottom": 350.25,
+              "left": 688.65625,
+              "right": 913.65625,
+              "opacity": "0.38"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": true,
+              "top": 362.5,
+              "bottom": 412.5,
+              "left": 688.65625,
+              "right": 988.65625,
+              "opacity": "1"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 123.5,
+            "bottom": 657.5,
+            "left": 42,
+            "right": 591,
+            "width": 549,
+            "height": 534
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      }
+    ],
+    "skin_rows": {
+      "found": true,
+      "count": 12,
+      "names": [
+        "TECHNICAL UV LAYOUT",
+        "WEATHERED COPPER FIGHTER",
+        "CARBON STEEL PLATING",
+        "HEXAGON ENERGY SHIELDS",
+        "STEALTH FOREST CAMO",
+        "HIGH-VOLTAGE GOLD CIRCUITRY",
+        "DARK RIVETED METALLIC ARMOR",
+        "INDUSTRIAL CORRUGATED STEEL",
+        "MAJADROID SPACE PATTERN 1",
+        "MAJADROID SPACE PATTERN 2",
+        "MAJADROID SPACE PATTERN 3",
+        "MAJADROID SPACE PATTERN 4"
+      ]
+    },
+    "active_category_after_1_right": "skin",
+    "active_category_after_2_right": "paint",
+    "paint_rows": {
+      "found": true,
+      "count": 8,
+      "rows": [
+        {
+          "name": "NO OVERLAY",
+          "hasSwatch": true,
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "name": "CYBER PINK",
+          "hasSwatch": false,
+          "bg": "rgb(255, 0, 127)"
+        },
+        {
+          "name": "NEON CYAN",
+          "hasSwatch": false,
+          "bg": "rgb(0, 255, 255)"
+        },
+        {
+          "name": "ELECTRIC LIME",
+          "hasSwatch": false,
+          "bg": "rgb(57, 255, 20)"
+        },
+        {
+          "name": "SUN GOLD",
+          "hasSwatch": false,
+          "bg": "rgb(255, 170, 0)"
+        },
+        {
+          "name": "BURN ORANGE",
+          "hasSwatch": false,
+          "bg": "rgb(255, 51, 0)"
+        },
+        {
+          "name": "DEEP INDIGO",
+          "hasSwatch": false,
+          "bg": "rgb(138, 43, 226)"
+        },
+        {
+          "name": "CUSTOM COLOR",
+          "hasSwatch": true,
+          "bg": null
+        }
+      ]
+    },
+    "paint_before_down": "NO OVERLAY",
+    "paint_after_down": "CYBER PINK"
+  },
+  "390x844": {
+    "title_rect": {
+      "found": true,
+      "top": 47,
+      "bottom": 83,
+      "left": 15,
+      "right": 355.5,
+      "width": 340.5,
+      "height": 36,
+      "opacity": "1",
+      "text": "HOVERCRAFT GARAGE"
+    },
+    "title_glyph": {
+      "found": true,
+      "left": 42.296875,
+      "right": 328.1875,
+      "top": 47,
+      "bottom": 72,
+      "text": "HOVERCRAFT GARAGE"
+    },
+    "gear_rect": {
+      "found": true,
+      "top": 20,
+      "bottom": 66,
+      "left": 20,
+      "right": 66,
+      "width": 46,
+      "height": 46,
+      "opacity": "1",
+      "text": ""
+    },
+    "back_btn_rect": {
+      "found": true,
+      "top": 47,
+      "bottom": 74,
+      "left": 91,
+      "right": 170.40625,
+      "width": 79.40625,
+      "height": 27,
+      "opacity": "1",
+      "text": "← BACK"
+    },
+    "title_vs_gear_overlap": true,
+    "back_vs_gear_overlap": false,
+    "viewport_height": 844,
+    "title_visible_in_viewport": true,
+    "container_rect": {
+      "found": true,
+      "top": 123,
+      "bottom": 723,
+      "left": 15,
+      "right": 355.5,
+      "width": 340.5,
+      "height": 600,
+      "opacity": "1",
+      "text": "HULLHULL\n            SKIN\n            PAINT\n          \n\n          \n            \n              ▲\n            STARFIRE FIGHTERSTARFIRE FIGHTER\n            \n              ▲\n            HOVERCRAFT HAULER\n            \n              ▲\n            HOVERCRAFT SCOUT\n            \n              ▲\n            HOVERCRAFT DREADNOUGHT\n            \n              ▲\n            HOVERCRAFT CRUISER\n            \n              ▲\n            COMBAT RACER\n            \n              ▲\n            HOVDI CONCEPT\n          \n\n          \n            \n              \n            TECHNICAL UV LAYOUT\n            \n              \n            WEATHERED COPPER FIGHTER\n            \n              \n            CARBON STEEL PLATING\n            \n              \n            HEXAGON ENERGY SHIELDS\n            \n              \n            STEALTH FOREST CAMO\n            \n              \n            HIGH-VOLTAGE GOLD CIRCUITRY\n            \n              \n            DARK RIVETED METALLIC ARMOR\n            \n              \n            INDUSTRIAL CORRUGATED STEEL\n            \n              \n            MAJADROID SPACE PATTERN 1\n            \n              \n            MAJADROID SPACE PATTERN 2\n            \n              \n            MAJADROID SPACE PATTERN 3\n            \n              \n            MAJADROID SPACE PATTERN 4\n          \n\n          \n            \n              ×\n            NO OVERLAY\n            CYBER PINK\n            NEON CYAN\n            ELECTRIC LIME\n            SUN GOLD\n            BURN ORANGE\n            DEEP INDIGO\n            \n              ✎\n            CUSTOM COLOR"
+    },
+    "hull_rows_step0": {
+      "found": true,
+      "trackRect": {
+        "top": 635.390625,
+        "bottom": 1021.390625,
+        "left": 35.25,
+        "right": 335.25
+      },
+      "items": [
+        {
+          "model": "original",
+          "name": "STARFIRE FIGHTER",
+          "focused": true,
+          "top": 635.390625,
+          "bottom": 685.390625,
+          "left": 35.25,
+          "right": 335.25,
+          "opacity": "1"
+        },
+        {
+          "model": "hauler",
+          "name": "HOVERCRAFT HAULER",
+          "focused": false,
+          "top": 697.640625,
+          "bottom": 735.140625,
+          "left": 35.25,
+          "right": 260.25,
+          "opacity": "0.38"
+        },
+        {
+          "model": "scout",
+          "name": "HOVERCRAFT SCOUT",
+          "focused": false,
+          "top": 753.640625,
+          "bottom": 791.140625,
+          "left": 35.25,
+          "right": 260.25,
+          "opacity": "0.22"
+        },
+        {
+          "model": "dreadnought",
+          "name": "HOVERCRAFT DREADNOUGHT",
+          "focused": false,
+          "top": 809.640625,
+          "bottom": 847.140625,
+          "left": 35.25,
+          "right": 260.25,
+          "opacity": "0.13"
+        },
+        {
+          "model": "cruiser",
+          "name": "HOVERCRAFT CRUISER",
+          "focused": false,
+          "top": 865.640625,
+          "bottom": 903.140625,
+          "left": 35.25,
+          "right": 260.25,
+          "opacity": "0.08"
+        },
+        {
+          "model": "racer",
+          "name": "COMBAT RACER",
+          "focused": false,
+          "top": 921.640625,
+          "bottom": 959.140625,
+          "left": 35.25,
+          "right": 260.25,
+          "opacity": "0.08"
+        },
+        {
+          "model": "hovdi",
+          "name": "HOVDI CONCEPT",
+          "focused": false,
+          "top": 977.640625,
+          "bottom": 1015.140625,
+          "left": 35.25,
+          "right": 260.25,
+          "opacity": "0.08"
+        }
+      ]
+    },
+    "preview_step0": {
+      "found": true,
+      "rect": {
+        "top": 135,
+        "bottom": 351,
+        "left": 17,
+        "right": 354,
+        "width": 337,
+        "height": 216
+      },
+      "nonEmptyPixelRatio": 0
+    },
+    "hull_walk": [
+      {
+        "step": 1,
+        "expectedModel": "hauler",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 579.390625,
+            "bottom": 965.390625,
+            "left": 35.25,
+            "right": 335.25
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 585.640625,
+              "bottom": 623.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.38"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": true,
+              "top": 635.390625,
+              "bottom": 685.390625,
+              "left": 35.25,
+              "right": 335.25,
+              "opacity": "1"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 697.640625,
+              "bottom": 735.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.38"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 753.640625,
+              "bottom": 791.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.22"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 809.640625,
+              "bottom": 847.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.13"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 865.640625,
+              "bottom": 903.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 921.640625,
+              "bottom": 959.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.08"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 135,
+            "bottom": 351,
+            "left": 17,
+            "right": 354,
+            "width": 337,
+            "height": 216
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 2,
+        "expectedModel": "scout",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 523.390625,
+            "bottom": 909.390625,
+            "left": 35.25,
+            "right": 335.25
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 529.640625,
+              "bottom": 567.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.22"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 585.640625,
+              "bottom": 623.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.38"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": true,
+              "top": 635.390625,
+              "bottom": 685.390625,
+              "left": 35.25,
+              "right": 335.25,
+              "opacity": "1"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 697.640625,
+              "bottom": 735.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.38"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 753.640625,
+              "bottom": 791.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.22"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 809.640625,
+              "bottom": 847.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.13"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 865.640625,
+              "bottom": 903.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.08"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 135,
+            "bottom": 351,
+            "left": 17,
+            "right": 354,
+            "width": 337,
+            "height": 216
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 3,
+        "expectedModel": "dreadnought",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 467.390625,
+            "bottom": 853.390625,
+            "left": 35.25,
+            "right": 335.25
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 473.640625,
+              "bottom": 511.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.13"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 529.640625,
+              "bottom": 567.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.22"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 585.640625,
+              "bottom": 623.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.38"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": true,
+              "top": 635.390625,
+              "bottom": 685.390625,
+              "left": 35.25,
+              "right": 335.25,
+              "opacity": "1"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 697.640625,
+              "bottom": 735.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.38"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 753.640625,
+              "bottom": 791.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.22"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 809.640625,
+              "bottom": 847.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.13"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 135,
+            "bottom": 351,
+            "left": 17,
+            "right": 354,
+            "width": 337,
+            "height": 216
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 4,
+        "expectedModel": "cruiser",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 411.390625,
+            "bottom": 797.390625,
+            "left": 35.25,
+            "right": 335.25
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 417.640625,
+              "bottom": 455.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 473.640625,
+              "bottom": 511.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.13"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 529.640625,
+              "bottom": 567.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.22"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 585.640625,
+              "bottom": 623.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.38"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": true,
+              "top": 635.390625,
+              "bottom": 685.390625,
+              "left": 35.25,
+              "right": 335.25,
+              "opacity": "1"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 697.640625,
+              "bottom": 735.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.38"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 753.640625,
+              "bottom": 791.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.22"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 135,
+            "bottom": 351,
+            "left": 17,
+            "right": 354,
+            "width": 337,
+            "height": 216
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 5,
+        "expectedModel": "racer",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 355.390625,
+            "bottom": 741.390625,
+            "left": 35.25,
+            "right": 335.25
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 361.640625,
+              "bottom": 399.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 417.640625,
+              "bottom": 455.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.08"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 473.640625,
+              "bottom": 511.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.13"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 529.640625,
+              "bottom": 567.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.22"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 585.640625,
+              "bottom": 623.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.38"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": true,
+              "top": 635.390625,
+              "bottom": 685.390625,
+              "left": 35.25,
+              "right": 335.25,
+              "opacity": "1"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": false,
+              "top": 697.640625,
+              "bottom": 735.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.38"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 135,
+            "bottom": 351,
+            "left": 17,
+            "right": 354,
+            "width": 337,
+            "height": 216
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      },
+      {
+        "step": 6,
+        "expectedModel": "hovdi",
+        "rows": {
+          "found": true,
+          "trackRect": {
+            "top": 299.390625,
+            "bottom": 685.390625,
+            "left": 35.25,
+            "right": 335.25
+          },
+          "items": [
+            {
+              "model": "original",
+              "name": "STARFIRE FIGHTER",
+              "focused": false,
+              "top": 305.640625,
+              "bottom": 343.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.08"
+            },
+            {
+              "model": "hauler",
+              "name": "HOVERCRAFT HAULER",
+              "focused": false,
+              "top": 361.640625,
+              "bottom": 399.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.08"
+            },
+            {
+              "model": "scout",
+              "name": "HOVERCRAFT SCOUT",
+              "focused": false,
+              "top": 417.640625,
+              "bottom": 455.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.08"
+            },
+            {
+              "model": "dreadnought",
+              "name": "HOVERCRAFT DREADNOUGHT",
+              "focused": false,
+              "top": 473.640625,
+              "bottom": 511.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.13"
+            },
+            {
+              "model": "cruiser",
+              "name": "HOVERCRAFT CRUISER",
+              "focused": false,
+              "top": 529.640625,
+              "bottom": 567.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.22"
+            },
+            {
+              "model": "racer",
+              "name": "COMBAT RACER",
+              "focused": false,
+              "top": 585.640625,
+              "bottom": 623.140625,
+              "left": 35.25,
+              "right": 260.25,
+              "opacity": "0.38"
+            },
+            {
+              "model": "hovdi",
+              "name": "HOVDI CONCEPT",
+              "focused": true,
+              "top": 635.390625,
+              "bottom": 685.390625,
+              "left": 35.25,
+              "right": 335.25,
+              "opacity": "1"
+            }
+          ]
+        },
+        "preview": {
+          "found": true,
+          "rect": {
+            "top": 135,
+            "bottom": 351,
+            "left": 17,
+            "right": 354,
+            "width": 337,
+            "height": 216
+          },
+          "nonEmptyPixelRatio": 0
+        }
+      }
+    ],
+    "skin_rows": {
+      "found": true,
+      "count": 12,
+      "names": [
+        "TECHNICAL UV LAYOUT",
+        "WEATHERED COPPER FIGHTER",
+        "CARBON STEEL PLATING",
+        "HEXAGON ENERGY SHIELDS",
+        "STEALTH FOREST CAMO",
+        "HIGH-VOLTAGE GOLD CIRCUITRY",
+        "DARK RIVETED METALLIC ARMOR",
+        "INDUSTRIAL CORRUGATED STEEL",
+        "MAJADROID SPACE PATTERN 1",
+        "MAJADROID SPACE PATTERN 2",
+        "MAJADROID SPACE PATTERN 3",
+        "MAJADROID SPACE PATTERN 4"
+      ]
+    },
+    "active_category_after_1_right": "skin",
+    "active_category_after_2_right": "paint",
+    "paint_rows": {
+      "found": true,
+      "count": 8,
+      "rows": [
+        {
+          "name": "NO OVERLAY",
+          "hasSwatch": true,
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "name": "CYBER PINK",
+          "hasSwatch": false,
+          "bg": "rgb(255, 0, 127)"
+        },
+        {
+          "name": "NEON CYAN",
+          "hasSwatch": false,
+          "bg": "rgb(0, 255, 255)"
+        },
+        {
+          "name": "ELECTRIC LIME",
+          "hasSwatch": false,
+          "bg": "rgb(57, 255, 20)"
+        },
+        {
+          "name": "SUN GOLD",
+          "hasSwatch": false,
+          "bg": "rgb(255, 170, 0)"
+        },
+        {
+          "name": "BURN ORANGE",
+          "hasSwatch": false,
+          "bg": "rgb(255, 51, 0)"
+        },
+        {
+          "name": "DEEP INDIGO",
+          "hasSwatch": false,
+          "bg": "rgb(138, 43, 226)"
+        },
+        {
+          "name": "CUSTOM COLOR",
+          "hasSwatch": true,
+          "bg": null
+        }
+      ]
+    },
+    "paint_before_down": "NO OVERLAY",
+    "paint_after_down": "CYBER PINK"
+  }
+}

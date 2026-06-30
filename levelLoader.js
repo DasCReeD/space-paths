@@ -229,6 +229,131 @@ export function applyCurvatureShader(material) {
   return material;
 }
 
+/**
+ * Flow/Tower "tunnel ceiling" lighting.
+ *
+ * In FLOW/TOWER the three tracks are stacked vertically (groups at y = +25 / 0 /
+ * -25), so when you ride a lower deck the deck above reads as a tunnel roof. This
+ * hangs emissive light fixtures under a deck — two continuous light rails plus
+ * periodic cross "rungs" — so that roof glows and the rungs sweep past overhead
+ * like real tunnel lighting.
+ *
+ * Parented into the deck's OWN group and curvature-shaded, so the fixtures bend
+ * and scroll with the track exactly like the road tiles do. The long rails are
+ * length-segmented (one segment per tile) or the curvature shader would bend
+ * them as a single straight chord and they'd poke through the curved road.
+ *
+ * Emissive-only by design (no real lights): the curvature shader displaces
+ * geometry but not light positions, so a real PointLight would slide off the
+ * curved road at distance. Bloom carries the glow instead.
+ *
+ * @param {THREE.Group} group - the deck's level group (already y-offset)
+ * @param {number} trackLength - deck length in world units (levelInfo.trackLength)
+ * @param {{color?, y?, intensity?, rungSpacingRows?}} [opts]
+ */
+export function buildDeckCeilingLight(group, trackLength, opts = {}) {
+  if (!group || !(trackLength > 0)) return;
+  const color = opts.color instanceof THREE.Color ? opts.color : new THREE.Color(opts.color !== undefined ? opts.color : 0x33e0ff);
+  const underY = opts.y !== undefined ? opts.y : -0.16; // hang just beneath the slab
+  const intensity = opts.intensity !== undefined ? opts.intensity : 2.4;
+  const lenSegs = Math.max(1, Math.round(trackLength / TILE_LENGTH));
+  const centerZ = -trackLength / 2;
+
+  const fixtureMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
+    color: 0x05070a,
+    emissive: color,
+    emissiveIntensity: intensity,
+    roughness: 0.4,
+    metalness: 0.0,
+  }));
+
+  // Two continuous light rails running the deck's length, inset from the road edges.
+  const railOffset = TOTAL_ROAD_WIDTH * 0.28;
+  for (const sx of [-railOffset, railOffset]) {
+    const railGeom = new THREE.BoxGeometry(0.22, 0.06, trackLength, 1, 1, lenSegs);
+    const rail = new THREE.Mesh(railGeom, fixtureMat);
+    rail.position.set(sx, underY, centerZ);
+    rail.frustumCulled = false; // curvature shader invalidates the static AABB
+    rail.userData.isDeckCeilingLight = true;
+    group.add(rail);
+  }
+
+  // Periodic cross rungs — the fixtures that read as ceiling lights sweeping past.
+  const rungSpacing = (opts.rungSpacingRows || 5) * TILE_LENGTH;
+  const rungGeom = new THREE.BoxGeometry(TOTAL_ROAD_WIDTH * 0.74, 0.05, 0.5);
+  for (let z = -rungSpacing; z > -trackLength; z -= rungSpacing) {
+    const rung = new THREE.Mesh(rungGeom, fixtureMat);
+    rung.position.set(0, underY - 0.02, z);
+    rung.frustumCulled = false;
+    rung.userData.isDeckCeilingLight = true;
+    group.add(rung);
+  }
+}
+
+/**
+ * Flow/Tower connecting pillars — the "tunnel shell".
+ *
+ * The stacked decks sit 25 units apart, so the ceiling lighting alone reads as a
+ * structure floating overhead rather than an enclosed tunnel. This raises a
+ * colonnade of pillars from a deck up to the deck above it, on both sides of the
+ * road, which encloses the space and visually explains the stacking. Each pillar
+ * is a dark structural column with an emissive trim strip up its inner face,
+ * tinted to match the roof it reaches.
+ *
+ * Parented into the LOWER deck's group (the one you ride, looking up) and
+ * curvature-shaded so the colonnade bends and scrolls with the track. Columns are
+ * thin in Z, so each bends fine with a single segment; the shader places each at
+ * the right curve height via its Z. Pillars sit just outside the road edges so
+ * they never block a lane.
+ *
+ * @param {THREE.Group} group - the lower deck's level group
+ * @param {number} trackLength - deck length in world units
+ * @param {{color?, height?, spacingRows?}} [opts]
+ */
+export function buildDeckPillars(group, trackLength, opts = {}) {
+  if (!group || !(trackLength > 0)) return;
+  const color = opts.color instanceof THREE.Color ? opts.color : new THREE.Color(opts.color !== undefined ? opts.color : 0x33e0ff);
+  const height = opts.height !== undefined ? opts.height : 25.0; // deck spacing
+  const spacing = (opts.spacingRows || 4) * TILE_LENGTH;
+  const sideX = TOTAL_ROAD_WIDTH / 2 + 0.6; // just beyond the outer rails
+
+  const columnMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
+    color: 0x10131c,
+    roughness: 0.5,
+    metalness: 0.85,
+  }));
+  const trimMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
+    color: 0x05070a,
+    emissive: color,
+    emissiveIntensity: 1.8,
+    roughness: 0.4,
+    metalness: 0.0,
+  }));
+
+  // Shared geometries reused across every pillar (cheap).
+  const columnGeom = new THREE.BoxGeometry(0.5, height, 0.5);
+  const trimGeom = new THREE.BoxGeometry(0.12, height * 0.92, 0.12);
+  const midY = height / 2;
+
+  for (let z = -spacing; z > -trackLength; z -= spacing) {
+    for (const sx of [-sideX, sideX]) {
+      const column = new THREE.Mesh(columnGeom, columnMat);
+      column.position.set(sx, midY, z);
+      column.frustumCulled = false; // curvature invalidates the static AABB
+      column.castShadow = false;
+      column.userData.isDeckPillar = true;
+      group.add(column);
+
+      // Emissive trim on the inner face (toward road center).
+      const trim = new THREE.Mesh(trimGeom, trimMat);
+      trim.position.set(sx + (sx < 0 ? 0.26 : -0.26), midY, z);
+      trim.frustumCulled = false;
+      trim.userData.isDeckPillar = true;
+      group.add(trim);
+    }
+  }
+}
+
 // Number of rows to process per async chunk before yielding
 const CHUNK_SIZE = 50;
 
@@ -1827,7 +1952,12 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
     } else if (behaviorKey === 'boost' || behaviorKey === 'super_boost') {
       matColor = railColor;
     } else if (isSpecial) {
-      matColor = themeBehavior.color || railColor;
+      // Slippery = ice. Give it a dark glossy BLUE so it reads clearly as ice
+      // rather than a glowing special tile. (themeBehavior.color + high emissive
+      // below made it blow out to white under bloom.)
+      matColor = behaviorKey === 'slippery'
+        ? new THREE.Color(0x2f8fd0).multiplyScalar(0.65)
+        : (themeBehavior.color || railColor);
     } else {
       const cIdx = typeof colIndex === 'number' ? colIndex : 3;
       const rIdx = typeof rowIndex === 'number' ? rowIndex : 0;
@@ -1868,8 +1998,10 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
 
     const matParams = {
       color: matColor,
-      roughness: behaviorKey === 'slippery' ? 0.05 : (['spire', 'tundra'].includes(biomeKey) ? 0.5 : 0.2),
-      metalness: behaviorKey === 'slippery' ? 0.95 : (['spire', 'tundra'].includes(biomeKey) ? 0.15 : 0.8),
+      // Glossy ice: very smooth + reflective, but NOT a perfect 0.95 mirror (which
+      // blew out to white). Reflects the dark sky → reads as ice, not light.
+      roughness: behaviorKey === 'slippery' ? 0.12 : (['spire', 'tundra'].includes(biomeKey) ? 0.5 : 0.2),
+      metalness: behaviorKey === 'slippery' ? 0.6 : (['spire', 'tundra'].includes(biomeKey) ? 0.15 : 0.8),
     };
 
     if (texture) {
@@ -1886,7 +2018,12 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
       matParams.normalScale = new THREE.Vector2(2.5, 2.5);
     }
 
-    if (isSpecial) {
+    if (behaviorKey === 'slippery') {
+      // Ice doesn't self-illuminate — a faint cold glow only, so the frost texture
+      // and reflections read instead of blowing out to white.
+      matParams.emissive = new THREE.Color(0x0b2a44);
+      matParams.emissiveIntensity = 0.18;
+    } else if (isSpecial) {
       matParams.emissive = matColor;
       matParams.emissiveIntensity = behaviorKey === 'burning' ? 1.5 : 0.9;
     } else if (isObstacle) {
@@ -2047,6 +2184,10 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   const levelIdx = levelIndex !== null ? levelIndex : 0;
   const activeProfile = profiles && profiles.length > 0 ? profiles[levelIdx % profiles.length] : null;
 
+  // Holds the bright accent for obstacles so we can darken their body (silhouette) while
+  // still feeding the accent into the emissive rim. Stays null for non-obstacle tiles.
+  let obstacleAccent = null;
+
   if (activeProfile && !isTestEnv) {
     let roadColor = new THREE.Color(...activeProfile.road);
     let railColor = new THREE.Color(...activeProfile.rail);
@@ -2129,7 +2270,11 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
         matColor = matColor.clone().multiplyScalar(alternatingFactor);
       }
     } else if (behaviorKey === 'obstacle') {
-      matColor = accentColor;
+      // Dark body so obstacles read as a solid silhouette against bright biomes (e.g. the
+      // tundra ice that was washing them out); the bright accent is kept for the emissive
+      // rim below so they still pop on dark biomes.
+      obstacleAccent = accentColor.clone();
+      matColor = accentColor.clone().multiplyScalar(0.20);
     }
   }
   
@@ -2140,9 +2285,11 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
     isGlowing = true;
   }
   
-  const matEmissive = isSpecial && themeBehavior.emissive 
-    ? themeBehavior.emissive 
-    : (isGlowing ? glowColor || matColor : new THREE.Color(0, 0, 0));
+  const matEmissive = isSpecial && themeBehavior.emissive
+    ? themeBehavior.emissive
+    : (behaviorKey === 'obstacle' && obstacleAccent
+      ? obstacleAccent
+      : (isGlowing ? glowColor || matColor : new THREE.Color(0, 0, 0)));
   
   const matParams = {
     color: matColor,
@@ -2173,7 +2320,7 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
 
   if (isGlowing) {
     matParams.emissive = matEmissive;
-    matParams.emissiveIntensity = behaviorKey === 'obstacle' ? 0.35 : 0.9;
+    matParams.emissiveIntensity = behaviorKey === 'obstacle' ? 0.25 : 0.9;
   } else if (emissiveMapTex) {
     // PBR emissive channel drives neon trim glow (WipEout-style edge lighting)
     matParams.emissiveMap = emissiveMapTex;

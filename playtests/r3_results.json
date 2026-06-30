@@ -1,0 +1,405 @@
+{
+  "fix1_webamp_375": {
+    "container": {
+      "exists": true,
+      "display": "none",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    "webamp": {
+      "exists": true,
+      "display": "none",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    }
+  },
+  "fix1_webamp_settings_375": {
+    "container": {
+      "exists": true,
+      "display": "none",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    "webamp": {
+      "exists": true,
+      "display": "none",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    }
+  },
+  "fix1_overlap_settings_375": {
+    "found": true,
+    "overlap": false,
+    "aHidden": true,
+    "bHidden": false,
+    "ra": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+    },
+    "rb": {
+      "x": 68.0390625,
+      "y": 288.8125,
+      "w": 238.921875,
+      "h": 56
+    }
+  },
+  "fix1_webamp_main_1024": {
+    "container": {
+      "exists": true,
+      "display": "none",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    "webamp": {
+      "exists": true,
+      "display": "none",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    }
+  },
+  "fix1_webamp_settings_1024": {
+    "container": {
+      "exists": true,
+      "display": "none",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    "webamp": {
+      "exists": true,
+      "display": "none",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    }
+  },
+  "fix1_overlap_settings_1024": {
+    "found": true,
+    "overlap": false,
+    "aHidden": true,
+    "bHidden": false,
+    "ra": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+    },
+    "rb": {
+      "x": 375.71875,
+      "y": 292,
+      "w": 272.5625,
+      "h": 56
+    }
+  },
+  "fix1_webamp_1920": {
+    "container": {
+      "exists": true,
+      "display": "block",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 0
+      }
+    },
+    "webamp": {
+      "exists": true,
+      "display": "block",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    }
+  },
+  "fix2_success_state": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "success",
+    "activeItem": "next",
+    "itemCount": 2
+  },
+  "fix2_screen_rect": {
+    "x": 0,
+    "y": 0,
+    "w": 1920,
+    "h": 1080,
+    "vw": 1920,
+    "vh": 1080
+  },
+  "fix2_columns_rect": {
+    "x": 600,
+    "y": 131.390625,
+    "w": 720,
+    "h": 280,
+    "computedMaxWidth": "720px"
+  },
+  "fix2_backdrop_filter": {
+    "backdropFilter": "blur(26px)",
+    "background": "rgba(8, 10, 22, 0.55) none repeat scroll 0% 0% / auto padding-box border-box",
+    "position": "absolute",
+    "inset": "0px",
+    "width": "1920px",
+    "height": "1080px"
+  },
+  "fix2_clip": [
+    {
+      "id": "btn-success-next",
+      "cls": "xmb-item btn btn-primary btn-glow",
+      "top": 713,
+      "left": 802,
+      "bottom": 769,
+      "right": 942,
+      "vw": 1920,
+      "vh": 1080,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "fix3_reset_btn": {
+    "found": true,
+    "background": "linear-gradient(135deg, rgb(249, 31, 49) 0%, rgb(203, 11, 59) 100%)",
+    "color": "rgb(255, 255, 255)",
+    "boxShadow": "rgba(255, 0, 50, 0.25) 0px 5px 15px 0px",
+    "rect": {
+      "x": 826.3359375,
+      "y": 687,
+      "w": 200.484375,
+      "h": 42
+    }
+  },
+  "fix3_other_btns": [
+    {
+      "id": "btn-pause-resume",
+      "found": true,
+      "background": "linear-gradient(135deg, rgb(255, 51, 187) 0%, rgb(255, 26, 102) 100%)",
+      "classes": "xmb-item btn btn-primary btn-glow"
+    },
+    {
+      "id": "btn-pause-boat-throttle",
+      "found": false
+    },
+    {
+      "id": "btn-pause-reset-level",
+      "found": true,
+      "background": "linear-gradient(135deg, rgb(249, 31, 49) 0%, rgb(203, 11, 59) 100%)",
+      "classes": "xmb-item btn btn-danger btn-glow"
+    },
+    {
+      "id": "btn-pause-quit",
+      "found": true,
+      "background": "linear-gradient(135deg, rgb(0, 212, 255) 0%, rgb(0, 153, 230) 100%)",
+      "classes": "xmb-item btn btn-secondary"
+    }
+  ],
+  "fix4_visuals_top": {
+    "categoryIndex": 2,
+    "itemIndex": 0,
+    "activeCategory": "visuals",
+    "activeItem": "starfield",
+    "itemCount": 9
+  },
+  "fix4_visuals_top_activeItem": {
+    "y": 292,
+    "h": 56,
+    "cy": 320,
+    "vh": 640
+  },
+  "fix4_visuals_step1": {
+    "y": 292.05303955078125,
+    "h": 55.8939208984375,
+    "cy": 320,
+    "top": 292.05303955078125,
+    "bottom": 347.94696044921875,
+    "label": "SPEED FOV: OFF"
+  },
+  "fix4_visuals_step2": {
+    "y": 292.06658935546875,
+    "h": 55.8668212890625,
+    "cy": 320,
+    "top": 292.06658935546875,
+    "bottom": 347.93341064453125,
+    "label": "GHOST RACER: ON"
+  },
+  "fix4_visuals_step3": {
+    "y": 292.10235595703125,
+    "h": 55.7952880859375,
+    "cy": 320,
+    "top": 292.10235595703125,
+    "bottom": 347.89764404296875,
+    "label": "VIS MODE: SKY"
+  },
+  "fix4_visuals_step4": {
+    "y": 292,
+    "h": 56,
+    "cy": 320,
+    "top": 292,
+    "bottom": 348,
+    "label": "WALL ANGLE\n            \n            45"
+  },
+  "fix4_visuals_step5": {
+    "y": 292,
+    "h": 56,
+    "cy": 320,
+    "top": 292,
+    "bottom": 348,
+    "label": "WALL SPREAD\n            \n            9"
+  },
+  "fix4_visuals_step6": {
+    "y": 292,
+    "h": 56,
+    "cy": 320,
+    "top": 292,
+    "bottom": 348,
+    "label": "WALL HEIGHT\n            \n            300"
+  },
+  "fix4_visuals_step7": {
+    "y": 292,
+    "h": 56,
+    "cy": 320,
+    "top": 292,
+    "bottom": 348,
+    "label": "STAR SIZE\n            \n            100"
+  },
+  "fix4_visuals_step8": {
+    "y": 292,
+    "h": 56,
+    "cy": 320,
+    "top": 292,
+    "bottom": 348,
+    "label": "STAR DENSITY\n            \n            1500"
+  },
+  "fix4_visuals_bottom": {
+    "categoryIndex": 2,
+    "itemIndex": 8,
+    "activeCategory": "visuals",
+    "activeItem": "star-density",
+    "itemCount": 9
+  },
+  "fix4_visuals_clip": [
+    {
+      "id": "settings-xmb-cat-visuals",
+      "cls": "xmb-category",
+      "top": 250,
+      "left": 412,
+      "bottom": 270,
+      "right": 612,
+      "vw": 1024,
+      "vh": 640,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    },
+    {
+      "id": "item-settings-star-density",
+      "cls": "xmb-item settings-xmb-slider",
+      "top": 292,
+      "left": 391,
+      "bottom": 348,
+      "right": 633,
+      "vw": 1024,
+      "vh": 640,
+      "fullyOffscreen": false,
+      "partiallyClipped": false
+    }
+  ],
+  "regress_success_button_rects": {
+    "crossbar": {
+      "x": 40,
+      "y": 441.390625,
+      "w": 1840,
+      "h": 598.609375
+    },
+    "columns": {
+      "x": 600,
+      "y": 131.390625,
+      "w": 720,
+      "h": 280
+    },
+    "crossbarBelowColumns": true
+  },
+  "regress_garage_crossbar_rect": {
+    "found": true,
+    "position": "relative",
+    "rect": {
+      "x": 617.328125,
+      "y": 266.5,
+      "w": 442.65625,
+      "h": 756
+    }
+  },
+  "regress_menu-screen": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "play",
+    "activeItem": "standard",
+    "itemCount": 3
+  },
+  "regress_pause-screen": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "pause",
+    "activeItem": "resume",
+    "itemCount": 5
+  },
+  "regress_death-screen": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "death",
+    "activeItem": "retry",
+    "itemCount": 2
+  },
+  "regress_how-to-screen": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "how-to",
+    "activeItem": "back",
+    "itemCount": 1
+  },
+  "regress_gamepad-config-screen": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "gamepad-config",
+    "activeItem": "forward",
+    "itemCount": 8
+  },
+  "regress_level_screen": {
+    "categoryIndex": 0,
+    "itemIndex": 0,
+    "activeCategory": "group-0",
+    "activeItem": "infinite",
+    "itemCount": 11
+  }
+}

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as THREE from 'three';
 import { buildLevel, TILE_WIDTH, TILE_LENGTH } from '../levelLoader.js';
-import { PhysicsEngine } from '../physics.js';
+import { PhysicsEngine, SHIP_COLLISION_WIDTH } from '../physics.js';
 
 function createMockScene() {
   return { add: vi.fn() };
@@ -184,8 +184,8 @@ describe('Sloped Ramp Physics Engine Mechanics', () => {
 
     physics.update(0.016, keyboard, levelInfo);
 
-    // Verify ship was pushed back to the left of the ramp (X = -1.0 - halfW = -1.0 - 0.3 = -1.3)
-    expect(physics.position.x).toBeLessThanOrEqual(-1.3);
+    // Verify ship was pushed back to the left of the ramp (X = -1.0 - collision halfW)
+    expect(physics.position.x).toBeLessThanOrEqual(-1.0 - SHIP_COLLISION_WIDTH / 2);
     expect(physics.velocity.x).toBe(0);
     expect(physics.triggerWallCollisionAudio).toBe(true);
   });

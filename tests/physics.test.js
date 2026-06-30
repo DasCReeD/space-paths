@@ -4,6 +4,7 @@ import {
   PhysicsEngine,
   KeyboardController,
   SHIP_WIDTH,
+  SHIP_COLLISION_WIDTH,
   SHIP_HEIGHT,
   SHIP_LENGTH,
   TILE_WIDTH,
@@ -732,13 +733,13 @@ describe('PhysicsEngine', () => {
   // ── Slippery Effect ───────────────────────────────────────────────────
 
   describe('Slippery effect', () => {
-    it('should use minimal steering drag (1.0) allowing drift', () => {
+    it('should conserve lateral momentum (zero release-drag) when slippery', () => {
       const slipperyTile = createSpecialTile('slippery');
       const slipperyLevel = createLevelInfo({ specialTiles: [slipperyTile] });
       physics.velocity.x = 5.0;
       physics.update(0.05, keyboard, slipperyLevel);
-      // slippery drag = 1.0 * 0.05 = 0.05
-      expect(physics.velocity.x).toBeCloseTo(5.0 - 1.0 * 0.05, 5);
+      // Ice conserves lateral momentum: steeringDrag = 0, so with no input the slide carries on.
+      expect(physics.velocity.x).toBeCloseTo(5.0, 5);
     });
 
     it('should drift much more than normal when slippery', () => {
@@ -930,8 +931,9 @@ describe('PhysicsEngine', () => {
     it('should compute correct min/max X from position', () => {
       physics.position.set(3.0, 1.0, -5.0);
       const box = physics.getShipBox();
-      expect(box.minX).toBeCloseTo(3.0 - SHIP_WIDTH / 2, 5);
-      expect(box.maxX).toBeCloseTo(3.0 + SHIP_WIDTH / 2, 5);
+      // Hitbox uses the (narrower) collision width, decoupled from the visual SHIP_WIDTH.
+      expect(box.minX).toBeCloseTo(3.0 - SHIP_COLLISION_WIDTH / 2, 5);
+      expect(box.maxX).toBeCloseTo(3.0 + SHIP_COLLISION_WIDTH / 2, 5);
     });
 
     it('should compute correct min/max Y from position', () => {

@@ -1,0 +1,366 @@
+[CONSOLE] error Failed to load resource: the server responded with a status of 404 (Not Found)
+{
+  "1920x1080": {
+    "garage_title_glyph": {
+      "found": true,
+      "left": 339.390625,
+      "right": 760.59375,
+      "top": 179.5,
+      "bottom": 215.5,
+      "text": "HOVERCRAFT GARAGE"
+    },
+    "garage_back_btn_rect": {
+      "found": true,
+      "top": 179.5,
+      "bottom": 206.5,
+      "left": 116,
+      "right": 195.40625,
+      "width": 79.40625,
+      "height": 27,
+      "opacity": "1",
+      "text": "← BACK"
+    },
+    "garage_back_vs_title_overlap": false,
+    "garage_gear_rect": {
+      "found": true,
+      "top": 20,
+      "bottom": 66,
+      "left": 20,
+      "right": 66,
+      "width": 46,
+      "height": 46,
+      "opacity": "1",
+      "text": ""
+    },
+    "garage_back_vs_gear_overlap": false,
+    "garage_header_rect": {
+      "found": true,
+      "top": 179.5,
+      "bottom": 251.5,
+      "left": 40,
+      "right": 1060,
+      "width": 1020,
+      "height": 72,
+      "opacity": "1",
+      "text": "← BACK\n        HOVERCRAFT GARAGE"
+    },
+    "garage_header_flex_direction": "row",
+    "active_category": "paint",
+    "paint_rows": {
+      "found": true,
+      "count": 8,
+      "rows": [
+        {
+          "name": "NO OVERLAY",
+          "focused": true,
+          "width": 300,
+          "height": 50,
+          "borderRadius": "8px",
+          "thumbWidth": 34,
+          "thumbHeight": 34,
+          "left": 688.65625,
+          "right": 988.65625,
+          "top": 616.5,
+          "bottom": 666.5
+        },
+        {
+          "name": "CYBER PINK",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 688.65625,
+          "right": 913.65625,
+          "top": 678.75,
+          "bottom": 716.25
+        },
+        {
+          "name": "NEON CYAN",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 688.65625,
+          "right": 913.65625,
+          "top": 734.75,
+          "bottom": 772.25
+        },
+        {
+          "name": "ELECTRIC LIME",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 688.65625,
+          "right": 913.65625,
+          "top": 790.75,
+          "bottom": 828.25
+        },
+        {
+          "name": "SUN GOLD",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 688.65625,
+          "right": 913.65625,
+          "top": 846.75,
+          "bottom": 884.25
+        },
+        {
+          "name": "BURN ORANGE",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 688.65625,
+          "right": 913.65625,
+          "top": 902.75,
+          "bottom": 940.25
+        },
+        {
+          "name": "DEEP INDIGO",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 688.65625,
+          "right": 913.65625,
+          "top": 958.75,
+          "bottom": 996.25
+        },
+        {
+          "name": "CUSTOM COLOR",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 688.65625,
+          "right": 913.65625,
+          "top": 1014.75,
+          "bottom": 1052.25
+        }
+      ]
+    },
+    "hull_row_sample": {
+      "found": true,
+      "width": 300,
+      "height": 50
+    },
+    "paint_focused_before": "NO OVERLAY",
+    "paint_focused_after_down1": "CYBER PINK",
+    "paint_focused_at_end": "CUSTOM COLOR",
+    "custom_color_row": {
+      "found": true,
+      "width": 300,
+      "height": 50,
+      "name": "CUSTOM COLOR"
+    }
+  },
+  "390x844": {
+    "garage_title_glyph": {
+      "found": true,
+      "left": 42.296875,
+      "right": 328.1875,
+      "top": 62.5,
+      "bottom": 87.5,
+      "text": "HOVERCRAFT GARAGE"
+    },
+    "garage_back_btn_rect": {
+      "found": true,
+      "top": 31.5,
+      "bottom": 58.5,
+      "left": 91,
+      "right": 170.40625,
+      "width": 79.40625,
+      "height": 27,
+      "opacity": "1",
+      "text": "← BACK"
+    },
+    "garage_back_vs_title_overlap": false,
+    "garage_gear_rect": {
+      "found": true,
+      "top": 20,
+      "bottom": 66,
+      "left": 20,
+      "right": 66,
+      "width": 46,
+      "height": 46,
+      "opacity": "1",
+      "text": ""
+    },
+    "garage_back_vs_gear_overlap": false,
+    "garage_header_rect": {
+      "found": true,
+      "top": 31.5,
+      "bottom": 123.5,
+      "left": 15,
+      "right": 355.5,
+      "width": 340.5,
+      "height": 92,
+      "opacity": "1",
+      "text": "← BACK\n        HOVERCRAFT GARAGE"
+    },
+    "garage_header_flex_direction": "column",
+    "active_category": "paint",
+    "paint_rows": {
+      "found": true,
+      "count": 8,
+      "rows": [
+        {
+          "name": "NO OVERLAY",
+          "focused": true,
+          "width": 300,
+          "height": 50,
+          "borderRadius": "8px",
+          "thumbWidth": 34,
+          "thumbHeight": 34,
+          "left": 35.25,
+          "right": 335.25,
+          "top": 650.890625,
+          "bottom": 700.890625
+        },
+        {
+          "name": "CYBER PINK",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 35.25,
+          "right": 260.25,
+          "top": 713.140625,
+          "bottom": 750.640625
+        },
+        {
+          "name": "NEON CYAN",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 35.25,
+          "right": 260.25,
+          "top": 769.140625,
+          "bottom": 806.640625
+        },
+        {
+          "name": "ELECTRIC LIME",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 35.25,
+          "right": 260.25,
+          "top": 825.140625,
+          "bottom": 862.640625
+        },
+        {
+          "name": "SUN GOLD",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 35.25,
+          "right": 260.25,
+          "top": 881.140625,
+          "bottom": 918.640625
+        },
+        {
+          "name": "BURN ORANGE",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 35.25,
+          "right": 260.25,
+          "top": 937.140625,
+          "bottom": 974.640625
+        },
+        {
+          "name": "DEEP INDIGO",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 35.25,
+          "right": 260.25,
+          "top": 993.140625,
+          "bottom": 1030.640625
+        },
+        {
+          "name": "CUSTOM COLOR",
+          "focused": false,
+          "width": 225,
+          "height": 37.5,
+          "borderRadius": "8px",
+          "thumbWidth": 25.5,
+          "thumbHeight": 25.5,
+          "left": 35.25,
+          "right": 260.25,
+          "top": 1049.140625,
+          "bottom": 1086.640625
+        }
+      ]
+    },
+    "hull_row_sample": {
+      "found": true,
+      "width": 300,
+      "height": 50
+    },
+    "paint_focused_before": "NO OVERLAY",
+    "paint_focused_after_down1": "CYBER PINK",
+    "paint_focused_at_end": "CUSTOM COLOR",
+    "custom_color_row": {
+      "found": true,
+      "width": 300,
+      "height": 50,
+      "name": "CUSTOM COLOR"
+    },
+    "level_title_glyph": {
+      "found": true,
+      "left": 87.125,
+      "right": 302.875,
+      "top": 51,
+      "bottom": 76,
+      "text": "STANDARD PACK"
+    },
+    "level_back_btn_rect": {
+      "found": true,
+      "top": 20,
+      "bottom": 47,
+      "left": 91,
+      "right": 170.40625,
+      "width": 79.40625,
+      "height": 27,
+      "opacity": "1",
+      "text": "← BACK"
+    },
+    "level_back_vs_title_overlap": false,
+    "level_header_flex_direction": "column"
+  }
+}

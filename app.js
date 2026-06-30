@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { loadLevelPack, getCachedPack, registerCustomPack } from './levels.js';
 import { GraphicsEngine } from './graphics.js';
 import { PhysicsEngine, KeyboardController, SHIP_LENGTH, LEGACY_MODEL_ALIASES } from './physics.js';
-import { buildLevelAsync, disposeUnusedThemes, getActiveThemeIndex, THEMES, curvatureUniforms } from './levelLoader.js';
+import { buildLevelAsync, disposeUnusedThemes, getActiveThemeIndex, THEMES, curvatureUniforms, buildDeckCeilingLight, buildDeckPillars } from './levelLoader.js';
 import { gameAudio, SYNTHWAVE_TRACK_URLS, SYNTHWAVE_TRACK_NAMES } from './audio.js';
 import { ShipPreviewEngine } from './preview.js';
 import { TouchControlManager } from './touchControls.js';
@@ -5450,6 +5450,19 @@ class GameManager {
     window.currentLevelIndex = worldIdx * 3;
 
     this.graphics.spawnCityScenery(this.levelInfo.trackLength);
+
+    // Tunnel-ceiling lighting for stacked decks: light the underside of any deck
+    // that can have the player beneath it. Deck B (top) sits over A; deck A (mid)
+    // sits over C. The bottom deck C is never ridden under, so it gets none.
+    // Tinted per deck so the roof overhead reads distinctly from the deck you're on.
+    buildDeckCeilingLight(this.levelGroupB, this.infoB.trackLength, { color: 0x3fd0ff });
+    buildDeckCeilingLight(this.levelGroupA, this.infoA.trackLength, { color: 0xff4fb0 });
+
+    // Connecting pillars enclose each deck-pair into a tunnel shell. Parented to
+    // the lower deck (the one you ride), rising the 25-unit gap to the roof above,
+    // tinted to match that roof's ceiling light: A rises to B (cyan), C rises to A (magenta).
+    buildDeckPillars(this.levelGroupA, this.infoA.trackLength, { color: 0x3fd0ff });
+    buildDeckPillars(this.levelGroupC, this.infoC.trackLength, { color: 0xff4fb0 });
 
     this.physics.playStyle = this.playStyle;
     this.physics.activeLevelIndex = 0;

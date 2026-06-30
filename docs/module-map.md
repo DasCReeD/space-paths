@@ -308,6 +308,11 @@
 | `buildLevelAsync(levelData, scene, onProgress, zOffset, isInfinite)` | function | Async level builder with progress callback |
 | `disposeUnusedThemes(activeThemeIndex)` | function | Disposes GPU textures for inactive themes |
 | `getActiveThemeIndex(levelData)` | function | Determines which theme for a level |
+| `getDemoNeonTexture(behavior, colorIndex, col, row, spanX, spanZ)` | function (internal) | Canvas-drawn neon block/grate textures for the Demo Road (level 0); cached under `demo_neon_*` keys (exempt from theme disposal) |
+| `getBiomeProceduralTexture(biomeKey, behavior, colorIndex, col, row, spanX, spanZ, levelIndex)` | function (internal) | Canvas-drawn per-biome tile textures for generated levels (61+); cached under `procedural_biome_*` keys |
+| `BIOME_COLOR_PROFILES` | const array (exported) | Per-biome road/rail/accent color profiles driving procedural texture + material color |
+| `buildDeckCeilingLight(group, trackLength, opts)` | function | Flow/Tower tunnel-ceiling lighting: hangs curvature-shaded emissive light rails + cross-rungs under a stacked deck so the deck below reads as a lit tunnel roof |
+| `buildDeckPillars(group, trackLength, opts)` | function | Flow/Tower tunnel shell: raises a curvature-shaded colonnade (dark columns + emissive trim) from a deck up to the deck above, enclosing the stacked decks into a tunnel |
 | `getCustomAssetUrl(filename)` | function | Resolves custom asset path via import.meta.glob |
 | `getLevelAssetUrl(levelIndex, filename)` | function | Resolves per-level custom asset URL |
 | `getLevelObjUrl(levelIndex, filename)` | function | Resolves per-level OBJ model URL |
@@ -321,6 +326,7 @@
 | `TOTAL_ROAD_WIDTH` | const `14.0` | Total road width |
 
 **Key features added recently:**
+- **Procedural canvas textures:** The Demo Road (level 0) and generated levels (index ≥ 61, or `levelData.isGenerated`) skip the loaded PBR texture pipeline and instead draw tile textures at runtime on a `<canvas>` — `getDemoNeonTexture` for the demo, `getBiomeProceduralTexture` (driven by `BIOME_COLOR_PROFILES`) for the 10 biomes. Both branch off `behavior` (boost/burning/sticky/refill/slippery/tunnel/obstacle) and scale canvas size by the merged shape's `spanX/spanZ`. Test env (`NODE_ENV==='test'` / `__vitest_worker__`) is detected and falls back to the non-procedural path so headless tests stay deterministic. `createTileMaterial` and `adjustBoxUVs` now take `spanX/spanZ` and `levelData`; procedural levels also get vertex-local (0..1) UVs instead of world-space tiling.
 - **Animated Decal Materials:** Added to `scene.userData.animatedDecals` with custom offset speeds (boost/sticky) and pulse modifiers (burning/refill).
 - **Side Rail Strips:** Edge columns on generated levels spawn glowing side rails (`stripMesh.userData.isRailStrip = true`) that fade/pulse based on player distance.
 - **Neon Emissive Optimization:** Emissive intensity on rib highlight cylinders and finish lines scaled to `0.8` to prevent bloom blowouts.

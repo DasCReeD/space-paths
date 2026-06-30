@@ -4,6 +4,299 @@
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
+import { validateTrackQuality, forcedDemand } from './trackQuality.js';
+
+// ==========================================================================
+// TRACK-QUALITY GATE (Bucket A wiring) + SHUFFLE-BAG SELECTION (Bucket B)
+// Offline-only. These never run on the game runtime path — worldBuilder is a
+// standalone Node CLI. See docs/track-quality-spec.md.
+// ==========================================================================
+
+// Reject/regenerate thresholds. Living constants — recalibrate against bot
+// telemetry (Bucket C) once that harness exists.
+const QUALITY_MIN_SCORE = 50;     // below this → regenerate
+const QUALITY_MAX_ATTEMPTS = 6;   // attempts per level before keeping the best
+const SHIP_FORWARD_SPEED = 32;    // physics maxSpeedNormal default (u/s) for D_min
+
+// Chunk-size assertions (Bucket B). The playbook's "4–8 segment chunks" means
+// 4–8 *composed units*, NOT 4–8 grid rows — so we do NOT flag a segment merely for
+// being long. Empirically (segment_library.json) filler chunks run median ~9 / p75
+// ~24 rows and authored signature set-pieces median ~30 (deliberate centerpieces).
+// So: hard-fail only tiny stubs / runaway megachunks; warn only when a NON-signature
+// filler chunk is an outlier (> p75-ish). Signature set-pieces are exempt from the
+// length warn — being long is their job.
+// Cross-bake segment utilization. Counts FINAL (kept) placements per segment id so
+// selection can steer toward even asset usage and we can report coverage. Module-
+// level: one fresh map per `node worldBuilder.js` process (the only bake driver).
+const GLOBAL_SEG_USAGE = new Map();
+
+const CHUNK_MIN_ROWS = 4;
+const CHUNK_SOFT_MAX_ROWS = 28;   // non-signature filler outlier threshold → warn above
+const CHUNK_HARD_MAX_ROWS = 50;   // matches assembleFromSegments candidate filter
+
+/**
+ * Deterministic shuffle-bag for draw-WITHOUT-replacement segment/template
+ * selection (Bucket B). Replaces uniform-with-replacement picking so the same
+ * template can't repeat inside a cooldown window, with drought protection
+ * (long-unseen items get priority) and a hard per-template repeat cap.
+ *
+ * Determinism: every random choice routes through the injected seeded `rng`,
+ * so generation stays fully reproducible.
+ */
+class ShuffleBag {
+  /**
+   * @param {Function} rng seeded RNG (0..1)
+   * @param {object} [opts]
+   * @param {number} [opts.cooldown=4]   min draws before a key may repeat
+   * @param {number} [opts.maxRepeats=3] hard cap on how many times one key may be drawn total
+   * @param {number} [opts.droughtAfter=12] a key unseen for this many draws gets priority
+   */
+  constructor(rng, opts = {}) {
+    this.rng = rng;
+    this.cooldown = opts.cooldown ?? 4;
+    this.maxRepeats = opts.maxRepeats ?? 3;
+    this.droughtAfter = opts.droughtAfter ?? 12;
+    // Optional cross-level evenness: a shared Map(key -> global use count). When
+    // set, draws prefer the globally least-used eligible candidates, so the
+    // regenerate loop can't keep reaching for the same few easy-to-validate
+    // assets and starve the rest of the pool.
+    this.globalUsage = opts.globalUsage || null;
+    this.draws = 0;
+    this.lastSeen = new Map();   // key -> draw index last drawn
+    this.useCount = new Map();   // key -> times drawn
+    this.everSeen = new Set();
+  }
+
+  _key(item, keyFn) { return keyFn ? keyFn(item) : item; }
+
+  /**
+   * Draw one item from `items` (draw-without-replacement semantics via cooldown).
+   * @param {Array} items candidate pool (already filtered for relevance)
+   * @param {Function} [keyFn] item -> template key for cooldown/cap tracking
+   * @returns {*} chosen item, or null if pool empty
+   */
+  draw(items, keyFn) {
+    if (!items || items.length === 0) return null;
+    this.draws++;
+
+    // 1) Eligible = not on cooldown and not over the repeat cap.
+    const eligible = items.filter((it) => {
+      const k = this._key(it, keyFn);
+      const used = this.useCount.get(k) || 0;
+      if (used >= this.maxRepeats) return false;
+      const last = this.lastSeen.get(k);
+      if (last !== undefined && this.draws - last < this.cooldown) return false;
+      return true;
+    });
+
+    // 2) Drought protection: among eligible, items never seen or unseen for a
+    //    long time take priority so the bag empties before repeating.
+    let pool = eligible.length ? eligible : items.filter((it) => {
+      // cooldown relaxed fallback, but still honour the hard repeat cap
+      const used = this.useCount.get(this._key(it, keyFn)) || 0;
+      return used < this.maxRepeats;
+    });
+    if (pool.length === 0) pool = items; // last resort: cap exhausted everywhere
+
+    const fresh = pool.filter((it) => !this.everSeen.has(this._key(it, keyFn)));
+    if (fresh.length) {
+      pool = fresh;
+    } else {
+      const droughted = pool.filter((it) => {
+        const last = this.lastSeen.get(this._key(it, keyFn));
+        return last !== undefined && this.draws - last >= this.droughtAfter;
+      });
+      if (droughted.length) pool = droughted;
+    }
+
+    // 3) Cross-level evenness: narrow to the globally least-used candidates. STRICT —
+    //    a segment can't be reused while a less-used (esp. never-used) alternative is
+    //    available. With a big oversupplied pool (e.g. jumps) this drains the unused
+    //    set before any repeat, maximizing asset coverage.
+    if (this.globalUsage && pool.length > 1) {
+      let minU = Infinity;
+      for (const it of pool) minU = Math.min(minU, this.globalUsage.get(this._key(it, keyFn)) || 0);
+      const leastUsed = pool.filter((it) => (this.globalUsage.get(this._key(it, keyFn)) || 0) <= minU);
+      if (leastUsed.length) pool = leastUsed;
+    }
+
+    const chosen = pool[Math.floor(this.rng() * pool.length)];
+    const k = this._key(chosen, keyFn);
+    this.lastSeen.set(k, this.draws);
+    this.useCount.set(k, (this.useCount.get(k) || 0) + 1);
+    this.everSeen.add(k);
+    return chosen;
+  }
+}
+
+/**
+ * Chunk-size + interface-continuity assertions over the segments that were
+ * actually placed during assembly (Bucket B, task 3). Returns violations in the
+ * same shape as trackQuality so the regenerate gate can act on them.
+ * @param {Array<{id,length,entry,exit,startRow}>} placed ordered placed segments
+ * @returns {Array<{rule,severity,row,detail}>}
+ */
+function auditAssembly(placed) {
+  const violations = [];
+  if (!Array.isArray(placed)) return violations;
+  for (const seg of placed) {
+    if (seg.length < CHUNK_MIN_ROWS) {
+      violations.push({ rule: 'B_chunk_too_small', severity: 'fail', row: seg.startRow ?? -1,
+        detail: `segment ${seg.id} is ${seg.length} rows (< ${CHUNK_MIN_ROWS})` });
+    } else if (seg.length > CHUNK_HARD_MAX_ROWS) {
+      violations.push({ rule: 'B_chunk_too_large', severity: 'fail', row: seg.startRow ?? -1,
+        detail: `segment ${seg.id} is ${seg.length} rows (> ${CHUNK_HARD_MAX_ROWS})` });
+    } else if (!seg.signature && seg.length > CHUNK_SOFT_MAX_ROWS) {
+      // Signature set-pieces are exempt — being long is intentional. Only flag a
+      // non-signature filler chunk that is a genuine length outlier.
+      violations.push({ rule: 'B_chunk_oversized', severity: 'warn', row: seg.startRow ?? -1,
+        detail: `non-signature filler ${seg.id} is ${seg.length} rows (> soft max ${CHUNK_SOFT_MAX_ROWS})` });
+    }
+  }
+  // Interface continuity: adjacent placed segments should stitch (an adapter or
+  // runway may sit between them, but a large raw mismatch with no transition is
+  // a defect). We flag exit→entry width/center jumps that exceed a step.
+  for (let i = 1; i < placed.length; i++) {
+    const prev = placed[i - 1], cur = placed[i];
+    if (!prev.exit || !cur.entry) continue;
+    if (cur.adapted) continue; // an adapter/runway bridged this seam
+    const dw = Math.abs((prev.exit.width || 0) - (cur.entry.width || 0));
+    const dc = Math.abs((prev.exit.center ?? 3) - (cur.entry.center ?? 3));
+    const dh = Math.abs((prev.exit.height || 0) - (cur.entry.height || 0));
+    if (dw > 2 || dc > 2 || dh > 0.1) {
+      violations.push({ rule: 'B_interface_break', severity: 'warn', row: cur.startRow ?? -1,
+        detail: `seam ${prev.id}->${cur.id} mismatch Δw=${dw} Δc=${dc} Δh=${dh.toFixed(2)} with no transition` });
+    }
+  }
+  return violations;
+}
+
+/**
+ * De-pack a level's rows: insert flat "breather" rows wherever two consecutive
+ * FORCED demands (gate / gap / tunnel — the same classification the validator's
+ * A1 lead-in rule uses) sit closer than the reaction-budget distance. This
+ * attacks A1_leadin at the source — the authored segments place hazards too
+ * tightly, and selection alone can't fix what isn't in the pool. Breathers are
+ * cloned from a neighbouring real road row (footprint + road colour preserved)
+ * with all hazard flags stripped, so road width/colour stay continuous and the
+ * level can only get *easier*, never unsolvable.
+ *
+ * Forced runs are collapsed first (a multi-row chasm/tunnel = one demand), so a
+ * long tunnel isn't mistaken for many packed demands. Runs against the same
+ * classifier as `validateTrackQuality`, so de-packing converges on what A1 scores.
+ *
+ * @param {Array<Array<object|null>>} rows
+ * @param {{speed?:number}} [opts]
+ * @returns {Array} new rows array (or the original if nothing needed spacing)
+ */
+function depackRows(rows, opts = {}) {
+  if (!Array.isArray(rows) || rows.length < 3) return rows;
+  const speed = opts.speed || SHIP_FORWARD_SPEED;
+  const minGapSingle = Math.ceil((speed * 0.5) / TILE_LENGTH); // ~4 rows @ speed 32
+  const minGapChoice = Math.ceil((speed * 0.7) / TILE_LENGTH); // ~6 rows @ speed 32
+
+  // Collapse consecutive same-type forced rows into single demands.
+  const forced = [];
+  let run = null;
+  for (let r = 0; r < rows.length; r++) {
+    const f = forcedDemand(rows[r]);
+    if (!f) { run = null; continue; }
+    if (run && run.type === f.type && r === run.endRow + 1) { run.endRow = r; continue; }
+    run = { row: r, endRow: r, type: f.type, choice: f.choice };
+    forced.push(run);
+  }
+
+  // How many breathers to insert AFTER each demand's last row.
+  const insertAfter = new Map();
+  for (let i = 1; i < forced.length; i++) {
+    const gap = forced[i].row - forced[i - 1].endRow;
+    const need = forced[i].choice ? minGapChoice : minGapSingle;
+    if (gap < need) {
+      const endIdx = forced[i - 1].endRow;
+      insertAfter.set(endIdx, (insertAfter.get(endIdx) || 0) + (need - gap));
+    }
+  }
+  if (insertAfter.size === 0) return rows;
+
+  // Plain-road version of a template row: keep footprint + bottom colour, drop hazards.
+  const breatherFrom = (row) => row.map((t) => (t ? { ...t, full: false, half: false, tunnel: false, ramp: false, top_color: 0 } : null));
+  const pickTemplate = (r) => {
+    // Prefer the road row right after the demand; fall back to scanning outward.
+    for (const idx of [r + 1, r, r + 2, r - 1]) {
+      const row = rows[idx];
+      if (row && !forcedDemand(row) && row.some((t) => t)) return row;
+    }
+    return null;
+  };
+
+  const out = [];
+  for (let r = 0; r < rows.length; r++) {
+    out.push(rows[r]);
+    const add = insertAfter.get(r);
+    if (add) {
+      const tpl = pickTemplate(r);
+      for (let k = 0; k < add; k++) out.push(tpl ? breatherFrom(tpl) : createRoadRow(1));
+    }
+  }
+  return out;
+}
+
+/**
+ * Summarize cross-bake segment utilization for the coverage report. Stats are over
+ * the FULL pool (never-used assets count as 0 uses) so the evenness numbers are
+ * honest. Pure function — the bake logs/writes it; tests assert on the shape.
+ * @param {Map} usage  segment id -> times placed in a kept level
+ * @param {Array} allIds  every segment id available in the pool
+ * @returns {{poolSize,usedCount,neverUsed,totalPlacements,mean,sd,cv,maxUses,top,overused,neverUsedIds}}
+ */
+function summarizeSegmentUsage(usage, allIds) {
+  const ids = Array.isArray(allIds) && allIds.length ? allIds : [...usage.keys()];
+  const counts = ids.map((id) => usage.get(id) || 0);
+  const n = counts.length || 1;
+  const total = counts.reduce((a, b) => a + b, 0);
+  const mean = total / n;
+  const sd = Math.sqrt(counts.reduce((a, b) => a + (b - mean) ** 2, 0) / n);
+  const cv = mean > 0 ? sd / mean : 0;
+  const sorted = [...usage.entries()].sort((a, b) => b[1] - a[1]);
+  const neverUsedIds = ids.filter((id) => !(usage.get(id) > 0));
+  const overused = sorted.filter(([, c]) => c > mean * 2 && c >= 3);
+  return {
+    poolSize: n,
+    usedCount: usage.size,
+    neverUsed: neverUsedIds.length,
+    totalPlacements: total,
+    mean: +mean.toFixed(2),
+    sd: +sd.toFixed(2),
+    cv: +cv.toFixed(2),
+    maxUses: sorted.length ? sorted[0][1] : 0,
+    top: sorted.slice(0, 6),
+    overused,
+    neverUsedIds,
+  };
+}
+
+/**
+ * Combined quality assessment for the regenerate gate. Runs the Bucket-A static
+ * validator and folds in any assembly-time (Bucket B) violations carried on the
+ * level object (levelData.__assembly). Returns a single score/pass verdict.
+ */
+function assessLevelQuality(levelData) {
+  const rows = levelData.rows;
+  const tq = validateTrackQuality(rows, { speed: SHIP_FORWARD_SPEED });
+  const asm = auditAssembly(levelData.__assembly || []);
+  const violations = [...tq.violations, ...asm];
+  const failCount = violations.filter((v) => v.severity === 'fail').length;
+  const warnCount = violations.length - failCount;
+  // Re-derive score including assembly violations (same weights as trackQuality).
+  const score = Math.max(0, 100 - failCount * 12 - warnCount * 4);
+  const pass = score >= QUALITY_MIN_SCORE && failCount === 0;
+  // Top offending rules for concise logging.
+  const tally = {};
+  for (const v of violations) tally[v.rule] = (tally[v.rule] || 0) + 1;
+  const topRules = Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 3)
+    .map(([r, c]) => `${r}×${c}`);
+  return { score, pass, violations, failCount, warnCount, topRules };
+}
 
 function createRng(seed) {
   let a = seed;
@@ -1310,18 +1603,91 @@ function generateCustomSegments(rng) {
  * Bake custom segments into data/segment_library.json. Idempotent: strips any
  * prior custom entries first, so re-running never bloats the pool.
  */
+/** Count distinct gaps (jump opportunities) in a segment's rows. */
+function _countGaps(seg) {
+  let gaps = 0, prev = false;
+  for (const row of seg.rows || []) {
+    const g = row.every((t) => t == null);
+    if (g && !prev) gaps++;
+    prev = g;
+  }
+  return gaps;
+}
+
+/** A safe road bridge connecting one segment's exit to the next's entry, at least
+ *  `minLen` rows so the fused gaps stay D_min-spaced (no internal A1 packing). */
+function _fuseBridge(exitIface, entryIface, minLen) {
+  const rows = slotBuildAdapter(exitIface, entryIface, 1);
+  const c = clamp(Math.round(entryIface.center ?? 3), 1, 5);
+  const w = Math.max(3, entryIface.width || 5);
+  while (rows.length < minLen) rows.push(createRoadRow(c, w, 1));
+  return rows;
+}
+
+/**
+ * Fuse pairs of small single-gap jump segments into longer, D_min-spaced multi-gap
+ * segments. The game ships ~252 jump chunks against ~10 jump slots — a huge
+ * oversupply of tiny pieces. Fusing them (a) shrinks the pool toward demand, (b)
+ * makes longer segments that fit slot target lengths far better, and (c) turns
+ * single hops into rhythm `gap_run`s (reclassified on load). Every fusion is
+ * validated solvable; unsolvable ones are skipped. Deterministic (index-ordered).
+ * @returns {Array} new pool with consumed singles removed and fusions added
+ */
+function fuseJumpSegments(pool, opts = {}) {
+  const minBridge = opts.minBridge ?? 5;   // ≈ D_min at speed 32 (16u / 4)
+  const maxFusions = opts.maxFusions ?? 40;
+  const gravity = opts.gravity ?? 8;
+  const smalls = pool.filter((s) => s.category === 'jump' && Array.isArray(s.rows) &&
+    s.rows.length <= 8 && _countGaps(s) === 1 &&
+    !(typeof s.id === 'string' && (s.id.startsWith('custom:') || s.id.startsWith('fused:'))));
+  const fused = [];
+  const consumed = new Set();
+  let made = 0;
+  for (let i = 0; i + 1 < smalls.length && made < maxFusions; i += 2) {
+    const a = smalls[i], b = smalls[i + 1];
+    const bridge = _fuseBridge(a.exit || { width: 5, center: 3, height: 0 }, b.entry || { width: 5, center: 3, height: 0 }, minBridge);
+    const rows = [
+      ...a.rows.map((r) => r.map((t) => (t ? { ...t } : null))),
+      ...bridge,
+      ...b.rows.map((r) => r.map((t) => (t ? { ...t } : null))),
+    ];
+    if (!_segmentSolvable(rows, gravity)) continue;
+    const first = rows.find((r) => r.some((t) => t)) || rows[0];
+    const last = [...rows].reverse().find((r) => r.some((t) => t)) || rows[rows.length - 1];
+    fused.push({
+      id: `fused:${a.id}+${b.id}`, source: 'fused', biome: a.biome || null,
+      category: 'jump', // reclassifies to gap_run on load (now 2 gaps)
+      difficulty: Math.max(a.difficulty || 3, b.difficulty || 3),
+      signature: false, length: rows.length,
+      entry: computeInterface(first), exit: computeInterface(last), rows,
+    });
+    consumed.add(a.id); consumed.add(b.id); made++;
+  }
+  if (!made) return pool;
+  return pool.filter((s) => !consumed.has(s.id)).concat(fused);
+}
+
 function enrichSegmentPool() {
   const libPath = path.resolve('data/segment_library.json');
   let pool = [];
   try { pool = JSON.parse(fs.readFileSync(libPath, 'utf8')); } catch (e) { /* start fresh */ }
-  pool = pool.filter(s => !(typeof s.id === 'string' && s.id.startsWith('custom:')));
+  // Strip prior generated entries so re-running never bloats the pool (idempotent).
+  pool = pool.filter(s => !(typeof s.id === 'string' && (s.id.startsWith('custom:') || s.id.startsWith('fused:'))));
   const rng = createRng(0xC0FFEE);
   const custom = generateCustomSegments(rng);
-  pool = pool.concat(custom);
-  fs.writeFileSync(libPath, JSON.stringify(pool, null, 2), 'utf8');
-  _segmentLibraryCache = null; // force reload of the enriched pool during the bake
-  console.log(`Pool enriched: +${custom.length} custom signature segments (pool total ${pool.length}).`);
-  return pool;
+  // The PERSISTED pool is base + custom ONLY. Fusion is applied to an in-memory copy
+  // for the build and is NOT written back: fuseJumpSegments CONSUMES the small jump
+  // originals it fuses, and the strip above only restores custom:/fused: ids — so
+  // persisting the fused result permanently erodes the library across runs (this is
+  // what drove base 489 → 331 over repeated bakes). Writing base+custom keeps
+  // enrichment fully idempotent; fuseJumpSegments returns a new array without mutating
+  // `base`, so the persisted copy stays intact.
+  const base = pool.concat(custom);
+  const enriched = fuseJumpSegments(base);
+  fs.writeFileSync(libPath, JSON.stringify(base, null, 2), 'utf8');
+  _segmentLibraryCache = reclassifyJumps(enriched); // build uses the fused pool, in-memory only
+  console.log(`Pool enriched: +${custom.length} custom, fused jumps ${base.length}→${enriched.length} (persisted base ${base.length}, build pool ${enriched.length}).`);
+  return _segmentLibraryCache;
 }
 
 // ==========================================================================
@@ -1845,11 +2211,52 @@ function generateVoidLevel(levelIndex, difficulty, seed) {
 // ==========================================================================
 
 /** Cache the segment library so we only read disk once */
+// Jump is the biggest pillar of the game (jump + steer) but shipped as one
+// 252-strong category — too coarse to design with, and so oversupplied that most
+// members never get drawn. Split it by what the player actually DOES, read off
+// the gap shape, so blueprints can request jump *types* the way they request
+// steering types:
+//   hop            — one short gap (≤2 wide), easy → the connective "glue"
+//   precision_jump — one short gap but harder (difficulty ≥4) → a deliberate test
+//   leap           — one wide gap (≥3 wide) → a committed long jump (feature/climax)
+//   gap_run        — multiple gaps in sequence → rhythm jumping
+const JUMP_FAMILY = new Set(['hop', 'precision_jump', 'leap', 'gap_run']);
+
+function jumpSubcategory(seg) {
+  let maxRun = 0, run = 0, gaps = 0, prevGap = false;
+  for (const row of seg.rows || []) {
+    const g = row.every((t) => t == null);
+    if (g) { run++; if (run > maxRun) maxRun = run; if (!prevGap) gaps++; } else run = 0;
+    prevGap = g;
+  }
+  if (gaps >= 2) return 'gap_run';
+  if (maxRun >= 3) return 'leap';
+  if ((seg.difficulty || 0) >= 4) return 'precision_jump';
+  return 'hop';
+}
+
+/** Does a segment's category satisfy a slot tag? A `jump` slot matches any
+ * jump-family subtype (back-compat for blueprints that still say 'jump'). */
+function categoryMatches(segCat, slotTag) {
+  if (segCat === slotTag) return true;
+  if (slotTag === 'jump' && JUMP_FAMILY.has(segCat)) return true;
+  return false;
+}
+
+/** Re-tag every monolithic 'jump' segment into its jump-family subtype (in place). */
+function reclassifyJumps(pool) {
+  if (!Array.isArray(pool)) return pool;
+  for (const s of pool) {
+    if (s && s.category === 'jump' && Array.isArray(s.rows)) s.category = jumpSubcategory(s);
+  }
+  return pool;
+}
+
 let _segmentLibraryCache = null;
 function getSegmentLibrary() {
   if (!_segmentLibraryCache) {
     const libPath = path.resolve('data/segment_library.json');
-    _segmentLibraryCache = JSON.parse(fs.readFileSync(libPath, 'utf8'));
+    _segmentLibraryCache = reclassifyJumps(JSON.parse(fs.readFileSync(libPath, 'utf8')));
   }
   return _segmentLibraryCache;
 }
@@ -1864,7 +2271,7 @@ function assembleFromSegments(config) {
     levelIndex, difficulty, seed, biome, name,
     gravity, fuel, oxygen, targetRows,
     diffRange = [1, 5],
-    categoryPrefs = ['slalom', 'jump', 'narrow_passage', 'tunnel', 'obstacle_course', 'mixed', 'hazard_zone', 'speed_section'],
+    categoryPrefs = ['slalom', 'hop', 'gap_run', 'narrow_passage', 'tunnel', 'obstacle_course', 'leap', 'mixed', 'hazard_zone', 'speed_section'],
     refillSpacing = 30,
     roadColor = 1,
     postProcess = null,
@@ -1911,6 +2318,16 @@ function assembleFromSegments(config) {
   let lastCategory = '', sameCategoryCount = 0;
   let lastExit = { width: 5, lanes: [1,2,3,4,5], height: 0, center: 3 };
 
+  // Bucket B: shuffle-bag for category selection so the same category can't
+  // repeat inside a cooldown window (drought-protected, repeat-capped). Keyed by
+  // category string. Deterministic w.r.t. the seeded rng.
+  const catBag = new ShuffleBag(rng, { cooldown: 2, maxRepeats: 4, droughtAfter: 6 });
+  // And a second bag over concrete segment ids, so individual templates don't
+  // recur within the cooldown window (≥4 segments) — replaces uniform-with-
+  // replacement picking from the top-N interface-matched candidates.
+  const segBag = new ShuffleBag(rng, { cooldown: 4, maxRepeats: 1, droughtAfter: 12, globalUsage: GLOBAL_SEG_USAGE });
+  const placed = []; // assembly metadata for chunk/interface assertions
+
   addStartRunway(state, 5, roadColor, rngInt(rng, 10, 14));
 
   while (state.rows.length < targetRows - 15) {
@@ -1919,7 +2336,7 @@ function assembleFromSegments(config) {
     if (catPool.length === 0) catPool = availableCategories;
     if (catPool.length === 0) break;
 
-    const category = rngChoice(rng, catPool);
+    const category = catBag.draw(catPool) ?? rngChoice(rng, catPool);
     const catSegments = byCategory[category] || [];
     if (catSegments.length === 0) continue;
 
@@ -1933,25 +2350,33 @@ function assembleFromSegments(config) {
     }
 
     const topN = scored.slice(0, Math.min(5, scored.length));
-    const pick = rngChoice(rng, topN);
+    // Shuffle-bag draw over the interface-matched top-N (no template repeats
+    // within the cooldown window); fall back to nearest if the bag is exhausted.
+    const pick = segBag.draw(topN, (p) => p.segment.id) ?? topN[0];
     const seg = pick.segment;
 
     if (state.rows.length + seg.length > targetRows + 30) {
       const shorter = topN.filter(s => state.rows.length + s.segment.length <= targetRows + 20);
       if (shorter.length === 0) break;
-      const sp = rngChoice(rng, shorter);
-      if (sp.distance > 2) for (const row of buildAdapter(lastExit, sp.segment.entry)) state.rows.push(row);
+      const sp = segBag.draw(shorter, (p) => p.segment.id) ?? shorter[0];
+      const adapted = sp.distance > 2;
+      if (adapted) for (const row of buildAdapter(lastExit, sp.segment.entry)) state.rows.push(row);
       addRunway(state, rngInt(rng, 3, 5), Math.max(3, sp.segment.entry.width || 4), roadColor);
+      placed.push({ id: sp.segment.id, length: sp.segment.length, entry: sp.segment.entry,
+        exit: sp.segment.exit, startRow: state.rows.length, adapted: true, signature: !!sp.segment.signature });
       for (const row of sp.segment.rows) state.rows.push(row.map(t => t ? { ...t } : null));
       usedSegmentIds.add(sp.segment.id);
       lastExit = sp.segment.exit;
       break;
     }
 
-    if (pick.distance > 2) for (const row of buildAdapter(lastExit, seg.entry)) state.rows.push(row);
+    const adapted = pick.distance > 2;
+    if (adapted) for (const row of buildAdapter(lastExit, seg.entry)) state.rows.push(row);
 
     const transLen = rngInt(rng, 3, 6);
     addRunway(state, transLen, Math.max(3, seg.entry.width || 4), roadColor);
+    placed.push({ id: seg.id, length: seg.length, entry: seg.entry, exit: seg.exit,
+      startRow: state.rows.length, adapted: true, signature: !!seg.signature });
 
     const refillRow = state.rows.length - Math.floor(transLen / 2);
     if (refillRow >= 0 && refillRow < state.rows.length) {
@@ -2008,7 +2433,7 @@ function assembleFromSegments(config) {
   }
 
   normalizeRows(state.rows);
-  return { level_index: levelIndex, name, gravity, fuel, oxygen, palette: PALETTES[biome], rows: state.rows };
+  return { level_index: levelIndex, name, gravity, fuel, oxygen, palette: PALETTES[biome], rows: state.rows, __assembly: placed };
 }
 
 // ==========================================================================
@@ -2058,10 +2483,22 @@ function slotBuildAdapter(exitIface, entryIface, roadColor) {
 }
 
 /** Pick the best pool segment for a blueprint slot (uniform pick step). */
-function pickSegmentForSlot(pool, slot, biome, diffRange, lastExit, usedIds, rng) {
+// TODO (Bucket B, task 4 — three-beat phrase grammar, NOT YET IMPLEMENTED):
+// A setup→challenge→recovery cadence would require segments in
+// data/segment_library.json to carry a `role` tag ('setup'|'challenge'|'recovery').
+// The current schema has no such field (keys: id, source, length, category,
+// difficulty, entry, exit, rows; custom entries add source:'custom'+biome+signature).
+// Implementing it fragile-free needs either (a) an offline pass that classifies
+// each pooled segment's role from its intensity profile via trackQuality's
+// computeIntensity (peak/forced-demand density → challenge; low flat → recovery;
+// rising → setup) and bakes a `role` field, or (b) authored role tags in the
+// segment extractor. Once roles exist, gate selection here so a 'challenge' draw
+// forces a 'recovery' before the next 'challenge'. Deferred to avoid inventing a
+// brittle heuristic; see final report.
+function pickSegmentForSlot(pool, slot, biome, diffRange, lastExit, usedIds, rng, segBag = null) {
   const [minDiff, maxDiff] = diffRange;
   let cands = pool.filter(s =>
-    s.category === slot.tag && s.rows && s.length >= 4 &&
+    categoryMatches(s.category, slot.tag) && s.rows && s.length >= 4 &&
     s.difficulty >= minDiff - 1 && s.difficulty <= maxDiff + 1 &&
     !usedIds.has(s.id));
 
@@ -2078,11 +2515,69 @@ function pickSegmentForSlot(pool, slot, biome, diffRange, lastExit, usedIds, rng
   if (cands.length === 0) return null;
 
   const target = slot.rows || 24;
-  const scored = cands
+  // Group-based draw (Bucket B widening): when a bag is supplied, draw from the
+  // WHOLE eligible group ("I need a `tag` segment → pick one from that group"),
+  // not just the 5 best-fitting candidates. The shuffle-bag's global-usage bias
+  // then spreads picks across the entire group instead of hammering the few that
+  // happen to fit the running interface, so dormant assets actually get used. Any
+  // interface gap is bridged by the adapter (and smoothed by the revision pass).
+  // A light length-band keeps slot sizing sane without collapsing back to top-N.
+  const band = cands.filter(s => Math.abs(s.length - target) <= Math.max(12, target * 0.6));
+  const group = band.length >= 3 ? band : cands;
+  if (segBag) {
+    const pick = segBag.draw(group, (s) => s.id);
+    if (pick) return pick;
+  }
+  // Deterministic fallback (no bag): best interface+length fit.
+  const scored = group
     .map(s => ({ s, d: slotInterfaceDistance(lastExit, s.entry) + Math.abs(s.length - target) * 0.5 }))
     .sort((a, b) => a.d - b.d);
-  const topN = scored.slice(0, Math.min(5, scored.length));
-  return rngChoice(rng, topN).s;
+  return rngChoice(rng, scored.slice(0, Math.min(5, scored.length))).s;
+}
+
+/**
+ * Revision pass (multi-pass assembly) — the part that makes this work like a real
+ * level designer instead of a single perfect pass. After segments are *planned*
+ * for each slot, walk the seams; wherever the next segment fits the previous one
+ * badly (interface distance over `threshold`), examine the PREVIOUS segment and
+ * try to swap it for an alternative from its own group that stitches better to
+ * BOTH its neighbours. Greedy, bounded sweeps; deterministic (picks max seam
+ * improvement, no rng). Purely reorders *selection*; materialization is unchanged.
+ *
+ * @param {Array<{slot,seg}>} plan  seg is a segment object, 'runway', or null
+ * @param {(slot:object, excludeIds:Set)=>Array} getAlternatives  group candidates for a slot
+ * @param {{threshold?:number, sweeps?:number}} [opts]
+ * @returns {{plan, swaps}}
+ */
+function reviseSegmentPlan(plan, getAlternatives, opts = {}) {
+  const threshold = opts.threshold ?? 8;
+  const sweeps = opts.sweeps ?? 2;
+  const FULL = { width: 5, center: 3, height: 0 };
+  const isSeg = (e) => e && e.seg && e.seg !== 'runway';
+  const exitOf = (e) => (isSeg(e) && e.seg.exit) ? e.seg.exit : FULL;
+  let swaps = 0;
+  for (let s = 0; s < sweeps; s++) {
+    let changed = false;
+    for (let i = 1; i < plan.length; i++) {
+      const cur = plan[i], prev = plan[i - 1];
+      if (!isSeg(cur) || !isSeg(prev)) continue;
+      const seam = slotInterfaceDistance(prev.seg.exit || FULL, cur.seg.entry || FULL);
+      if (seam <= threshold) continue;
+      const prevPrevExit = i >= 2 ? exitOf(plan[i - 2]) : FULL;
+      const oldBefore = slotInterfaceDistance(prevPrevExit, prev.seg.entry || FULL);
+      const excl = new Set(plan.filter(isSeg).map((p) => p.seg.id));
+      let best = null, bestGain = 1e-9;
+      for (const alt of (getAlternatives(prev.slot, excl) || [])) {
+        const nb = slotInterfaceDistance(prevPrevExit, alt.entry || FULL);
+        const na = slotInterfaceDistance(alt.exit || FULL, cur.seg.entry || FULL);
+        const gain = (oldBefore + seam) - (nb + na);
+        if (gain > bestGain) { bestGain = gain; best = alt; }
+      }
+      if (best) { prev.seg = best; swaps++; changed = true; }
+    }
+    if (!changed) break;
+  }
+  return { plan, swaps };
 }
 
 /**
@@ -2148,24 +2643,41 @@ function buildLevelFromBlueprint(cfg) {
   const usedIds = new Set();
   let lastExit = { ...FULL_EXIT };
 
-  // Lay down a single blueprint slot (uniform pick step).
-  const placeSlot = (slot) => {
+  // Bucket B: shuffle-bag over concrete segment ids so the same template doesn't
+  // recur within the cooldown window across all slot picks. Deterministic.
+  const segBag = new ShuffleBag(rng, { cooldown: 4, maxRepeats: 1, droughtAfter: 12, globalUsage: GLOBAL_SEG_USAGE });
+  const placed = []; // assembly metadata for chunk/interface assertions
+
+  // Group candidates for a slot (used by the revision pass to find alternatives).
+  const getAlternatives = (slot, excludeIds) => pool.filter((s) =>
+    categoryMatches(s.category, slot.tag) && s.rows && s.length >= 4 &&
+    s.difficulty >= diffRange[0] - 1 && s.difficulty <= diffRange[1] + 1 &&
+    !excludeIds.has(s.id) && (slot.signature ? s.source === 'custom' : true));
+
+  // Lay down a single blueprint slot. `chosenSeg` (when provided) is a segment
+  // already selected + revised in the planning pass; otherwise pick one now.
+  const placeSlot = (slot, chosenSeg) => {
     if (slot.tag === 'runway') {
       addRunway(state, slot.rows || 10, 5, roadColor);
       lastExit = { ...FULL_EXIT };
       return;
     }
-    const seg = pickSegmentForSlot(pool, slot, biome, diffRange, lastExit, usedIds, rng);
+    const seg = chosenSeg !== undefined
+      ? chosenSeg
+      : pickSegmentForSlot(pool, slot, biome, diffRange, lastExit, usedIds, rng, segBag);
     if (!seg) {
       // No pool match — keep the arc intact with a runway of the slot's length.
       addRunway(state, Math.max(6, slot.rows || 12), 5, roadColor);
       lastExit = { ...FULL_EXIT };
       return;
     }
-    if (slotInterfaceDistance(lastExit, seg.entry) > 2) {
+    const adapted = slotInterfaceDistance(lastExit, seg.entry) > 2;
+    if (adapted) {
       for (const row of slotBuildAdapter(lastExit, seg.entry, roadColor)) state.rows.push(row);
     }
     addRunway(state, rngInt(rng, 2, 4), Math.max(3, seg.entry.width || 4), roadColor);
+    placed.push({ id: seg.id, length: seg.length, entry: seg.entry, exit: seg.exit,
+      startRow: state.rows.length, adapted: true, signature: !!seg.signature });
     for (const row of seg.rows) state.rows.push(row.map(t => (t ? { ...t } : null)));
     usedIds.add(seg.id);
     lastExit = seg.exit || { ...FULL_EXIT };
@@ -2187,9 +2699,28 @@ function buildLevelFromBlueprint(cfg) {
   // Filler categories for length top-up: reuse the blueprint's own filler tags
   // (real extracted chunks; never the signature set-pieces).
   const fillerTags = [...new Set(bodySlots.filter(s => !s.signature && s.tag !== 'runway').map(s => s.tag))];
-  const fillerPool = fillerTags.length ? fillerTags : ['slalom', 'jump', 'narrow_passage', 'mixed'];
+  // 'hop' is the universal connective glue (easy single jumps, biome-agnostic) so
+  // every level shares a common jump vocabulary; mixed with light steering fillers.
+  const glueTags = ['hop', 'slalom', 'narrow_passage', 'gap_run', 'precision_jump'];
+  const fillerPool = [...new Set([...glueTags, ...fillerTags])];
 
-  for (const slot of preClimax) placeSlot(slot);
+  // Multi-pass assembly for the authored backbone: (1) PLAN — pick a segment per
+  // slot (group-based draw, threading the running interface); (2) REVISE — swap
+  // poorly-fitting segments by examining the previous one; (3) MATERIALIZE.
+  let planExit = { ...FULL_EXIT };
+  const plan = [];
+  for (const slot of preClimax) {
+    if (slot.tag === 'runway') { plan.push({ slot, seg: 'runway' }); planExit = { ...FULL_EXIT }; continue; }
+    const seg = pickSegmentForSlot(pool, slot, biome, diffRange, planExit, usedIds, rng, segBag);
+    if (seg) usedIds.add(seg.id);
+    plan.push({ slot, seg: seg || null });
+    planExit = seg && seg.exit ? seg.exit : { ...FULL_EXIT };
+  }
+  reviseSegmentPlan(plan, getAlternatives, { threshold: 8, sweeps: 2 });
+  for (const { slot, seg } of plan) {
+    if (slot.tag === 'runway') placeSlot(slot);
+    else placeSlot(slot, seg);
+  }
 
   if (targetRows > 0) {
     const reserve = 48; // room for the climax segment + the short safe finish
@@ -2246,7 +2777,7 @@ function buildLevelFromBlueprint(cfg) {
   }
 
   normalizeRows(state.rows);
-  return { level_index: levelIndex, name, gravity, fuel, oxygen, palette: PALETTES[biome], rows: state.rows };
+  return { level_index: levelIndex, name, gravity, fuel, oxygen, palette: PALETTES[biome], rows: state.rows, __assembly: placed };
 }
 
 /** Per-biome build config: road color, refill cadence, difficulty windows, flavor pass. */
@@ -2541,6 +3072,7 @@ function bakeAllWorlds() {
 
   const OUT_PATH = path.resolve('data/generated_levels.json');
   let generatedLevels = [];
+  const failedIndices = []; // levels that couldn't regenerate; keep their prior version
 
   // Always load existing levels so we can upsert in place. This preserves any
   // out-of-range entries (e.g. the audio-generated level 91) across a full bake.
@@ -2588,16 +3120,42 @@ function bakeAllWorlds() {
     let success = false;
     let levelData = null;
 
+    // Track the best solvable-but-sub-threshold candidate so that if no attempt
+    // clears the quality bar we still emit the strongest one we found.
+    let best = null; // { levelData, quality, seed }
+    let qualityAttempts = 0;
+
     while (!success && attempts < 1000) {
       try {
         levelData = generator(levelIndex, l, seed);
-        
+
+        // De-pack: space out forced demands that the authored segments placed too
+        // tightly, before checkpoints/solve so the quality gate scores the spaced
+        // rows. (__assembly describes the pre-depack composition; the chunk audit
+        // uses lengths/interfaces which de-packing leaves intact.)
+        levelData.rows = depackRows(levelData.rows, { speed: SHIP_FORWARD_SPEED });
+
         // Inject checkpoints
         injectCheckpoints(levelData);
 
         // Run the static solver to verify complete traversability
         if (solveLevel(levelData)) {
-          success = true;
+          // Bucket-A reject/regenerate gate: a solvable level must also clear the
+          // track-quality bar. We keep the best-scoring solvable attempt and stop
+          // either on a pass or after QUALITY_MAX_ATTEMPTS solvable tries.
+          qualityAttempts++;
+          const quality = assessLevelQuality(levelData);
+          if (!best || quality.score > best.quality.score) {
+            best = { levelData, quality, seed };
+          }
+          if (quality.pass || qualityAttempts >= QUALITY_MAX_ATTEMPTS) {
+            // Use the best attempt seen (could be this one or an earlier higher score).
+            levelData = best.levelData;
+            success = true;
+          } else {
+            seed += 17;
+            attempts++;
+          }
         } else {
           seed += 17;
           attempts++;
@@ -2608,17 +3166,66 @@ function bakeAllWorlds() {
       }
     }
 
+    // Salvage: if we burned the iteration budget without reaching a pass or 6
+    // solvable attempts, but DID find at least one solvable level along the way,
+    // keep the best of those rather than discarding it. (Fixes levels like PULSE
+    // III where most seeds don't solve, so 6 quality attempts never accumulate.)
+    if (!success && best) {
+      levelData = best.levelData;
+      success = true;
+    }
+
     if (success) {
+      const q = best ? best.quality : null;
+      if (q) {
+        const verdict = q.pass ? 'PASS' : 'BEST(sub-threshold)';
+        console.log(`  Quality: ${verdict} score=${q.score} after ${qualityAttempts} attempt(s)` +
+          (q.topRules.length ? ` top=[${q.topRules.join(', ')}]` : ''));
+      }
+      seed = (best && best.seed) || seed;
+      // Record FINAL placements into the cross-bake usage map (kept level only, not
+      // discarded attempts) so utilization stays even and we can report coverage.
+      if (Array.isArray(levelData.__assembly)) {
+        for (const seg of levelData.__assembly) {
+          if (seg && seg.id != null) GLOBAL_SEG_USAGE.set(seg.id, (GLOBAL_SEG_USAGE.get(seg.id) || 0) + 1);
+        }
+      }
       // Upsert by index: replace in place if present, otherwise insert. Keeps
       // unrelated entries (e.g. audio level 91) intact for both bake modes.
+      delete levelData.__assembly; // strip internal assembly metadata before persisting
       const existingIdx = generatedLevels.findIndex(lvl => lvl.level_index === levelIndex);
       if (existingIdx >= 0) generatedLevels[existingIdx] = levelData;
       else generatedLevels.push(levelData);
       console.log(`  Level ${levelIndex} (Attempt ${attempts + 1}): PLAYABLE. Seed = ${seed}`);
     } else {
-      console.error(`  Level ${levelIndex} Failed to solve playability after 1000 iterations!`);
-      process.exit(1);
+      // A single level failing to solve must NOT abort the whole bake and lose all
+      // prior work before the write. Keep the existing level for this index (if one
+      // was loaded), warn, and continue. Track it so the run summary is honest.
+      console.error(`  Level ${levelIndex} Failed to solve playability after 1000 iterations! Keeping previous version.`);
+      failedIndices.push(levelIndex);
+      if (!generatedLevels.some(lvl => lvl.level_index === levelIndex)) {
+        console.error(`  Level ${levelIndex} has no previous version to fall back on — it will be ABSENT from output.`);
+      }
     }
+  }
+
+  if (failedIndices.length) {
+    console.error(`\n⚠ ${failedIndices.length} level(s) failed to regenerate and kept their prior version: [${failedIndices.join(', ')}]`);
+  }
+
+  // Segment utilization / coverage report — surfaces uneven asset use.
+  try {
+    const poolIds = (getSegmentLibrary() || []).map((s) => s.id).filter((id) => id != null);
+    const u = summarizeSegmentUsage(GLOBAL_SEG_USAGE, poolIds);
+    console.log(`\n── Segment utilization ──`);
+    console.log(`  pool ${u.poolSize} | used ${u.usedCount} | never-used ${u.neverUsed} | placements ${u.totalPlacements}`);
+    console.log(`  per-asset uses: mean ${u.mean} sd ${u.sd} CV ${u.cv} max ${u.maxUses}`);
+    if (u.overused.length) console.log(`  ⚠ overused (>2× mean): ${u.overused.map(([id, c]) => `${id}:${c}`).join(', ')}`);
+    else console.log(`  ✓ no asset exceeds 2× the mean — utilization is even`);
+    fs.writeFileSync(path.resolve('data/segment_usage_report.json'),
+      JSON.stringify({ ...u, top: u.top, generatedAtRun: true }, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('  (segment utilization report skipped:', e.message, ')');
   }
 
   // Write the output file (sorted by index so the pack stays ordered).
@@ -2631,14 +3238,250 @@ function bakeAllWorlds() {
   console.log(`\nSuccessfully baked levels and saved to ${OUT_PATH}!`);
 }
 
+// ==========================================================================
+// SECTION: BUCKET-D REVISE MODE
+//   node worldBuilder.js --revise --level <61-90>
+//        [--notes '<json array>' | --notes-file <path>] [--seeds K] [--out path]
+//
+// Applies the track-critic's (Bucket D) revision notes to ONE generated level by
+// resampling the generator over a seed sweep and selecting the variant that
+// (a) is solvable, (b) clears the Bucket-A gate, and (c) best improves the beats
+// the critic flagged. It is a GUIDED RE-ROLL, not a prose-driven surgical patch:
+// the generator is procedural, so the honest "revise" operation is to draw new
+// variants under a fitness biased toward the critic's concern categories and keep
+// the best gate-passing one. Solvability + A-pass are HARD constraints; the
+// concern bias only ranks among survivors, so quality never regresses below the
+// gate. Only the target level is rewritten — every other entry in the output file
+// is preserved. The downstream A+C+critic re-check (tools/trackSoul.mjs / the
+// track-soul workflow) decides keep / revise-again / regenerate.
+// ==========================================================================
+
+const REVISE_SEED_BASE = 9001; // explore a different seed neighbourhood than bake
+
+function _rvMean(a) { return a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0; }
+function _rvClamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function _rvCorr(a, b) {
+  const n = Math.min(a.length, b.length);
+  if (n < 2) return 0;
+  const ma = _rvMean(a.slice(0, n)), mb = _rvMean(b.slice(0, n));
+  let num = 0, da = 0, db = 0;
+  for (let i = 0; i < n; i++) { const xa = a[i] - ma, xb = b[i] - mb; num += xa * xb; da += xa * xa; db += xb * xb; }
+  return da && db ? num / Math.sqrt(da * db) : 0;
+}
+
+// Map the critic's free-text revision notes onto the small set of concern
+// categories the fitness can actually optimise. revisionNotes are
+// [{ rows:[a,b], beatId, issue, fix }] — we read beatId + issue + fix keywords.
+function classifyRevisionNotes(notes) {
+  const concerns = { climax: false, breather: false, telegraph: false, arc: false };
+  const text = (Array.isArray(notes) ? notes : [])
+    .map((nte) => `${nte.beatId || ''} ${nte.issue || ''} ${nte.fix || ''}`.toLowerCase())
+    .join(' \n ');
+  if (/climax|peak|finale|set-?piece|crescendo|capstone/.test(text)) concerns.climax = true;
+  if (/breather|rest|flat|valley|deepen|lull|recover|relief/.test(text)) concerns.breather = true;
+  if (/telegraph|hidden|sightline|read|warning|fair|gotcha|blind|surprise/.test(text)) concerns.telegraph = true;
+  if (/arc|soul|story|pacing|monoton|rhythm|cadence|build|tension/.test(text)) concerns.arc = true;
+  return concerns;
+}
+
+// Revision-aware fitness. Base is the Bucket-A score (so we never trade away
+// overall quality); each flagged concern adds a bounded term computed from the
+// measured smoothed-intensity arc, keeping the A-score dominant.
+function revisionFitness(tq, concerns) {
+  const arr = ((tq.intensity && tq.intensity.smooth) || []).filter((v) => Number.isFinite(v));
+  const n = arr.length;
+  let bias = 0;
+  if (n >= 9) {
+    const peakVal = Math.max(...arr, 1e-6);
+    const third = Math.floor(n / 3);
+    if (concerns.climax) {
+      // Reward a peak located late AND a final third that is the strongest third.
+      let peakRow = 0;
+      for (let i = 1; i < n; i++) if (arr[i] > arr[peakRow]) peakRow = i;
+      bias += (peakRow / (n - 1)) * 14;
+      const lift = _rvMean(arr.slice(2 * third)) - _rvMean(arr.slice(0, third));
+      bias += _rvClamp(lift, -1, 1) * 6;
+    }
+    if (concerns.breather) {
+      // Reward a genuine low valley in the middle third (real release).
+      const mid = arr.slice(third, 2 * third);
+      const minMid = mid.length ? Math.min(...mid) : peakVal;
+      bias += _rvClamp(1 - minMid / peakVal, 0, 1) * 12;
+    }
+    if (concerns.telegraph) {
+      // A-side proxy for fairness: penalise abrupt single-row intensity spikes
+      // (a hazard that appears with no ramp-up reads as a gotcha). Smoother = fairer.
+      let maxJump = 0;
+      for (let i = 1; i < n; i++) maxJump = Math.max(maxJump, Math.abs(arr[i] - arr[i - 1]));
+      bias += _rvClamp(1 - maxJump, 0, 1) * 10;
+    }
+    if (concerns.arc) {
+      // Reward correlation with a canonical rising arc (intro → climax).
+      const ramp = arr.map((_, i) => i / (n - 1));
+      bias += _rvClamp(_rvCorr(arr, ramp), -1, 1) * 10;
+    }
+  }
+  return tq.score + bias;
+}
+
+// Build one revise candidate through the exact bake pipeline (generate → de-pack
+// → checkpoints → solve → assess), returning the level plus its A result and the
+// full intensity-bearing trackQuality for the fitness. null on un-solvable / throw.
+function buildRevisionCandidate(levelIndex, l, generator, seed) {
+  let levelData;
+  try {
+    levelData = generator(levelIndex, l, seed);
+  } catch (e) {
+    return null;
+  }
+  levelData.rows = depackRows(levelData.rows, { speed: SHIP_FORWARD_SPEED });
+  injectCheckpoints(levelData);
+  if (!solveLevel(levelData)) return null;
+  const quality = assessLevelQuality(levelData);
+  const tq = validateTrackQuality(levelData.rows, { speed: SHIP_FORWARD_SPEED });
+  return { levelData, quality, tq, seed };
+}
+
+async function reviseLevel({ levelIndex, notes = [], seeds = 16, outPath, cGate = true, cGateMax = 8 }) {
+  if (!(levelIndex >= 61 && levelIndex <= 90)) {
+    throw new Error(`--revise level must be in range 61-90, got ${levelIndex}`);
+  }
+  const OUT_PATH = path.resolve(outPath || 'data/generated_levels.json');
+  enrichSegmentPool(); // signature set-pieces present, same as bake
+
+  const relativeIdx = levelIndex - 61;
+  const w = Math.floor(relativeIdx / 3);
+  const l = relativeIdx % 3;
+  const biome = THEMES[w];
+  const generator = WORLD_GENERATORS[w];
+
+  const concerns = classifyRevisionNotes(notes);
+  const active = Object.entries(concerns).filter(([, v]) => v).map(([k]) => k);
+  console.log(`Revising Level ${levelIndex} (World ${w}, ${biome}). ` +
+    `Concerns: ${active.length ? active.join(', ') : 'none (plain quality re-roll)'}`);
+
+  // Seed sweep — collect solvable + A-passing variants, rank by revision fitness.
+  const survivors = [];
+  let seed = levelIndex * 1337 + REVISE_SEED_BASE;
+  let tried = 0, guard = 0;
+  while (survivors.length < seeds && guard++ < seeds * 30) {
+    const cand = buildRevisionCandidate(levelIndex, l, generator, seed);
+    seed += 17;
+    tried++;
+    if (!cand) continue;
+    if (cand.quality.failCount > 0 || cand.quality.score < QUALITY_MIN_SCORE) continue;
+    cand.fitness = revisionFitness(cand.tq, concerns);
+    survivors.push(cand);
+  }
+
+  if (!survivors.length) {
+    console.error(`  No solvable, A-passing variant found in ${tried} seeds — level left UNCHANGED.`);
+    return { changed: false, levelIndex };
+  }
+
+  survivors.sort((a, b) => b.fitness - a.fitness);
+
+  // C-gate: A-pass + solvable is necessary but not sufficient — a high-A variant can
+  // still land outside the Bucket-C difficulty band. Walk the top survivors by fitness
+  // and pick the first that ALSO passes the bot, so --revise never commits a level the
+  // machine gate would reject. Lazy-imported so the bake/test/import paths never load
+  // the bot. Falls back to the top-fitness A-passing variant (with a warning) if none
+  // of the checked survivors pass C.
+  let winner = survivors[0];
+  let cVerdict = null;
+  if (cGate) {
+    let runPlaytestAsync;
+    try { ({ runPlaytestAsync } = await import('./tools/trackPlaytest.js')); }
+    catch (e) { console.warn(`  (C-gate skipped — could not load bot: ${e.message})`); }
+    if (runPlaytestAsync) {
+      const checked = survivors.slice(0, Math.min(cGateMax, survivors.length));
+      let cPass = null;
+      for (const cand of checked) {
+        let c;
+        try { c = await runPlaytestAsync(cand.levelData, { speed: SHIP_FORWARD_SPEED }); }
+        catch (e) { continue; }
+        cand.cVerdict = c;
+        if (c && c.solvableExpert !== false && c.verdict !== 'fail') { cPass = cand; cVerdict = c; break; }
+      }
+      if (cPass) {
+        winner = cPass;
+      } else {
+        console.warn(`  ⚠ none of the top ${checked.length} survivor(s) passed Bucket C — keeping ` +
+          `top-fitness A-passing variant (C verdict may be 'fail'); the loop should revise again.`);
+        cVerdict = checked[0] && checked[0].cVerdict;
+      }
+    }
+  }
+
+  console.log(`  Picked seed ${winner.seed} from ${survivors.length} survivor(s) / ${tried} seed(s): ` +
+    `A=${winner.quality.score} fitness=${winner.fitness.toFixed(1)}` +
+    (cVerdict ? ` C=${cVerdict.verdict} fail=${(cVerdict.failRate * 100).toFixed(0)}%` : '') +
+    (winner.quality.topRules.length ? ` top=[${winner.quality.topRules.join(', ')}]` : ''));
+
+  const out = winner.levelData;
+  if (Array.isArray(out.__assembly)) {
+    for (const seg of out.__assembly) {
+      if (seg && seg.id != null) GLOBAL_SEG_USAGE.set(seg.id, (GLOBAL_SEG_USAGE.get(seg.id) || 0) + 1);
+    }
+  }
+  delete out.__assembly;
+
+  let levels = [];
+  if (fs.existsSync(OUT_PATH)) {
+    try { levels = JSON.parse(fs.readFileSync(OUT_PATH, 'utf8')); } catch (e) { levels = []; }
+  }
+  const idx = levels.findIndex((lv) => lv.level_index === levelIndex);
+  if (idx >= 0) levels[idx] = out; else levels.push(out);
+  levels.sort((a, b) => a.level_index - b.level_index);
+  fs.writeFileSync(OUT_PATH, JSON.stringify(levels, null, 2), 'utf8');
+  console.log(`  Wrote revised Level ${levelIndex} to ${OUT_PATH}.`);
+  return { changed: true, levelIndex, seed: winner.seed, score: winner.quality.score, fitness: winner.fitness,
+    concerns: active, cVerdict: cVerdict ? cVerdict.verdict : null };
+}
+
+function parseReviseArgs(args) {
+  const levelIndex = args.includes('--level') ? parseInt(args[args.indexOf('--level') + 1], 10) : NaN;
+  let notes = [];
+  if (args.includes('--notes')) {
+    try { notes = JSON.parse(args[args.indexOf('--notes') + 1]); }
+    catch (e) { console.error('--notes must be a JSON array of revision notes'); process.exit(1); }
+  } else if (args.includes('--notes-file')) {
+    const p = args[args.indexOf('--notes-file') + 1];
+    const raw = JSON.parse(fs.readFileSync(path.resolve(p), 'utf8'));
+    // Accept a bare array OR a critic payload/verdict object carrying revisionNotes.
+    notes = Array.isArray(raw) ? raw : (raw.revisionNotes || []);
+  }
+  if (!Array.isArray(notes)) notes = notes.revisionNotes || [];
+  const seeds = args.includes('--seeds') ? parseInt(args[args.indexOf('--seeds') + 1], 10) : 16;
+  const outPath = args.includes('--out') ? args[args.indexOf('--out') + 1] : null;
+  const cGate = !args.includes('--no-cgate'); // C-gate the survivors by default
+  return { levelIndex, notes, seeds, outPath, cGate };
+}
+
 // Only bake when run directly (`node worldBuilder.js`); allow importing the
 // solver + tile helpers (e.g. the audio-level generator reuses solveLevel).
 const isMain = import.meta.url === pathToFileURL(process.argv[1] || '').href;
-if (isMain) bakeAllWorlds();
+if (isMain) {
+  const argv = process.argv.slice(2);
+  if (argv.includes('--revise')) {
+    const opts = parseReviseArgs(argv);
+    if (!(opts.levelIndex >= 61 && opts.levelIndex <= 90)) {
+      console.error('Usage: node worldBuilder.js --revise --level <61-90> ' +
+        '[--notes \'<json array>\' | --notes-file <path>] [--seeds K] [--out path] [--no-cgate]');
+      process.exit(1);
+    }
+    reviseLevel(opts).catch((e) => { console.error(e); process.exit(1); });
+  } else {
+    bakeAllWorlds();
+  }
+}
 
 export {
   solveLevel, getSegmentLibrary, assembleFromSegments,
   createRoadRow, createRampTile, createTile, createObstacle, createTunnelTile,
   createEmptyRow, createFullRow, clamp, normalizeRows, injectCheckpoints,
-  generateCustomSegments, enrichSegmentPool, computeInterface
+  generateCustomSegments, enrichSegmentPool, computeInterface,
+  ShuffleBag, auditAssembly, assessLevelQuality, depackRows, summarizeSegmentUsage, reviseSegmentPlan,
+  jumpSubcategory, reclassifyJumps, categoryMatches, JUMP_FAMILY, fuseJumpSegments,
+  QUALITY_MIN_SCORE, QUALITY_MAX_ATTEMPTS, SHIP_FORWARD_SPEED
 };
