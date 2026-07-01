@@ -16,6 +16,7 @@
 
 const ROAD_WIDTH_LANES = 7;
 const TILE_LENGTH = 4.0; // world units per row (Z); kept in sync with levelLoader/worldBuilder
+const SHIP_HEIGHT = 0.4; // collision height used to judge vertical clearance
 
 // Mechanics whose INTRODUCTION is paced (teach→develop→twist). The base dodge/jump
 // vocabulary (obstacle/lowblock/gap) is present from the first row by nature and is
@@ -71,6 +72,50 @@ const isBurning = (t) => t.top_color === 13 || t.bottom_color === 13;
 const isSlippery = (t) => t.bottom_color === 9;
 const isSticky = (t) => t.top_color === 3 || t.bottom_color === 3;
 
+// ── Spans helpers (multi-span cells only — gated on Array.isArray(cell.spans)) ──
+
+/**
+ * Returns true when a spans cell offers NO passable vertical corridor.
+ * A lane is impassable when: a solid span S blocks the ground (floorY ≤ 0) AND
+ * the gap between S's top and the next span A's floor is < SHIP_HEIGHT
+ * (player can't fit on top of S), AND there is no opening beneath S either
+ * (S starts at/below ground so you can't pass under it).
+ * If ANY viable gap exists (under S, or on top of S with enough headroom), the
+ * lane is passable.
+ */
+function isLaneImpassableSpans(cell) {
+  if (!cell || !Array.isArray(cell.spans) || cell.spans.length === 0) return false;
+  const spans = cell.spans.slice().sort((a, b) => a.floorY - b.floorY);
+  for (let i = 0; i < spans.length; i++) {
+    const s = spans[i];
+    if (!s.isWallObstacle) continue; // non-obstacle spans don't block
+    const blocksGround = s.floorY <= 0; // on or below the road surface
+    if (!blocksGround) continue; // can pass under it
+    // Check headroom on top of s: gap to the next span's underside
+    const next = spans[i + 1];
+    const ceiling = next ? next.floorY : Infinity;
+    const headroom = ceiling - s.topExitY;
+    if (headroom < SHIP_HEIGHT) return true; // can't fit on top either
+  }
+  return false;
+}
+
+/** Count lanes that are passable in a spans-aware sense. */
+function spansOpenLanes(row) {
+  if (!row) return 0;
+  let n = 0;
+  for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
+    const t = row[l];
+    if (!t) continue;
+    if (Array.isArray(t.spans)) {
+      if (!isLaneImpassableSpans(t)) n++;
+    } else if (!t.full) {
+      n++;
+    }
+  }
+  return n;
+}
+
 /**
  * A *forced* demand is something the player MUST act on (can't simply hold a
  * lane through): a gap (must jump), a tunnel row (must not jump / duck), or a
@@ -88,6 +133,22 @@ function forcedDemand(row) {
   const open = openLanes(row);
   if (full >= 3 && open <= 3) {
     return { type: 'gate', choice: open >= 1 && open <= 3 };
+  }
+  // Spans-aware: check if the row has any spans cells at all.
+  const hasSpans = row && row.some((t) => t && Array.isArray(t.spans));
+  if (hasSpans) {
+    const passable = spansOpenLanes(row);
+    if (passable === 0) {
+      // Every lane is impassable — treat as a gate (A8 will also flag this as fail).
+      return { type: 'gate', choice: false };
+    }
+    // If all ground lanes are blocked by spans but some raised-deck lanes are open,
+    // the player must have jumped up — vertical demand with lane choice.
+    const groundOpen = row.filter((t) => t && !Array.isArray(t.spans) && !t.full).length;
+    const gapLanes = row.filter((t) => t == null).length;
+    if (groundOpen + gapLanes === 0 && passable < ROAD_WIDTH_LANES) {
+      return { type: 'vertical', choice: passable < ROAD_WIDTH_LANES };
+    }
   }
   return null;
 }
@@ -291,6 +352,35 @@ function validateTrackQuality(rows, opts = {}) {
     const forcedHere = forcedDemand(rows[r]);
     if (forcedHere && forcedHere.type === 'gate' && open > o.forkCap) {
       add('A7_forks', 'warn', r, `${open} open branches at a gate (cap ${o.forkCap})`);
+    }
+  }
+
+  // A8 — spans clearance: a row is flagged only when EVERY lane is impassable due to
+  // spans geometry (no legacy open lane, no passable spans lane). A single open lane
+  // is always enough to dodge — that is fair design.
+  for (let r = 0; r < n; r++) {
+    const row = rows[r];
+    const hasSpansCells = row && row.some((t) => t && Array.isArray(t.spans));
+    if (!hasSpansCells) continue; // gate: legacy rows untouched
+    if (spansOpenLanes(row) === 0) {
+      // Collect diagnostic heights from first impassable spans cell found.
+      let detail = `row ${r}: every lane impassable`;
+      for (let l = 0; l < ROAD_WIDTH_LANES; l++) {
+        const t = row[l];
+        if (t && Array.isArray(t.spans) && isLaneImpassableSpans(t)) {
+          const s = t.spans.slice().sort((a, b) => a.floorY - b.floorY);
+          const blocker = s.find((sp) => sp.isWallObstacle && sp.floorY <= 0);
+          if (blocker) {
+            const next = s[s.indexOf(blocker) + 1];
+            const ceiling = next ? next.floorY : null;
+            detail = `row ${r} lane ${l}: wall top=${blocker.topExitY}` +
+              (ceiling != null ? ` ceiling floor=${ceiling} headroom=${(ceiling - blocker.topExitY).toFixed(2)}` : '') +
+              ` (need ≥${SHIP_HEIGHT})`;
+          }
+          break;
+        }
+      }
+      add('A8_clearance', 'fail', r, detail);
     }
   }
 
