@@ -33,7 +33,9 @@
 | [index.css](file:///c:/dev/Sky%20roads/index.css) | 78 KB | ~3,145 | Retro-futuristic glassmorphism design system |
 | [index.html](file:///c:/dev/Sky%20roads/index.html) | 61 KB | ~967 | Full game UI — menus, HUD, settings, garage, touch controls |
 | [worldBuilder.js](file:///c:/dev/Sky%20roads/worldBuilder.js) | 50 KB | ~1,695 | Procedural level generation (standalone CLI) |
-| [physics.js](file:///c:/dev/Sky%20roads/physics.js) | 42 KB | ~850 | Physics engine, collision, ship class presets, keyboard/gamepad input |
+| [heightfield.js](file:///c:/dev/Sky%20roads/heightfield.js) | — | — | Pure-logic multi-span column model (no Three.js); shared by browser and Node CLI |
+| [collision.js](file:///c:/dev/Sky%20roads/collision.js) | — | — | Swept-AABB MTV resolver; imports only `heightfield.js` |
+| [physics.js](file:///c:/dev/Sky%20roads/physics.js) | 42 KB | ~850 | Physics engine, ship class presets, keyboard/gamepad input; column grid is the only collision path |
 | [audio.js](file:///c:/dev/Sky%20roads/audio.js) | 41 KB | ~1,281 | Web Audio synthesizer, music sequencer, SFX |
 | [cockpitConsole.js](file:///c:/dev/Sky%20roads/cockpitConsole.js) | 35 KB | ~400 | 3D cockpit dashboard HUD + path scanner minimap |
 | [touchControls.js](file:///c:/dev/Sky%20roads/touchControls.js) | 24 KB | ~751 | Touch input manager — individual button system |
@@ -71,6 +73,10 @@ graph TD
     CC --> LL
     CC --> THREE
 
+    PHY --> HF["heightfield.js<br/>Column Model"]
+    PHY --> COL["collision.js<br/>MTV Resolver"]
+    COL --> HF
+    LL --> HF
     PHY --> THREE
     LL --> THREE
     PRV --> THREE
@@ -185,6 +191,22 @@ flowchart LR
 - **Whitecap grid** (`visualizerGrid`, `visualizerDots`): `depthWrite:false`, `AdditiveBlending` — renders in the transparent pass; base Y is set 9 units above road (`physics.position.y + 9`) so it projects into the sky/horizon area above the camera and does not overlap road pixels.
 - **Road tiles / obstacles**: opaque, render first and write depth. Road always paints over grid even where Z values match.
 - **Bloom**: `strength = 0.35 + bassEnergy × 0.5 + beatEnergy × 0.6`; `threshold = max(0.55, 0.88 − bassEnergy × 0.25)`.
+
+---
+
+## Collision Architecture (Multi-Span Column Model)
+
+Collision was rewritten from a flat per-block AABB loop into a **unified multi-span column model** (2026-06-30). The new path is the only collision path in `physics.js`.
+
+**`heightfield.js`** — pure module, no Three.js import. Runs in both the browser and the Node `worldBuilder.js` CLI. Builds a `columnGrid[r][c]` from level JSON: each **Column** holds a sorted stack of **Spans** (`{floorY, topEntryY, topExitY, isRamp, behavior, isWallObstacle, xMin?, xMax?, isSuperJump?}`). A span fills a cell's `TILE_WIDTH × TILE_LENGTH` footprint; its top face may slope along Z (ramps); its underside (`floorY`) is flat. Partial-width spans (`xMin`/`xMax`) model thin tunnel side walls. Exports `buildColumnGrid`, `legacyTileToSpans`, `cellBounds`, `worldToCell`, `spanTopAtZ`, `spanSolidTopAtZ`, `columnsOverlappingBox`, `supportSurface`, `ceilingAbove`. Also the single source of truth for `ROAD_WIDTH_LANES`, `TILE_WIDTH`, `TILE_LENGTH`, `TOTAL_ROAD_WIDTH` (re-exported from `physics.js`, `levelLoader.js`, `editorRenderer.js`).
+
+**`collision.js`** — swept-AABB velocity-aware MTV resolver. Imports only `heightfield.js`. Exports `resolve({grid, numRows, position, velocity, dt, ship})` and `getShipBox(position, ship)`. `resolve` runs substeps capped at `min(0.5, ship.height * 0.9)` (prevents tunneling through thin surfaces), finds the minimum-penetration contact per substep using a velocity-aware axis selector (`chooseAxis`), and emits `CollisionEvent` objects (`{kind: 'land'|'ceiling'|'wallSide'|'wallFront', axis, span, cell, surfaceY, penetration, impactSpeed}`). It resolves geometry only — all game outcomes (crash, bounce, death, audio) are applied by `physics.js` based on the events and `span.behavior`.
+
+**`levelLoader.js`** — `buildLevel` and `buildLevelAsync` attach `levelInfo.columnGrid` and `numRows` via `buildColumnGrid(levelData)`. The `processTile` function has a `tile.spans` branch that renders each span as its own box (overpass = thin slab with a visible underside). Legacy tiles are unaffected.
+
+**`physics.js`** — calls `resolve(...)` from `collision.js` each frame, reads the resulting events to apply outcomes, then queries `supportSurface` for `onGround`/`groundHeight`/`onRamp`/`rampSlope`.
+
+**Level JSON:** a cell may carry a native `"spans": [...]` array (authoritative when present) or legacy tile flags (`full`/`half`/`ramp`/`tunnel`), which `legacyTileToSpans` maps to spans at build time. Both forms coexist — no level data migration required.
 
 ---
 
