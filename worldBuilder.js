@@ -2108,6 +2108,43 @@ function generateVoidLevel(levelIndex, difficulty, seed) {
       state.rows.push(createRampRow(h1, h2, [1, 2, 3, 4, 5]));
     }
 
+    // SECTION 5d: OVERPASS SHOWCASE — a true multi-span bridge (native `spans`).
+    // The racing line ramps UP onto an elevated deck and drives OVER it; a ground
+    // road runs beneath the same cells (the pass-UNDER route), so each deck cell
+    // renders as a slab with a visible underside, not a ground pillar. This proves
+    // the whole pipeline (build → bake → normalize → serialize → runtime + solver)
+    // handles stacked spans end-to-end. Enters/exits at ground height 0 on lane 3.
+    {
+      const deckH = 2.0, rampLen = 5, deckLen = 8;
+      // A two-span cell: ground road (drive-under) + elevated deck (drive-over).
+      const overpassCell = () => ({
+        spans: [
+          { floorY: -0.1, topEntryY: 0.0, topExitY: 0.0, bottom_color: 1 },
+          { floorY: deckH - 0.3, topEntryY: deckH, topExitY: deckH, bottom_color: 1 },
+        ],
+      });
+      // Ramp up 0 → deckH on the center lanes.
+      for (let i = 0; i < rampLen; i++) {
+        const row = createEmptyRow();
+        for (let l = 1; l <= 5; l++) row[l] = createRampTile((i / rampLen) * deckH, ((i + 1) / rampLen) * deckH, 1);
+        state.rows.push(row);
+      }
+      // Drive across the elevated deck; ground road passes beneath the same cells.
+      for (let i = 0; i < deckLen; i++) {
+        const row = createEmptyRow();
+        for (let l = 1; l <= 5; l++) row[l] = overpassCell();
+        state.rows.push(row);
+      }
+      // Ramp back down deckH → 0.
+      for (let i = 0; i < rampLen; i++) {
+        const row = createEmptyRow();
+        for (let l = 1; l <= 5; l++) row[l] = createRampTile(deckH * (1 - i / rampLen), deckH * (1 - (i + 1) / rampLen), 1);
+        state.rows.push(row);
+      }
+      // Settle on flat ground before the next section.
+      for (let i = 0; i < 3; i++) state.rows.push(createRoadRow(3, 5, 1));
+    }
+
     // SECTION 6: Burning Hazards & Boost Chain (rows 225-284)
     // 6a. Burn Zone (19 rows)
     for (let i = 0; i < 19; i++) {
@@ -3001,6 +3038,10 @@ function injectCheckpoints(levelData) {
         for (let colIdx = 0; colIdx < 7; colIdx++) {
           const tile = row[colIdx];
           if (tile) {
+            // Multi-span cells (stacked decks) are never valid checkpoint ground:
+            // the checkpoint writer flattens the row to a single road tile, which
+            // would destroy an overpass. Treat like a ramp/obstacle.
+            if (Array.isArray(tile.spans)) { valid = false; break; }
             // No sloped ramps, tunnels, obstacles, or special tiles in the first pass
             const isSlopedRamp = tile.ramp && tile.startY !== tile.endY;
             if (isSlopedRamp || tile.tunnel || tile.full || tile.half ||
@@ -3042,7 +3083,7 @@ function injectCheckpoints(levelData) {
             const tile = row[colIdx];
             if (tile) {
               const isSlopedRamp = tile.ramp && tile.startY !== tile.endY;
-              if (isSlopedRamp || tile.tunnel) {
+              if (isSlopedRamp || tile.tunnel || Array.isArray(tile.spans)) {
                 valid = false;
                 break;
               }
