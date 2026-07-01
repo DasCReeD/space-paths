@@ -45,6 +45,34 @@ describe('collision.resolve — geometry-only swept MTV', () => {
     expect(out.events.some(e => e.kind === 'wallSide')).toBe(false);
   });
 
+  it('elevated obstacle on a platform => walls at platform height (no fall-through)', () => {
+    // Regression for the "fall through the track near an obstacle" bug. Generated
+    // levels build platform obstacles as {full, startY:h}. If the adapter ignores
+    // startY, the obstacle lands at [0,2] instead of [h,h+2], leaving a phantom hole
+    // at the platform surface — the ship drives in and falls through. A ship on the
+    // height-4 platform driving into the obstacle must hit a wallFront and stay at ~4.
+    const PLAT = { val: 0, ramp: true, startY: 4, endY: 4 };            // flat platform surface at 4
+    const OBST = { val: 0, full: true, startY: 4, endY: 4 };            // obstacle sitting on the platform
+    const { grid, numRows } = gridFromRows([
+      rowWith(3, PLAT),
+      rowWith(3, PLAT),
+      rowWith(3, OBST),
+    ]);
+    const b = cellBounds(3, 2); // obstacle row: maxZ = -8
+
+    // Ship on the platform at y=4, just in front of the obstacle entry edge, moving -Z.
+    const position = { x: 0, y: 4, z: b.maxZ + 1.0 };
+    const velocity = { x: 0, y: 0, z: -6 };
+    const out = resolve({ grid, numRows, position, velocity, dt: 0.1, ship: SHIP });
+
+    // Must wall on Z (not sink): a wallFront fires and the ship never drops below the platform.
+    expect(out.events.some(e => e.kind === 'wallFront')).toBe(true);
+    expect(out.velocity.z).toBe(0);
+    expect(out.position.y).toBeGreaterThanOrEqual(4 - 1e-6); // stayed on the platform, no fall-through
+    // Ship front backed out to (or in front of) the obstacle entry edge — not inside it.
+    expect(out.position.z - SHIP.length / 2).toBeGreaterThanOrEqual(b.maxZ - 1e-9);
+  });
+
   it('side graze: overlapping a block X edge moving +X => wallSide, pushed out in X, vx=0', () => {
     // Block at lane 4 (centerX +2): minX=+1, maxX=+3. Put ship straddling minX.
     const { grid, numRows } = gridFromRows([

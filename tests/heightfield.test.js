@@ -90,6 +90,32 @@ describe('legacyTileToSpans', () => {
     expect(spans[0].isWallObstacle).toBe(true);
   });
 
+  // Regression: an obstacle sitting on an ELEVATED platform is encoded
+  // `{full:true, startY:h, endY:h}` (generated levels build platform obstacles this
+  // way). It must occupy [h, h+height] — matching levelLoader.computeTileGeometry —
+  // NOT [0, height]. The old adapter ignored startY, leaving a phantom hole at the
+  // platform surface where the wall renders → the ship drove in and fell through.
+  it('elevated full block (startY=4) => [floorY:4, top:6] (matches renderer, no phantom hole)', () => {
+    const spans = legacyTileToSpans(flatTile({ full: true, startY: 4, endY: 4 }));
+    expect(spans).toHaveLength(1);
+    expect(spans[0].floorY).toBe(4);
+    expect(spans[0].topEntryY).toBe(6);
+    expect(spans[0].topExitY).toBe(6);
+    expect(spans[0].isWallObstacle).toBe(true);
+  });
+
+  it('elevated half block (startY=2) => [floorY:2, top:3]', () => {
+    const spans = legacyTileToSpans(flatTile({ half: true, startY: 2, endY: 2 }));
+    expect(spans[0].floorY).toBe(2);
+    expect(spans[0].topEntryY).toBe(3);
+  });
+
+  it('elevated full+half block (startY=6) => [floorY:6, top:9]', () => {
+    const spans = legacyTileToSpans(flatTile({ full: true, half: true, startY: 6, endY: 6 }));
+    expect(spans[0].floorY).toBe(6);
+    expect(spans[0].topEntryY).toBe(9);
+  });
+
   it('ramp up (startY=0, endY=2) => topEntryY=startY, topExitY=endY, isRamp', () => {
     const spans = legacyTileToSpans(flatTile({ ramp: true, startY: 0, endY: 2 }));
     expect(spans).toHaveLength(1);

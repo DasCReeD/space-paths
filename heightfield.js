@@ -176,29 +176,17 @@ export function legacyTileToSpans(tile) {
     ];
   }
 
-  // Full + half block (height = 3.0)
-  if (tile.full && tile.half) {
-    return [makeSpan(0, 3.0, 3.0, {
-      behavior:       behaviorForColor(tile.top_color ?? 0),
-      isWallObstacle: true,
-      topColor:       tile.top_color    ?? 0,
-      bottomColor:    tile.bottom_color ?? 0,
-    })];
-  }
-
-  // Full block (height = 2.0)
-  if (tile.full) {
-    return [makeSpan(0, 2.0, 2.0, {
-      behavior:       behaviorForColor(tile.top_color ?? 0),
-      isWallObstacle: true,
-      topColor:       tile.top_color    ?? 0,
-      bottomColor:    tile.bottom_color ?? 0,
-    })];
-  }
-
-  // Half block (height = 1.0)
-  if (tile.half) {
-    return [makeSpan(0, 1.0, 1.0, {
+  // Full / half / full+half blocks. These may sit on an ELEVATED surface: a block
+  // on a platform is encoded `{full:true, startY:h, endY:h}` (and on a ramp row,
+  // startY/endY differ). The block occupies [base, base+height] — MUST match the
+  // renderer (levelLoader.computeTileGeometry uses baseY = tile.startY, height
+  // 1/2/3). Ignoring startY put the block at [0,height], leaving a phantom HOLE at
+  // the platform surface where the wall should be → the ship drove in and fell
+  // through the track near the obstacle. (base = startY, matching the renderer.)
+  if (tile.full || tile.half) {
+    const base = tile.startY ?? 0;
+    const height = (tile.full && tile.half) ? 3.0 : (tile.full ? 2.0 : 1.0);
+    return [makeSpan(base, base + height, base + height, {
       behavior:       behaviorForColor(tile.top_color ?? 0),
       isWallObstacle: true,
       topColor:       tile.top_color    ?? 0,
