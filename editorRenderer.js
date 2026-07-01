@@ -2,11 +2,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// Tile size constants matching game engine
-export const TILE_WIDTH = 2.0;
-export const TILE_LENGTH = 4.0;
-export const ROAD_WIDTH_LANES = 7;
-export const TOTAL_ROAD_WIDTH = TILE_WIDTH * ROAD_WIDTH_LANES;
+// Tile size constants — declared in heightfield.js (single source of truth)
+export { TILE_WIDTH, TILE_LENGTH, ROAD_WIDTH_LANES, TOTAL_ROAD_WIDTH } from './heightfield.js';
+import { TILE_WIDTH, TILE_LENGTH, ROAD_WIDTH_LANES, TOTAL_ROAD_WIDTH } from './heightfield.js';
 
 // VGA color mapping index to Hex
 const PALETTE_HEX = {
@@ -542,6 +540,32 @@ export class EditorRenderer {
         const xPos = (c - 3) * TILE_WIDTH;
         const zPos = -r * TILE_LENGTH - TILE_LENGTH / 2;
 
+        // --- Multi-span cell: render each span independently ---
+        // ponytail: mirrors levelLoader P3.2; no new abstraction, just a branch.
+        if (cell.type === 'spans' && Array.isArray(cell.spans)) {
+          for (const span of cell.spans) {
+            const floorY = span.floorY ?? -0.1;
+            const topEntryY = span.topEntryY ?? 0;
+            const topExitY = span.topExitY ?? topEntryY;
+            const spanColor = span.top_color != null
+              ? (PALETTE_HEX[span.top_color] || '#00aa33')
+              : (span.bottom_color != null ? (PALETTE_HEX[span.bottom_color] || '#00aa33') : '#00aa33');
+
+            const geom = this.createBasicRampGeometry(TILE_WIDTH, TILE_LENGTH, topEntryY, topExitY, floorY);
+            const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(spanColor), roughness: 0.5, metalness: 0.3 });
+            const mesh = new THREE.Mesh(geom, mat);
+            mesh.position.set(xPos, 0, zPos);
+            mesh.receiveShadow = true;
+            this.perspectiveGroup.add(mesh);
+
+            // Ortho: same geometry with flat material
+            const orthoMesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: spanColor, side: THREE.DoubleSide }));
+            orthoMesh.position.set(xPos, 0, zPos);
+            this.orthogonalGroup.add(orthoMesh);
+          }
+          return; // spans handled; skip the single-cell path below
+        }
+
         // Determine height and Y center based on cell type
         let height = 0.2;
         let yPos = -0.1;
@@ -663,11 +687,12 @@ export class EditorRenderer {
 
   /**
    * Helper to create 3D ramp geometry.
+   * yBottom defaults to -0.2 (ground-level tiles); pass span.floorY for overpasses
+   * so a slab at floorY=3 renders as a thin slab with a visible underside, not a pillar.
    */
-  createBasicRampGeometry(w, l, y1, y2) {
+  createBasicRampGeometry(w, l, y1, y2, yBottom = -0.2) {
     const w2 = w / 2;
     const l2 = l / 2;
-    const yBottom = -0.2; // base depth
 
     const vertices = [
       // Bottom

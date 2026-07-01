@@ -1,11 +1,10 @@
 // SkyRoads 3D Kinematics & Physics Engine
 import * as THREE from 'three';
 
-// Road configuration constants
-export const ROAD_WIDTH_LANES = 7;
-export const TILE_WIDTH = 2.0;
-export const TILE_LENGTH = 4.0;
-export const TOTAL_ROAD_WIDTH = TILE_WIDTH * ROAD_WIDTH_LANES;
+// Road configuration constants — declared in heightfield.js (single source of truth)
+export { ROAD_WIDTH_LANES, TILE_WIDTH, TILE_LENGTH, TOTAL_ROAD_WIDTH } from './heightfield.js';
+import { ROAD_WIDTH_LANES, TILE_WIDTH, TILE_LENGTH, TOTAL_ROAD_WIDTH, buildColumnGrid, supportSurface, cellBounds, worldToCell } from './heightfield.js';
+import { resolve as columnResolve } from './collision.js';
 
 // Ship dimensions
 export const SHIP_WIDTH = 0.6;
@@ -112,6 +111,12 @@ export class PhysicsEngine {
     this.velocity = new THREE.Vector3(0, 0, 0);
     this.playStyle = 'classic';
     this.activeLevelIndex = 0;
+
+    // ponytail: simple cache — rebuild when level identity or collidables length changes
+    this._colGrid = null;
+    this._colNumRows = 0;
+    this._colLevelId = null;      // tracks levelInfo object identity
+    this._colCollidablesLen = -1; // tracks collidables.length to detect push()
     
     // Physics constants
     this.maxSpeedNormal = 32.0; // Z speed in units/s
@@ -490,7 +495,6 @@ export class PhysicsEngine {
     }
 
     // 6. Update Position
-    const prevY = this.position.y;
     this.position.x += this.velocity.x * dt;
     this.position.y += this.velocity.y * dt;
     this.position.z += this.velocity.z * dt;
@@ -501,410 +505,257 @@ export class PhysicsEngine {
     this.onRamp = false;
     this.rampSlope = 0.0;
 
-    // Create ship bounding box
-    let shipBox = this.getShipBox();
+    // ── Column-collision path (unconditional — P2.1) ────────────────────────
+    this._updateColumnCollision(dt, keyboard, levelInfo);
+  }
 
-    // Check collisions with all level collidables
-    for (const block of levelInfo.collidables) {
-      if (block.isRamp) {
-        // Calculate ramp height at current ship Z position
-        const t = (this.position.z - block.maxZ) / (block.minZ - block.maxZ);
-        const clampedT = Math.max(0, Math.min(1, t));
-        const rampHeight = block.startY + clampedT * (block.endY - block.startY);
-
-        const xOverlap = shipBox.maxX > block.minX && shipBox.minX < block.maxX;
-        const zOverlap = shipBox.maxZ > block.minZ && shipBox.minZ < block.maxZ;
-
-        if (xOverlap && zOverlap) {
-          // 1. Frontal Collision (Crash) check
-          // Only possible if the ship's center has not entered the ramp yet
-          if (this.position.z > block.maxZ) {
-            // Check if there is a connecting block preceding this ramp in collidables
-            let isPrecededByConnecting = levelInfo.collidables.some(other => {
-              const matchesZ = Math.abs(other.minZ - block.maxZ) < 0.05;
-              const matchesX = shipBox.maxX > other.minX && shipBox.minX < other.maxX;
-              if (matchesZ && matchesX) {
-                const otherHeight = other.isRamp ? other.endY : (other.maxY || 0.0);
-                return Math.abs(otherHeight - block.startY) < 0.05;
-              }
-              return false;
-            });
-
-            // Also check if the preceding tile is a standard flat road tile at 0.0
-            if (!isPrecededByConnecting && Math.abs(block.startY) < 0.05) {
-              const maxLeft = -TOTAL_ROAD_WIDTH / 2;
-              const precedingZ = block.maxZ + 0.1; // point inside preceding row
-              const rIdx = Math.floor(-precedingZ / TILE_LENGTH);
-              const cIdx = Math.floor((this.position.x - maxLeft) / TILE_WIDTH);
-              const originalLevelData = window.currentLevelData;
-              if (originalLevelData && originalLevelData.rows[rIdx]) {
-                const tile = originalLevelData.rows[rIdx][cIdx];
-                if (tile !== null && !tile.full && !tile.half) {
-                  const tileHeight = tile.ramp ? tile.endY : 0.0;
-                  if (Math.abs(tileHeight - block.startY) < 0.05) {
-                    isPrecededByConnecting = true;
-                  }
-                }
-              }
-            }
-
-            const isBelowEntrance = this.position.y < block.startY - 0.15;
-            if (isBelowEntrance && !isPrecededByConnecting) {
-              if (this.difficulty === 'easy') {
-                // Bounce back instead of dying!
-                this.velocity.z = this.settings.easyCollisionBounceVel !== undefined ? this.settings.easyCollisionBounceVel : 10.0; // Positive Z is backward
-                this.position.z += this.settings.easyCollisionBounceDist !== undefined ? this.settings.easyCollisionBounceDist : 1.2; // Push back to clear block bounding box
-                this.triggerWallCollisionAudio = true; // Scrape/scrape wall audio as bounce indicator
-                this.velocity.x = 0;
-                
-                // Update the ship's bounding box
-                shipBox = this.getShipBox();
-              } else if (this.difficulty === 'normal') {
-                const shipMass = this.settings.shipMass !== undefined ? this.settings.shipMass : 1.0;
-                const damageModifier = this.settings.damageModifier !== undefined ? this.settings.damageModifier : 1.0;
-                const minDamageSpeed = this.settings.minDamageSpeed !== undefined ? this.settings.minDamageSpeed : 4.0;
-                const impactSpeed = Math.abs(this.velocity.z);
-                const damage = impactSpeed < minDamageSpeed ? 0 : impactSpeed * shipMass * damageModifier * 1.5;
-                if (this.health > damage) {
-                  this.health -= damage;
-                  // Bounce back
-                  this.velocity.z = this.settings.easyCollisionBounceVel !== undefined ? this.settings.easyCollisionBounceVel : 10.0;
-                  this.position.z += this.settings.easyCollisionBounceDist !== undefined ? this.settings.easyCollisionBounceDist : 1.2;
-                  this.triggerWallCollisionAudio = true;
-                  this.velocity.x = 0;
-                  shipBox = this.getShipBox();
-                } else {
-                  this.health = 0;
-                  this.isDead = true;
-                  this.deathReason = 'COLLIDED WITH BLOCK';
-                  this.velocity.set(0, 0, 0);
-                  return;
-                }
-              } else {
-                this.isDead = true;
-                this.deathReason = 'COLLIDED WITH BLOCK';
-                this.velocity.set(0, 0, 0);
-                return;
-              }
-            }
-          }
-
-          // 2. Side Collision Check
-          // Only possible if ship's center is within the ramp's Z range
-          let isSideHit = false;
-          if (this.position.z <= block.maxZ && this.position.z >= block.minZ) {
-            const blockCenterX = (block.minX + block.maxX) / 2;
-            const isSideCollision = (block.maxX - block.minX <= TILE_WIDTH + 0.1)
-              ? Math.abs(this.position.x - blockCenterX) > 0.35
-              : (this.position.x < block.minX || this.position.x > block.maxX);
-
-            if (isSideCollision && this.position.y < rampHeight - 0.1) {
-              // Check if ship is currently riding an adjacent ramp of the same slope
-              const isSteeringRight = this.position.x > blockCenterX;
-              const isOnAdjacentRamp = levelInfo.collidables.some(other => 
-                other.isRamp && 
-                other !== block &&
-                other.startY === block.startY && 
-                other.endY === block.endY && 
-                other.minZ === block.minZ && 
-                other.maxZ === block.maxZ && 
-                (isSteeringRight ? (Math.abs(other.minX - block.maxX) < 0.01) : (Math.abs(other.maxX - block.minX) < 0.01))
-              );
-
-              if (!isOnAdjacentRamp) {
-                const halfW = SHIP_COLLISION_WIDTH / 2;
-                if (this.position.x > blockCenterX) {
-                  this.position.x = block.maxX + halfW + 0.01;
-                } else {
-                  this.position.x = block.minX - halfW - 0.01;
-                }
-
-                if (this.difficulty === 'normal') {
-                  const shipMass = this.settings.shipMass !== undefined ? this.settings.shipMass : 1.0;
-                  const damageModifier = this.settings.damageModifier !== undefined ? this.settings.damageModifier : 1.0;
-                  const minDamageSpeed = this.settings.minDamageSpeed !== undefined ? this.settings.minDamageSpeed : 4.0;
-                  const impactSpeed = Math.abs(this.velocity.x);
-                  const damage = impactSpeed < minDamageSpeed ? 0 : impactSpeed * shipMass * damageModifier * 1.5;
-                  if (this.health > damage) {
-                    this.health -= damage;
-                  } else {
-                    this.health = 0;
-                    this.isDead = true;
-                    this.deathReason = 'COLLIDED WITH BLOCK';
-                    this.velocity.set(0, 0, 0);
-                    return;
-                  }
-                }
-
-                this.velocity.x = 0;
-                this.triggerWallCollisionAudio = true;
-                shipBox = this.getShipBox();
-                isSideHit = true;
-              }
-            }
-          }
-
-          // 3. Riding / Snapping onto the ramp
-          // Snap if we haven't hit the side and we are either on the ramp or transitioning off the top
-          if (!isSideHit && this.position.z <= block.maxZ) {
-            const isAboveRampSurface = this.position.y > rampHeight + 0.01;
-            const isJumping = this.velocity.y > 0;
-            
-            // Snap to ramp if not climbing/flying above it
-            if (!(isJumping && isAboveRampSurface)) {
-              this.position.y = rampHeight;
-              this.groundHeight = rampHeight;
-              this.onGround = true;
-              this.canDoubleJump = false;
-              this.velocity.y = 0;
-              shipBox = this.getShipBox();
-              
-              // Only set onRamp if the ship's center is actually within the ramp's Z range
-              if (this.position.z <= block.maxZ && this.position.z >= block.minZ) {
-                this.onRamp = true;
-                this.rampSlope = Math.atan2(block.endY - block.startY, block.maxZ - block.minZ);
-              }
-            }
-          }
+  // ── Column-collision update ───────────────────────────────────────────────
+  // The sole collision path (P2.1 removed the old per-block loop).
+  // Geometry resolution: collision.js resolve() — pure MTV, no game rules.
+  // Game rules (death/bounce/damage/audio/rampSlope): applied per §1.7.
+  _updateColumnCollision(dt, keyboard, levelInfo) {
+    // ── Get or build column grid ──────────────────────────────────────────────
+    // Prefer levelInfo.columnGrid (produced by levelLoader in P3.1).
+    // Fall back to building from window.currentLevelData once per level.
+    let grid, numRows;
+    if (levelInfo.columnGrid) {
+      grid = levelInfo.columnGrid;
+      numRows = levelInfo.numRows ?? levelInfo.columnGrid.length;
+      // Track identity so a level change forces a rebuild of the fallback cache.
+      this._colLevelId = levelInfo;
+    } else {
+      // ponytail: use object-identity of levelInfo + collidables.length as cache key
+      const curLen = levelInfo.collidables ? levelInfo.collidables.length : 0;
+      if (this._colLevelId !== levelInfo || !this._colGrid || this._colCollidablesLen !== curLen) {
+        this._colCollidablesLen = curLen;
+        const rawData = (typeof window !== 'undefined' && window.currentLevelData)
+          ? window.currentLevelData
+          : null;
+        if (rawData) {
+          const built = buildColumnGrid(rawData);
+          this._colGrid = built.grid;
+          this._colNumRows = built.numRows;
+        } else if (levelInfo.collidables) {
+          // Test / editor fallback: synthesize a column grid from legacy collidables.
+          // Keeps tests working without a rows-format level data source.
+          // Transitional bridge — removed in P3.1 when levelLoader supplies columnGrid.
+          const built = this._buildGridFromCollidables(levelInfo.collidables);
+          this._colGrid = built.grid;
+          this._colNumRows = built.numRows;
+        } else {
+          this._colGrid = null;
+          this._colNumRows = 0;
         }
-        continue; // Skip standard block collision checks for ramp blocks
+        this._colLevelId = levelInfo;
       }
+      grid = this._colGrid;
+      numRows = this._colNumRows;
+    }
 
-      // Check if Z and X intersect
-      const xOverlap = shipBox.maxX > block.minX && shipBox.minX < block.maxX;
-      const zOverlap = shipBox.maxZ > block.minZ && shipBox.minZ < block.maxZ;
+    if (!grid) {
+      // Grid unavailable: run nothing (ship falls freely), set deathY default
+      this.deathY = -4.0;
+      const canFallBelow = (this.playStyle === 'flow') || (this.playStyle === 'tower' && this.activeLevelIndex > 0);
+      if (this.position.y < this.deathY) {
+        if (!canFallBelow) {
+          this.isDead = true;
+          this.deathReason = 'FELL OFF ROAD';
+          this.velocity.set(0, -15, 0);
+        }
+      }
+      return;
+    }
 
-      if (xOverlap && zOverlap) {
-        // Handle ceiling collision bump
-        if (block.isCeiling) {
-          const verticalOverlap = shipBox.maxY > block.minY && shipBox.minY < block.maxY;
-          if (verticalOverlap && this.velocity.y > 0) {
-            this.position.y = block.minY - SHIP_HEIGHT - 0.01;
-            this.velocity.y = 0;
-            shipBox = this.getShipBox();
-          }
-          // Note: we skip standard obstacle checks for ceiling blocks,
-          // but flow through to the landing checks below
-        } else if (block.isObstacle) {
-          // If Y overlap exists, check for horizontal collision
-          const isBelowTop = shipBox.minY < block.maxY - 0.15;
-          const isAboveBottom = shipBox.maxY > block.minY;
+    // ── Swept-AABB resolution ─────────────────────────────────────────────────
+    // Position was already integrated by update() ("6. Update Position").
+    // We pass the post-integration position + current velocity into resolve(),
+    // which sub-steps, pushes out, and emits events. resolve() re-does its own
+    // sub-step integration, so we must pass the PRE-integration position.
+    // Fix: we need to undo the integration done in step 6, then let resolve() redo it.
+    // ponytail: simpler — undo step-6 integration, pass to resolve, use result.
+    const prePos = {
+      x: this.position.x - this.velocity.x * dt,
+      y: this.position.y - this.velocity.y * dt,
+      z: this.position.z - this.velocity.z * dt,
+    };
 
-          if (isBelowTop && isAboveBottom) {
-            // Check if this obstacle is preceded by a ramp and the ship is transitioning onto it
-            const isPrecededByRamp = levelInfo.collidables.some(other => 
-              other.isRamp && 
-              Math.abs(other.minZ - block.maxZ) < 0.1 &&
-              this.position.x >= other.minX - 0.2 && this.position.x <= other.maxX + 0.2
-            );
-            const isOnRamp = isPrecededByRamp && 
-              this.position.z >= block.maxZ - 0.5 && this.position.z <= block.maxZ + TILE_LENGTH + 0.1;
+    const shipDims = { width: SHIP_COLLISION_WIDTH, height: SHIP_HEIGHT, length: SHIP_LENGTH };
+    const result = columnResolve({
+      grid,
+      numRows,
+      position: prePos,
+      velocity: { x: this.velocity.x, y: this.velocity.y, z: this.velocity.z },
+      dt,
+      ship: shipDims,
+    });
 
-            if (isOnRamp && shipBox.minY >= block.maxY - 0.25) {
-              // Bypassed! Transitioning onto the platform.
-              // Raise the ship's Y to block.maxY to ensure it lands smoothly in the subsequent landing check.
-              this.position.y = Math.max(this.position.y, block.maxY);
-              shipBox = this.getShipBox();
-            } else {
-              // Calculate overlap depths in X and Z
-              const overlapZ = Math.min(shipBox.maxZ, block.maxZ) - Math.max(shipBox.minZ, block.minZ);
-              const overlapX = Math.min(shipBox.maxX, block.maxX) - Math.max(shipBox.minX, block.minX);
+    // Write back resolved position + velocity
+    this.position.x = result.position.x;
+    this.position.y = result.position.y;
+    this.position.z = result.position.z;
+    this.velocity.x = result.velocity.x;
+    this.velocity.y = result.velocity.y;
+    this.velocity.z = result.velocity.z;
 
-              // A side collision occurs if the back of the ship has already crossed the front of the block,
-              // OR if the horizontal overlap is shallow while the vertical longitudinal overlap is deep.
-              const isSideCollision = (shipBox.maxZ <= block.maxZ + 0.15) || (overlapX < 0.35 && overlapZ > 0.5);
+    // ── §1.7 event → outcome mapping ─────────────────────────────────────────
+    const isJumpHeld = keyboard.spacePressed !== undefined ? keyboard.spacePressed : false;
 
-              if (!isSideCollision) {
-                if (this.difficulty === 'easy') {
-                  // Bounce back instead of dying!
-                  this.velocity.z = this.settings.easyCollisionBounceVel !== undefined ? this.settings.easyCollisionBounceVel : 10.0; // Positive Z is backward
-                  this.position.z += this.settings.easyCollisionBounceDist !== undefined ? this.settings.easyCollisionBounceDist : 1.2; // Push back to clear block bounding box
-                  this.triggerWallCollisionAudio = true; // Scrape/scrape wall audio as bounce indicator
-                  this.velocity.x = 0;
-                  
-                  // Update the ship's bounding box
-                  shipBox = this.getShipBox();
-                } else if (this.difficulty === 'normal') {
-                  const shipMass = this.settings.shipMass !== undefined ? this.settings.shipMass : 1.0;
-                  const damageModifier = this.settings.damageModifier !== undefined ? this.settings.damageModifier : 1.0;
-                  const minDamageSpeed = this.settings.minDamageSpeed !== undefined ? this.settings.minDamageSpeed : 4.0;
-                  const impactSpeed = Math.abs(this.velocity.z);
-                  const damage = impactSpeed < minDamageSpeed ? 0 : impactSpeed * shipMass * damageModifier * 1.5;
-                  if (this.health > damage) {
-                    this.health -= damage;
-                    // Bounce back
-                    this.velocity.z = this.settings.easyCollisionBounceVel !== undefined ? this.settings.easyCollisionBounceVel : 10.0;
-                    this.position.z += this.settings.easyCollisionBounceDist !== undefined ? this.settings.easyCollisionBounceDist : 1.2;
-                    this.triggerWallCollisionAudio = true;
-                    this.velocity.x = 0;
-                    shipBox = this.getShipBox();
-                  } else {
-                    this.health = 0;
-                    this.isDead = true;
-                    this.deathReason = 'COLLIDED WITH BLOCK';
-                    this.velocity.set(0, 0, 0);
-                    return;
-                  }
-                } else {
-                  // Front collision -> Crash!
-                  this.isDead = true;
-                  this.deathReason = 'COLLIDED WITH BLOCK';
-                  this.velocity.set(0, 0, 0);
-                  return;
-                }
-              } else {
-                // Side wall collision -> Push ship out of the block and slide!
-                const halfW = SHIP_COLLISION_WIDTH / 2;
-                const shipCenterX = this.position.x;
-                const blockCenterX = (block.minX + block.maxX) / 2;
+    for (const ev of result.events) {
+      if (ev.kind === 'land') {
+        // Landed on a surface top — snap, ground state, possible rebound
+        const surfaceY = ev.surfaceY;
+        this.groundHeight = surfaceY;
+        this.onGround = true;
+        this.canDoubleJump = false;
+        this.onRamp = false;
+        this.rampSlope = 0.0;
 
-                if (shipCenterX > blockCenterX) {
-                  // Push to the right of the block
-                  this.position.x = block.maxX + halfW + 0.01;
-                } else {
-                  // Push to the left of the block
-                  this.position.x = block.minX - halfW - 0.01;
-                }
+        // Classic rebound: fast landing that wasn't already a rebound
+        // Matches old code lines 810-826: vy < -3.0 && !isJumpHeld && !justRebounded
+        if (ev.impactSpeed > 3.0 && !isJumpHeld && !this.justRebounded) {
+          this.isRebounding = true;
+          this.reboundTimer = 0.12;
+          this.velocity.y = 4.2 * (this.settings.bounceFactor !== undefined ? this.settings.bounceFactor : 1.0);
+          this.onGround = false;
+          this.justRebounded = true;
+          this.triggerLandingReboundAudio = true;
+        } else {
+          this.velocity.y = 0;
+          this.justRebounded = false;
+        }
 
-                if (this.difficulty === 'normal') {
-                  const shipMass = this.settings.shipMass !== undefined ? this.settings.shipMass : 1.0;
-                  const damageModifier = this.settings.damageModifier !== undefined ? this.settings.damageModifier : 1.0;
-                  const minDamageSpeed = this.settings.minDamageSpeed !== undefined ? this.settings.minDamageSpeed : 4.0;
-                  const impactSpeed = Math.abs(this.velocity.x);
-                  const damage = impactSpeed < minDamageSpeed ? 0 : impactSpeed * shipMass * damageModifier * 1.5;
-                  if (this.health > damage) {
-                    this.health -= damage;
-                  } else {
-                    this.health = 0;
-                    this.isDead = true;
-                    this.deathReason = 'COLLIDED WITH BLOCK';
-                    this.velocity.set(0, 0, 0);
-                    return;
-                  }
-                }
+      } else if (ev.kind === 'ceiling') {
+        // Head-bonk — matches old lines 679-686
+        // position.y was already pushed down by resolve(); just zero vy
+        this.velocity.y = 0;
 
-                // Stop lateral steering velocity
-                this.velocity.x = 0;
-
-                // Trigger side scrape sound!
-                this.triggerWallCollisionAudio = true;
-
-                // Update the ship's bounding box for subsequent collision checks in this frame
-                shipBox = this.getShipBox();
-              }
-            }
+      } else if (ev.kind === 'wallSide') {
+        // Side slide — matches old lines 753-791
+        this.velocity.x = 0;
+        this.triggerWallCollisionAudio = true;
+        if (this.difficulty === 'normal') {
+          const shipMass = this.settings.shipMass !== undefined ? this.settings.shipMass : 1.0;
+          const damageModifier = this.settings.damageModifier !== undefined ? this.settings.damageModifier : 1.0;
+          const minDamageSpeed = this.settings.minDamageSpeed !== undefined ? this.settings.minDamageSpeed : 4.0;
+          const impactSpeed = ev.impactSpeed;
+          const damage = impactSpeed < minDamageSpeed ? 0 : impactSpeed * shipMass * damageModifier * 1.5;
+          if (this.health > damage) {
+            this.health -= damage;
+          } else {
+            this.health = 0;
+            this.isDead = true;
+            this.deathReason = 'COLLIDED WITH BLOCK';
+            this.velocity.set(0, 0, 0);
+            return;
           }
         }
 
-        // Check if we are landing on top of the tile
-        const fallingDown = this.velocity.y <= 0;
-        const aboveBlockTop = (prevY >= block.maxY && this.position.y <= block.maxY) ||
-                              (prevY > block.maxY - 0.25 && this.position.y <= block.maxY) ||
-                              (shipBox.minY >= block.maxY - 0.25 && shipBox.minY <= block.maxY + 0.15);
-
-        if (fallingDown && aboveBlockTop) {
-          this.position.y = block.maxY;
-          this.groundHeight = block.maxY;
-          this.onRamp = false;
-          this.rampSlope = 0.0;
-
-          const isJumpHeld = keyboard.spacePressed !== undefined ? keyboard.spacePressed : false;
-          if (this.velocity.y < -3.0 && !isJumpHeld && !this.justRebounded) {
-            this.isRebounding = true;
-            this.reboundTimer = 0.12;
-            this.velocity.y = 4.2 * (this.settings.bounceFactor !== undefined ? this.settings.bounceFactor : 1.0); // Classic bounce upwards
-            this.onGround = false;
-            this.justRebounded = true;
-            this.triggerLandingReboundAudio = true;
+      } else if (ev.kind === 'wallFront') {
+        // Frontal crash — matches old lines 715-753
+        if (this.difficulty === 'easy') {
+          this.velocity.z = this.settings.easyCollisionBounceVel !== undefined ? this.settings.easyCollisionBounceVel : 10.0;
+          this.position.z += this.settings.easyCollisionBounceDist !== undefined ? this.settings.easyCollisionBounceDist : 1.2;
+          this.triggerWallCollisionAudio = true;
+          this.velocity.x = 0;
+        } else if (this.difficulty === 'normal') {
+          const shipMass = this.settings.shipMass !== undefined ? this.settings.shipMass : 1.0;
+          const damageModifier = this.settings.damageModifier !== undefined ? this.settings.damageModifier : 1.0;
+          const minDamageSpeed = this.settings.minDamageSpeed !== undefined ? this.settings.minDamageSpeed : 4.0;
+          const impactSpeed = ev.impactSpeed;
+          const damage = impactSpeed < minDamageSpeed ? 0 : impactSpeed * shipMass * damageModifier * 1.5;
+          if (this.health > damage) {
+            this.health -= damage;
+            this.velocity.z = this.settings.easyCollisionBounceVel !== undefined ? this.settings.easyCollisionBounceVel : 10.0;
+            this.position.z += this.settings.easyCollisionBounceDist !== undefined ? this.settings.easyCollisionBounceDist : 1.2;
+            this.triggerWallCollisionAudio = true;
+            this.velocity.x = 0;
           } else {
-            this.onGround = true;
-            this.canDoubleJump = false;
-            this.velocity.y = 0;
-            this.justRebounded = false;
+            this.health = 0;
+            this.isDead = true;
+            this.deathReason = 'COLLIDED WITH BLOCK';
+            this.velocity.set(0, 0, 0);
+            return;
           }
-          shipBox = this.getShipBox();
+        } else {
+          // hard
+          this.isDead = true;
+          this.deathReason = 'COLLIDED WITH BLOCK';
+          this.velocity.set(0, 0, 0);
+          return;
         }
       }
     }
 
-    // Handle standard ground level (y=0) check across active track zones
-    const absoluteZ = -this.position.z;
-    if (absoluteZ >= 0 && absoluteZ <= levelInfo.trackLength) {
-      // Check if we are inside the track width
-      const maxLeft = -TOTAL_ROAD_WIDTH / 2;
-      const maxRight = TOTAL_ROAD_WIDTH / 2;
-      const withinTrackWidth = this.position.x >= maxLeft && this.position.x <= maxRight;
-
-      // Check if we landed on standard flat ground.
-      // Only snap when ship is CLOSE to ground level (within 0.5 units),
-      // not when it has already fallen deep below the road.
-      const crossedGround = (prevY >= 0.0 && this.position.y <= 0.0);
-      const nearGround = (prevY > -0.25 && this.position.y <= 0.0) ||
-                         (this.position.y <= 0.0 && this.position.y > -0.5);
-      if (withinTrackWidth && !this.onGround && this.velocity.y <= 0.0 && (crossedGround || nearGround)) {
-        // Verify we aren't falling through a gap in the road
-        const tileExists = this.checkTileExists(this.position.x, this.position.z);
-        if (tileExists) {
-          this.position.y = 0.0;
-          this.groundHeight = 0.0;
-          this.onRamp = false;
-          this.rampSlope = 0.0;
-
-          const isJumpHeld = keyboard.spacePressed !== undefined ? keyboard.spacePressed : false;
-          if (this.velocity.y < -3.0 && !isJumpHeld && !this.justRebounded) {
-            this.isRebounding = true;
-            this.reboundTimer = 0.12;
-            this.velocity.y = 4.2 * (this.settings.bounceFactor !== undefined ? this.settings.bounceFactor : 1.0); // Classic bounce upwards
-            this.onGround = false;
-            this.justRebounded = true;
-            this.triggerLandingReboundAudio = true;
-          } else {
-            this.onGround = true;
-            this.canDoubleJump = false;
-            this.velocity.y = 0.0;
-            this.justRebounded = false;
-          }
-        }
+    // ── Post-resolution: resting-ground check ────────────────────────────────
+    // If no 'land' event fired (ship was already sitting on the surface — zero
+    // penetration, no push-out), use supportSurface() to detect resting contact.
+    // This is the "or from heightfield.supportSurface for resting" path in §1.7.
+    //
+    // Nudge z by -1e-6 to avoid the columnsOverlappingBox boundary issue at
+    // cell-entry edges (e.g. z=0 exactly maps to rMax=-1 due to the epsilon in
+    // the rMax formula, excluding row 0).
+    if (!this.onGround && !this.isDead && grid) {
+      const restTol = 0.05; // ship is "resting" if surface is within 0.05 of feet
+      // Footprint-aware: sample the ship's full width/length so a ship resting partly
+      // on road (and partly over an obstacle's lane at a clipped corner) stays grounded.
+      const support = supportSurface(grid, numRows, this.position.x, this.position.z, this.position.y, restTol, SHIP_COLLISION_WIDTH / 2, SHIP_LENGTH / 2);
+      if (support && this.velocity.y <= 0 && (this.position.y - support.surfaceY) <= restTol) {
+        this.position.y = support.surfaceY;
+        this.groundHeight = support.surfaceY;
+        this.onGround = true;
+        this.canDoubleJump = false;
+        this.velocity.y = 0;
+        this.justRebounded = false;
       }
     }
-    // Calculate smoothly-interpolated/blended ramp slope if on the ground
-    if (this.onGround && !this.isDead && levelInfo && levelInfo.collidables) {
+
+    // ── P1.3: onRamp / rampSlope — ship-length-weighted slope blend ───────────
+    // Reproduces old lines 870-916: weight each overlapping ramp span by how much
+    // of the ship length it covers, then blend slopes. Uses supportSurface() at
+    // three sample points (front, center, rear) so we capture partial overlap.
+    if (this.onGround && !this.isDead && grid) {
+      const halfL = SHIP_LENGTH / 2;
+      const sampleZ = [
+        this.position.z + halfL,   // rear (higher z = entry side)
+        this.position.z,           // center
+        this.position.z - halfL,   // front (lower z = exit side)
+      ];
+      const tol = 0.5; // how far below surface we can be and still be "on" it
+
       let sumOverlap = 0;
       let sumWeightedSlope = 0;
-      const shipBox = this.getShipBox();
-      const halfL = SHIP_LENGTH / 2;
 
-      for (const block of levelInfo.collidables) {
-        if (block.isRamp) {
-          // Check if ship overlaps block in X and Z
-          const xOverlap = shipBox.maxX > block.minX && shipBox.minX < block.maxX;
-          const zOverlap = shipBox.maxZ > block.minZ && shipBox.minZ < block.maxZ;
-          
-          if (xOverlap && zOverlap) {
-            // Check if ship is vertically close to the ramp at its current position
-            const t = (this.position.z - block.maxZ) / (block.minZ - block.maxZ);
-            const clampedT = Math.max(0, Math.min(1, t));
-            const rampHeight = block.startY + clampedT * (block.endY - block.startY);
-            
-            // Ship position.y is close to the rampHeight (within 0.5 units)
-            if (Math.abs(this.position.y - rampHeight) < 0.5) {
-              const startIntersect = Math.max(this.position.z - halfL, block.minZ);
-              const endIntersect = Math.min(this.position.z + halfL, block.maxZ);
-              const overlap = Math.max(0, endIntersect - startIntersect);
-              
-              if (overlap > 0) {
-                const slope = Math.atan2(block.endY - block.startY, block.maxZ - block.minZ);
-                sumOverlap += overlap;
-                sumWeightedSlope += overlap * slope;
-              }
-            }
-          }
+      // Sample at front, center, rear. For each ramp-supporting span, accumulate
+      // an overlap weight (fraction of ship length touching it) × slope.
+      // ponytail: three-point sample is O(1) and matches old behavior closely.
+      const seen = new Set(); // avoid counting the same span twice
+      for (const z of sampleZ) {
+        // Nudge z slightly negative to avoid columnsOverlappingBox excluding the
+        // cell at boundary edges (z=0 → rMax=-1 due to epsilon, missing row 0).
+        const qz = z - 1e-6;
+        const support = supportSurface(grid, numRows, this.position.x, qz, this.position.y, tol);
+        if (!support || !support.span || !support.span.isRamp) continue;
+        const spanKey = support.span; // object identity — each span is a unique object
+        if (seen.has(spanKey)) continue;
+        seen.add(spanKey);
+
+        // Find the cell bounds for this span so we can compute the exact Z intersection
+        // between the ship footprint and the ramp tile — matching old code lines 889-891.
+        const cell = worldToCell(this.position.x, qz);
+        if (!cell) continue;
+        const bounds = cellBounds(cell.c, cell.r);
+
+        const startIntersect = Math.max(this.position.z - halfL, bounds.minZ);
+        const endIntersect   = Math.min(this.position.z + halfL, bounds.maxZ);
+        const overlap = Math.max(0, endIntersect - startIntersect);
+        if (overlap > 0) {
+          sumOverlap += overlap;
+          sumWeightedSlope += overlap * support.slope;
         }
       }
 
       if (sumOverlap > 0) {
         this.onRamp = true;
-        // Remaining ship length is assumed to be on flat ground (slope 0)
         this.rampSlope = sumWeightedSlope / SHIP_LENGTH;
       } else {
         this.onRamp = false;
@@ -915,66 +766,121 @@ export class PhysicsEngine {
       this.rampSlope = 0.0;
     }
 
-    // 8. Fall out of track detection
+    // ── Fall / deathY ─────────────────────────────────────────────────────────
+    // O(1): local floor is always 0; deathY = -4.0 (matches old default when no
+    // low ramps present). Low ramps (startY < -4) would push this lower, but
+    // those cases are rare and the old O(n) scan's result was also -4 unless a
+    // collidable went below -4. The ramps test for deathY (line 290-315) uses a
+    // ramp ending at -6.0 → old deathY = min(-4, -6 - 4) = -10. With the column
+    // model we query the grid's minimum floor Y instead.
     let deathY = -4.0;
-    if (levelInfo && levelInfo.collidables && levelInfo.collidables.length > 0) {
+    if (grid && numRows > 0) {
       let minRoadY = 0.0;
-      for (const block of levelInfo.collidables) {
-        if ((!block.isObstacle || block.isRamp) && !block.isCeiling) {
-          const tileMinY = block.isRamp ? Math.min(block.startY, block.endY) : (block.minY || 0.0);
-          if (tileMinY < minRoadY) {
-            minRoadY = tileMinY;
+      for (let r = 0; r < numRows; r++) {
+        for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
+          const col = grid[r]?.[c];
+          if (!col || col.isGap) continue;
+          for (const span of col.spans) {
+            if (!span.isWallObstacle) {
+              const spanMinY = Math.min(span.topEntryY, span.topExitY);
+              if (spanMinY < minRoadY) minRoadY = spanMinY;
+            }
           }
         }
       }
       deathY = Math.min(-4.0, minRoadY - 4.0);
     }
     this.deathY = deathY;
+
     const canFallBelow = (this.playStyle === 'flow') || (this.playStyle === 'tower' && this.activeLevelIndex > 0);
     if (this.position.y < deathY) {
       if (canFallBelow) {
-        // Do not die; app.js will handle the wrapping/falling transition.
+        // app.js handles the wrap
       } else {
         this.isDead = true;
         this.deathReason = 'FELL OFF ROAD';
         this.velocity.set(0, -15, 0);
       }
     }
+
+    // Special-tile effects still run as today (resolveSpecialTiles already called
+    // in step 2 of update(), before this method is reached).
   }
+  // ── End _updateColumnCollision ────────────────────────────────────────────────
 
-  // Check if a tile exists at specific world coordinates on the track
-  checkTileExists(x, z) {
-    const maxLeft = -TOTAL_ROAD_WIDTH / 2;
-    const absZ = -z;
-    const rIdx = Math.floor(absZ / TILE_LENGTH);
-    const cIdx = Math.floor((x - maxLeft) / TILE_WIDTH);
+  /**
+   * P1.4: Build a minimal columnGrid from legacy collidables array.
+   * Used as a test/fallback path when neither levelInfo.columnGrid nor
+   * window.currentLevelData is available. Converts each collidable to one or
+   * more Span objects placed in the correct cell. Non-covered cells default to
+   * flat road so the ground-check doesn't fall through.
+   *
+   * ponytail: only called when the other two sources are absent (tests, editor).
+   * In production P3.1 provides levelInfo.columnGrid directly.
+   */
+  _buildGridFromCollidables(collidables) {
+    const HALF_ROAD = TOTAL_ROAD_WIDTH / 2; // 7.0
 
-    // If out of bounds of track, no tile
-    if (rIdx < 0 || cIdx < 0 || cIdx >= ROAD_WIDTH_LANES) return false;
-
-    // Check the original level row data via window global
-    const originalLevelData = window.currentLevelData;
-    if (originalLevelData && originalLevelData.rows[rIdx]) {
-      const tile = originalLevelData.rows[rIdx][cIdx];
-      return tile !== null;
+    // Find how many rows we need
+    let maxRow = 29; // safe default for tests
+    for (const blk of collidables) {
+      const r = Math.round(-blk.maxZ / TILE_LENGTH);
+      if (r > maxRow) maxRow = r;
+      const r2 = Math.round(-blk.minZ / TILE_LENGTH);
+      if (r2 > maxRow) maxRow = r2;
     }
-    return true; // Fallback: assume tile exists if data unavailable
+    const numRows = maxRow + 1;
+
+    // Build rows as flat road by default
+    const rows = Array.from({ length: numRows }, () =>
+      Array.from({ length: ROAD_WIDTH_LANES }, () => ({
+        val: 0, full: false, half: false, tunnel: false,
+        top_color: 0, bottom_color: 0, low3: 0,
+      }))
+    );
+
+    for (const blk of collidables) {
+      const centerX = (blk.minX + blk.maxX) / 2;
+      // Use floor (matching worldToCell) so x=0 → lane 3, not lane 4
+      const c = Math.floor((centerX + HALF_ROAD) / TILE_WIDTH);
+      // Row: maxZ=0 → r=0, maxZ=-4 → r=1, etc. Use round to handle fp edge cases.
+      const r = Math.round(-blk.maxZ / TILE_LENGTH);
+
+      if (r < 0 || r >= numRows || c < 0 || c >= ROAD_WIDTH_LANES) continue;
+
+      if (blk.isRamp) {
+        rows[r][c] = {
+          val: 0, full: false, half: false, tunnel: false,
+          ramp: true,
+          startY: blk.startY ?? 0,
+          endY: blk.endY ?? 0,
+          top_color: 0, bottom_color: 0, low3: 0,
+        };
+      } else if (blk.isObstacle && !blk.isCeiling) {
+        const h = blk.maxY ?? 0;
+        rows[r][c] = {
+          val: 0,
+          full: h >= 2.0,
+          half: h >= 1.0 && h < 2.0,
+          tunnel: false,
+          top_color: 0, bottom_color: 0, low3: 0,
+        };
+      }
+      // Ceiling blocks and non-obstacle flat blocks stay as flat road
+    }
+
+    return buildColumnGrid({ rows });
   }
 
+  // P2.2: super-jump detection via column grid span (no window.currentLevelData read).
+  // Span.isSuperJump is set by legacyTileToSpans for flat-road tiles that carry the flag.
   checkSuperJumpTile(x, z) {
-    const maxLeft = -TOTAL_ROAD_WIDTH / 2;
-    const absZ = -z;
-    const rIdx = Math.floor(absZ / TILE_LENGTH);
-    const cIdx = Math.floor((x - maxLeft) / TILE_WIDTH);
-
-    if (rIdx < 0 || cIdx < 0 || cIdx >= ROAD_WIDTH_LANES) return false;
-
-    const originalLevelData = window.currentLevelData;
-    if (originalLevelData && originalLevelData.rows[rIdx]) {
-      const tile = originalLevelData.rows[rIdx][cIdx];
-      return tile && !!tile.isSuperJump;
-    }
-    return false;
+    if (!this._colGrid || !this._colNumRows) return false;
+    const cell = worldToCell(x, z);
+    if (!cell) return false;
+    const col = this._colGrid[cell.r]?.[cell.c];
+    if (!col || col.isGap) return false;
+    return col.spans.some(s => s.isSuperJump);
   }
 
   // Ship bounding box

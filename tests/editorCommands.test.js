@@ -7,7 +7,8 @@ import {
   UpdateMetadataCommand,
   UpdatePhysicsCommand,
   ConfigureMaterialCommand,
-  DrawRampCommand
+  DrawRampCommand,
+  EditSpansCommand
 } from '../editorCommands.js';
 
 describe('Editor Command Pattern Unit Tests', () => {
@@ -120,6 +121,109 @@ describe('Editor Command Pattern Unit Tests', () => {
 
     state.undo();
     expect(state.level.rows[10][3]).toBeNull();
+  });
+
+  // ── P4.3 EditSpansCommand tests ───────────────────────────────────────────
+
+  it('P4.3: EditSpansCommand execute sets type:spans and drops legacy fields', () => {
+    // Seed a legacy ramp cell
+    state.executeCommand(new PaintCellCommand(2, 3, {
+      type: 'ramp', colorIdx: 5, ramp: { direction: 'forward', startY: 0, endY: 2 }
+    }));
+    const legacyCell = state.level.rows[3][2];
+    expect(legacyCell.type).toBe('ramp');
+
+    const spans = [
+      { floorY: -0.1, topEntryY: 0, topExitY: 0 },
+      { floorY: 3.0, topEntryY: 3.2, topExitY: 3.2 }
+    ];
+    state.executeCommand(new EditSpansCommand(2, 3, spans));
+
+    const cell = state.level.rows[3][2];
+    expect(cell.type).toBe('spans');
+    expect(Array.isArray(cell.spans)).toBe(true);
+    expect(cell.spans).toHaveLength(2);
+    expect(cell.spans[0].floorY).toBe(-0.1);
+    // Legacy fields must be gone
+    expect(cell.ramp).toBeUndefined();
+    expect(cell.colorIdx).toBeUndefined();
+  });
+
+  it('P4.3: EditSpansCommand undo restores prior legacy ramp cell exactly', () => {
+    const legacyRamp = { type: 'ramp', colorIdx: 5, ramp: { direction: 'forward', startY: 0, endY: 2 } };
+    state.executeCommand(new PaintCellCommand(2, 3, legacyRamp));
+
+    const spans = [{ floorY: -0.1, topEntryY: 0, topExitY: 0 }];
+    state.executeCommand(new EditSpansCommand(2, 3, spans));
+    expect(state.level.rows[3][2].type).toBe('spans');
+
+    state.undo();
+    const restored = state.level.rows[3][2];
+    expect(restored.type).toBe('ramp');
+    expect(restored.colorIdx).toBe(5);
+    expect(restored.ramp.endY).toBe(2);
+  });
+
+  it('P4.3: EditSpansCommand undo restores null when prior cell was null', () => {
+    // Lane 4, row 7 starts null
+    expect(state.level.rows[7][4]).toBeNull();
+
+    const spans = [{ floorY: -0.1, topEntryY: 0, topExitY: 0 }];
+    state.executeCommand(new EditSpansCommand(4, 7, spans));
+    expect(state.level.rows[7][4].type).toBe('spans');
+
+    state.undo();
+    expect(state.level.rows[7][4]).toBeNull();
+  });
+
+  it('P4.3: adding a span at activePlaneHeight=3 yields 2 spans, ground span unchanged', () => {
+    // Start with a ground span
+    const groundSpans = [{ floorY: -0.1, topEntryY: 0, topExitY: 0 }];
+    state.executeCommand(new EditSpansCommand(1, 5, groundSpans));
+    state.ui.activePlaneHeight = 3;
+
+    // Simulate what the Add Span button does
+    const cell = state.level.rows[5][1];
+    const h = state.ui.activePlaneHeight * 1.0;
+    const newSpan = { floorY: h, topEntryY: h + 0.2, topExitY: h + 0.2 };
+    const newSpans = [...cell.spans, newSpan];
+    state.executeCommand(new EditSpansCommand(1, 5, newSpans));
+
+    const result = state.level.rows[5][1];
+    expect(result.spans).toHaveLength(2);
+    // Ground span unchanged
+    expect(result.spans[0].floorY).toBe(-0.1);
+    expect(result.spans[0].topEntryY).toBe(0);
+    // New upper span at height 3
+    expect(result.spans[1].floorY).toBeCloseTo(3);
+    expect(result.spans[1].topEntryY).toBeCloseTo(3.2);
+  });
+
+  it('P4.3: cook → deserialize round-trip preserves EditSpansCommand spans', () => {
+    const spans = [
+      { floorY: -0.1, topEntryY: 0, topExitY: 0 },
+      { floorY: 3.0, topEntryY: 3.2, topExitY: 3.2 }
+    ];
+    state.executeCommand(new EditSpansCommand(3, 2, spans));
+
+    const cooked = state.cook();
+    const reloaded = new EditorStateManager();
+    expect(reloaded.deserialize(JSON.stringify(cooked))).toBe(true);
+
+    const cell = reloaded.level.rows[2][3];
+    expect(cell.type).toBe('spans');
+    expect(cell.spans).toHaveLength(2);
+    expect(cell.spans[0].floorY).toBe(-0.1);
+    expect(cell.spans[1].floorY).toBe(3.0);
+    expect(cell.spans[1].topEntryY).toBe(3.2);
+  });
+
+  it('P4.3: toString reports lane+1, row, and span count', () => {
+    const cmd = new EditSpansCommand(2, 5, [
+      { floorY: -0.1, topEntryY: 0, topExitY: 0 },
+      { floorY: 3.0, topEntryY: 3.2, topExitY: 3.2 }
+    ]);
+    expect(cmd.toString()).toBe('Edited spans at Lane 3, Row 5 (2 spans)');
   });
 
   it('should jump to arbitrary history indices correctly', () => {

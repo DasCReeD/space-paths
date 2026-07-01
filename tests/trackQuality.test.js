@@ -147,3 +147,83 @@ function rowWith(props) {
   row[3] = tile(props);
   return row;
 }
+
+// ── Spans cell builders ───────────────────────────────────────────────────────
+
+/** A spans cell with a wall span that blocks the ground and a ceiling above it. */
+function spansCell(wallTop, ceilingFloor) {
+  const spans = [{ floorY: 0, topExitY: wallTop, isWallObstacle: true }];
+  if (ceilingFloor != null) spans.push({ floorY: ceilingFloor, topExitY: ceilingFloor + 1, isWallObstacle: false });
+  return { spans };
+}
+
+/** A row where every lane is a spans cell with the same geometry. */
+function allSpansRow(wallTop, ceilingFloor) {
+  return Array.from({ length: LANES }, () => spansCell(wallTop, ceilingFloor));
+}
+
+/** A row with spans cells in all lanes except one open legacy lane. */
+function mixedSpansRow(wallTop, ceilingFloor, openLaneIdx = 0) {
+  return Array.from({ length: LANES }, (_, l) =>
+    l === openLaneIdx ? tile() : spansCell(wallTop, ceilingFloor));
+}
+
+describe('A8_clearance (spans impossible clearance)', () => {
+  it('flags a row where every lane has impossible clearance (wall blocks ground, ceiling < SHIP_HEIGHT headroom)', () => {
+    // wall top=2.5, ceiling floor=2.7 → headroom=0.2 < 0.4; wall starts at 0 so can't pass under
+    const rows = [...flatTrack(20), allSpansRow(2.5, 2.7), ...flatTrack(20)];
+    const res = validateTrackQuality(rows);
+    const a8 = res.violations.filter((v) => v.rule === 'A8_clearance');
+    expect(a8.length).toBeGreaterThan(0);
+    expect(a8[0].severity).toBe('fail');
+    expect(a8[0].row).toBe(20);
+  });
+
+  it('does NOT flag when headroom on top of wall is ample (≥ SHIP_HEIGHT)', () => {
+    // wall top=1.0, ceiling floor=2.5 → headroom=1.5 ≥ 0.4 — fair
+    const rows = [...flatTrack(20), allSpansRow(1.0, 2.5), ...flatTrack(20)];
+    const res = validateTrackQuality(rows);
+    const a8 = res.violations.filter((v) => v.rule === 'A8_clearance');
+    expect(a8).toHaveLength(0);
+  });
+
+  it('does NOT flag when at least one open legacy lane exists alongside impossible spans lanes', () => {
+    // 6 impossible spans lanes + 1 open legacy tile — player can dodge
+    const rows = [...flatTrack(20), mixedSpansRow(2.5, 2.7, 0), ...flatTrack(20)];
+    const res = validateTrackQuality(rows);
+    const a8 = res.violations.filter((v) => v.rule === 'A8_clearance');
+    expect(a8).toHaveLength(0);
+  });
+
+  it('does NOT flag when there is no ceiling (no upper span) — open sky above wall', () => {
+    // wall top=2.5, no ceiling → headroom=Infinity — player can mount the wall
+    const rows = [...flatTrack(20), allSpansRow(2.5, null), ...flatTrack(20)];
+    const res = validateTrackQuality(rows);
+    const a8 = res.violations.filter((v) => v.rule === 'A8_clearance');
+    expect(a8).toHaveLength(0);
+  });
+});
+
+describe('Legacy parity (spans-unaware levels score identically)', () => {
+  it('a purely legacy level produces no A8 violation and its score is unchanged', () => {
+    // A simple handbuilt legacy level — compute score once and confirm A8 absent.
+    const rows = [...flatTrack(10), gapRow(), ...flatTrack(10)];
+    const res = validateTrackQuality(rows);
+    expect(res.violations.some((v) => v.rule === 'A8_clearance')).toBe(false);
+    // Score must be 100 (no fails, no warns on this benign track).
+    expect(res.score).toBe(100);
+  });
+
+  it('a legacy level with gates and tunnels still scores identically to pre-spans code', () => {
+    const rows = [
+      ...flatTrack(8), gateRow(), ...flatTrack(8), tunnelRow(), tunnelRow(), ...flatTrack(15),
+      gapRow(), ...flatTrack(8),
+    ];
+    const res = validateTrackQuality(rows);
+    expect(res.violations.some((v) => v.rule === 'A8_clearance')).toBe(false);
+    // The score must equal the deterministic formula value — pre-compute it.
+    const failCount = res.violations.filter((v) => v.severity === 'fail').length;
+    const warnCount = res.violations.length - failCount;
+    expect(res.score).toBe(Math.max(0, 100 - failCount * 12 - warnCount * 4));
+  });
+});

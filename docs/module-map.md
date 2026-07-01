@@ -3,6 +3,8 @@
 > **Last updated:** 2026-06-25
 > Authoritative code map for all source modules, their exports, dependencies, and relationships.
 >
+> **2026-06-30 — Multi-span column collision:** Collision engine rewritten into a unified column model. New modules `heightfield.js` (pure, THREE-free, shared browser+Node) and `collision.js` (swept-AABB MTV resolver); `physics.js` uses the column grid as the only collision path; `levelLoader.js` attaches `columnGrid` + `numRows` to `levelInfo`. `worldBuilder.js` `solveLevel` upgraded to multi-span; `trackQuality.js` gained rule `A8_clearance`. See `docs/collision-redesign-plan.md`.
+>
 > **2026-06-25 — Visualizer Preset Variety:** Added 179 pre-converted Waveform presets from the projectM "presets-cream-of-the-crop" repository, loaded asynchronously on demand.
 >
 > **2026-06-22 — XMB menu system:** All in-game menus were rebuilt as a PS3
@@ -20,34 +22,34 @@
 2. [app.js — Game Orchestrator](#appjs)
 3. [graphics.js — Rendering Engine](#graphicsjs)
 4. [physics.js — Physics & Controls](#physicsjs)
-5. [levelLoader.js — Level Builder](#levelloaderjs)
-6. [worldBuilder.js — Procedural Generator](#worldbuilderjs)
-7. [audio.js — Audio System](#audiojs)
-8. [cockpitConsole.js — Cockpit HUD](#cockpitconsolejs)
-9. [preview.js — Garage Preview](#previewjs)
-10. [oplSynth.js — OPL2 FM Synth](#oplsynthjs)
-11. [levels.js — Level Pack Loader](#levelsjs)
-12. [touchControls.js — Touch Input Manager](#touchcontrolsjs)
-13. [generate_textures.js — Texture Generator](#generate_texturesjs)
-14. [debug_coords.js — Debug Overlay](#debug_coordsjs)
-15. [vitest.setup.js — Test Setup](#vitestsetupjs)
-16. [index.html — UI Structure](#indexhtml)
-17. [index.css — Design System](#indexcss)
-18. [vite.config.js — Build Config](#viteconfigjs)
-19. [package.json — Project Metadata](#packagejson)
-20. [editor.html — Editor UI Structure](#editorhtml-1)
-21. [editor.css — Editor Design System](#editorcss-1)
-22. [editor.js — Editor Manager](#editorjs-1)
-23. [editorRenderer.js — Editor Viewport Renderer](#editorrendererjs-1)
-24. [editorState.js — Editor Document State](#editorstatejs-1)
-25. [editorCommands.js — Editor Commands](#editorcommandsjs-1)
-26. [Cross-Module Dependency Graph](#cross-module-dependency-graph)
-27. [Theme System](#theme-system)
-28. [Asset Structure](#asset-structure)
-29. [Data Files](#data-files)
-30. [analyze_audio.js — Audio Feature Extractor](#analyze_audiojs)
-31. [generate_audio_level.js — Audio Level Generator](#generate_audio_leveljs)
-32. [convert-all-presets.js — Waveform Presets Offline Converter](#convert-all-presetsjs)
+5. [heightfield.js — Column Model](#heightfieldjs)
+6. [collision.js — MTV Resolver](#collisionjs)
+7. [levelLoader.js — Level Builder](#levelloaderjs)
+8. [worldBuilder.js — Procedural Generator](#worldbuilderjs)
+9. [audio.js — Audio System](#audiojs)
+10. [cockpitConsole.js — Cockpit HUD](#cockpitconsolejs)
+11. [preview.js — Garage Preview](#previewjs)
+14. [touchControls.js — Touch Input Manager](#touchcontrolsjs)
+15. [generate_textures.js — Texture Generator](#generate_texturesjs)
+16. [debug_coords.js — Debug Overlay](#debug_coordsjs)
+17. [vitest.setup.js — Test Setup](#vitestsetupjs)
+18. [index.html — UI Structure](#indexhtml)
+19. [index.css — Design System](#indexcss)
+20. [vite.config.js — Build Config](#viteconfigjs)
+21. [package.json — Project Metadata](#packagejson)
+22. [editor.html — Editor UI Structure](#editorhtml-1)
+23. [editor.css — Editor Design System](#editorcss-1)
+24. [editor.js — Editor Manager](#editorjs-1)
+25. [editorRenderer.js — Editor Viewport Renderer](#editorrendererjs-1)
+26. [editorState.js — Editor Document State](#editorstatejs-1)
+27. [editorCommands.js — Editor Commands](#editorcommandsjs-1)
+28. [Cross-Module Dependency Graph](#cross-module-dependency-graph)
+29. [Theme System](#theme-system)
+30. [Asset Structure](#asset-structure)
+31. [Data Files](#data-files)
+32. [analyze_audio.js — Audio Feature Extractor](#analyze_audiojs)
+33. [generate_audio_level.js — Audio Level Generator](#generate_audio_leveljs)
+34. [convert-all-presets.js — Waveform Presets Offline Converter](#convert-all-presetsjs)
 
 
 ---
@@ -66,7 +68,9 @@
 | [editor.js](../editor.js) | 65 KB | ~1,600 | Level Editor — page orchestrator, UI listeners, customizer |
 | [index.html](../index.html) | 61 KB | ~967 | Full game UI — menus, HUD, settings, garage, touch controls |
 | [worldBuilder.js](../worldBuilder.js) | 50 KB | ~1,695 | Procedural level generation (standalone Node.js CLI) |
-| [physics.js](../physics.js) | 46 KB | ~1,050 | Physics engine, collision detection, keyboard/gamepad controller |
+| [heightfield.js](../heightfield.js) | — | — | Pure multi-span column model (no Three.js); shared by browser and Node CLI |
+| [collision.js](../collision.js) | — | — | Swept-AABB MTV resolver; imports only `heightfield.js` |
+| [physics.js](../physics.js) | 46 KB | ~1,050 | Physics engine, keyboard/gamepad controller; column grid is the only collision path |
 | [audio.js](../audio.js) | 41 KB | ~1,281 | Web Audio API synthesizer, music sequencer, SFX |
 | [editorRenderer.js](../editorRenderer.js) | 35 KB | ~900 | 3D + 2D orthogonal camera layout viewports renderer |
 | [cockpitConsole.js](../cockpitConsole.js) | 35 KB | ~400 | 3D cockpit dashboard HUD + path scanner minimap |
@@ -292,7 +296,71 @@
 | `SHIP_LENGTH` | const `1.8` | Ship collision box length |
 
 **Dependencies:**
+- [heightfield.js](../heightfield.js) → `ROAD_WIDTH_LANES`, `TILE_WIDTH`, `TILE_LENGTH`, `TOTAL_ROAD_WIDTH`, `buildColumnGrid`, `supportSurface`, `cellBounds`, `worldToCell`
+- [collision.js](../collision.js) → `resolve` (as `columnResolve`)
 - `three` (Vector3, Box3)
+
+---
+
+## heightfield.js
+
+**Purpose:** Pure-logic multi-span column model shared by the browser (physics, levelLoader, editor) and the Node `worldBuilder.js` CLI. **No Three.js import.** Centralizes the four track constants (single source of truth) and provides the complete column-grid API used by all collision and rendering code.
+
+**Stats:** NEW (2026-06-30)
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `ROAD_WIDTH_LANES` | const `7` | Number of drivable lanes |
+| `TILE_WIDTH` | const `2.0` | World-unit width of one tile/lane |
+| `TILE_LENGTH` | const `4.0` | World-unit depth (Z-extent) of one tile/row |
+| `TOTAL_ROAD_WIDTH` | const `14.0` | `TILE_WIDTH × ROAD_WIDTH_LANES` |
+| `legacyTileToSpans(tile)` | function | Converts a legacy tile object (`full`/`half`/`ramp`/`tunnel` flags) to `Span[]`. When `tile.spans` is present it is authoritative (native multi-span passthrough). |
+| `cellBounds(c, r)` | function | Returns `{minX, maxX, minZ, maxZ}` for cell (lane c, row r) |
+| `worldToCell(x, z)` | function | Floor-divides world coords to `{c, r}` or `null` if out of track |
+| `buildColumnGrid(levelData)` | function | Walks `levelData.rows`; builds and returns `{grid: Column[][], numRows}`. Calls `addTunnelStructure` to correct multi-lane tunnel arch heights and add partial-width wall legs. |
+| `spanTopAtZ(span, bounds, z)` | function | Interpolates the drivable top height of a span at world Z. `bounds = {minZ, maxZ}` (from `cellBounds`). |
+| `spanSolidTopAtZ(span, bounds, z)` | function | Alias of `spanTopAtZ`; returns the same value (top face is the solid/drivable surface). |
+| `columnsOverlappingBox(grid, numRows, box)` | function | Returns `Array<{c, r, column, bounds}>` for all cells whose footprint overlaps `box = {minX, maxX, minZ, maxZ}` |
+| `supportSurface(grid, numRows, x, z, y, tol, halfW, halfL)` | function | Finds the highest drivable span top ≤ `y + tol` across the ship footprint (`halfW`/`halfL`). Returns `{surfaceY, span, slope}` or `null`. |
+| `ceilingAbove(grid, numRows, x, z, y)` | function | Returns the lowest `span.floorY` strictly above `y` (head-bonk ceiling), or `Infinity`. |
+
+**Typedefs (JSDoc only):**
+
+- **`Span`** — `{floorY, topEntryY, topExitY, isRamp, behavior, isWallObstacle, topColor, bottomColor, xMin?, xMax?, isSuperJump?}`. A solid filling the cell footprint; top face drivable (may slope along Z); underside (`floorY`) flat. `xMin`/`xMax` restrict the X extent for partial-width spans (tunnel side walls).
+- **`Column`** — `{spans: Span[], isGap}`. Spans sorted ascending by `topEntryY`.
+
+**Imported by:** `physics.js`, `levelLoader.js`, `editorRenderer.js`, `worldBuilder.js`, `collision.js`
+
+---
+
+## collision.js
+
+**Purpose:** Swept-AABB velocity-aware MTV resolver. Geometry only — resolves penetration and emits events; applies no game outcomes (those live in `physics.js`). Imports only `heightfield.js`; no Three.js.
+
+**Stats:** NEW (2026-06-30)
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `resolve({grid, numRows, position, velocity, dt, ship})` | function | Substep-swept push-out loop. `ship = {width, height, length}`. Returns `{position, velocity, events}`. Substep cap = `min(0.5, ship.height * 0.9)` (prevents tunneling thin surfaces). |
+| `getShipBox(position, ship)` | function | Returns `{minX,maxX,minY,maxY,minZ,maxZ}` AABB with feet at `position.y`. |
+
+**CollisionEvent schema** (emitted by `resolve`, consumed by `physics.js`):
+
+| Field | Description |
+|-------|-------------|
+| `kind` | `'land'` \| `'ceiling'` \| `'wallSide'` \| `'wallFront'` |
+| `axis` | `'x'` \| `'y'` \| `'z'` (MTV resolution axis) |
+| `span` | The `Span` object that was hit (carries `behavior` + metadata) |
+| `cell` | `{c, r}` |
+| `surfaceY` | For `'land'`: the top the ship snapped to |
+| `penetration` | MTV depth before push-out |
+| `impactSpeed` | `|velocity[axis]|` at contact |
+
+Axis selection is velocity-aware (`chooseAxis`): resolves along the face the ship crossed, with a `nearTop` exception so ramps ride up instead of walling. Directional (swept) push-out backs the ship's leading edge to the obstacle's entry face, which correctly handles obstacles thinner than the ship.
+
+**Imported by:** `physics.js`
+
+**Dependencies:** [heightfield.js](../heightfield.js)
 
 ---
 
@@ -348,14 +416,34 @@
 |--------|------|-------------|
 | `createRng(seed)` | function (internal) | Seeded Mulberry32 PRNG |
 | `generateLevelData(idx, biome, seed)` | function (internal) | Creates level data structure |
-| `solveLevel(levelData)` | function (internal) | Static physics simulation to verify completability |
+| `solveLevel(levelData)` | function (internal) | Static DFS physics solver — upgraded (2026-06-30) to understand multi-span cells: state key tracks which span the ship is on; transitions handle pass-under clearance, head-bonk, and gaps between spans. Legacy single-span levels solve identically. |
 | `BIOME_PALETTES` | const (internal) | 10 biome × color scheme mappings |
 
 **Exports:** None (standalone script, not imported by other modules)
 
 **Dependencies:**
 - `fs`, `path` (Node.js builtins)
+- [heightfield.js](../heightfield.js) → `legacyTileToSpans`, `cellBounds`, `spanTopAtZ` (imported for multi-span solver)
 - [data/level_patterns.json](../data/level_patterns.json) (loaded at startup)
+
+---
+
+## trackQuality.js
+
+**Purpose:** Static per-level quality validator used by `worldBuilder.js` as a generation gate. Runs headless (Node-safe). Returns a structured result with a score and a list of violated rules.
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `validateTrackQuality(levelData, solveResult)` | function | Runs all rule checks; returns `{score, violations: [{rule, severity, row, detail}]}` |
+| `forcedDemand(levelData)` | function | Returns forced-demand/intensity metrics used by A-rules |
+
+**Rules relevant to the multi-span rewrite (2026-06-30):**
+
+| Rule | Description |
+|------|-------------|
+| `A8_clearance` | Flags cells where a span stack creates a vertical clearance gap that is impossible for the ship to pass through (clearance < ship height) — previously blind to multi-span verticality. |
+
+**Dependencies:** None (pure data analysis — no imports, no THREE, no DOM; runs at generation time)
 
 ---
 
@@ -820,8 +908,12 @@ graph TD
     CC --> LL
     CC --> THREE
 
+    PHY --> HF["heightfield.js<br/>Column Model"]
+    PHY --> COL["collision.js<br/>MTV Resolver"]
     PHY --> THREE
 
+    COL --> HF
+    LL --> HF
     LL --> THREE
 
     PRV --> THREE
@@ -837,10 +929,12 @@ graph TD
         ED --> EDS["editorState.js"]
         EDS --> EDC["editorCommands.js"]
         EDS -->|"uses cooked parser"| LL
+        EDR --> HF
     end
 
     subgraph "Standalone CLI Scripts"
-        WB["worldBuilder.js"] -->|"reads"| DATA
+        WB["worldBuilder.js"] --> HF
+        WB -->|"reads"| DATA
         GT["generate_textures.js"] -->|"writes"| TEXOUT["*.png textures"]
         DC["debug_coords.js"] -->|"uses"| PUP["puppeteer"]
     end

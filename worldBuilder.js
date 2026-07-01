@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import { validateTrackQuality, forcedDemand } from './trackQuality.js';
+import { legacyTileToSpans, cellBounds, spanTopAtZ } from './heightfield.js';
 
 // ==========================================================================
 // TRACK-QUALITY GATE (Bucket A wiring) + SHUFFLE-BAG SELECTION (Bucket B)
@@ -1059,6 +1060,39 @@ function solveLevel(levelData) {
     return baseY + archHeight - archThickness;
   }
 
+  // ── Multi-span helpers (only used for cells carrying an explicit `spans` array) ──
+  // Legacy single-span cells never reach these; the legacy arithmetic below is
+  // left byte-for-byte unchanged for them (parity by construction).
+  function spanTops(tile, lane, row) {
+    // tops of landable (non-wall) spans and floors of all spans, at the cell entry edge.
+    const b = cellBounds(lane, row);
+    const spans = legacyTileToSpans(tile);
+    return spans.map(s => ({
+      entryTop: spanTopAtZ(s, b, b.maxZ),
+      exitTop: spanTopAtZ(s, b, b.minZ),
+      floorY: s.floorY,
+      isWall: !!s.isWallObstacle,
+    }));
+  }
+
+  // Step from surface height h into a spans-cell. Returns { canStep, stepHeight } or null.
+  function spanStep(tile, lane, row, h) {
+    const ss = spanTops(tile, lane, row);
+    // A step is legal onto a non-wall span whose entry top ≈ h.
+    let best = null;
+    for (const s of ss) {
+      if (!s.isWall && Math.abs(s.entryTop - h) < 0.1) {
+        if (best === null || s.exitTop > best) best = s.exitTop;
+      }
+    }
+    if (best === null) return { canStep: false, stepHeight: h };
+    // Head-bonk: any span floor sitting in (h, h + SHIP_HEIGHT) blocks the step.
+    for (const s of ss) {
+      if (s.floorY > h + 1e-6 && s.floorY < h + SHIP_HEIGHT) return { canStep: false, stepHeight: h };
+    }
+    return { canStep: true, stepHeight: best };
+  }
+
   const visited = new Set();
   const fuelRate = (levelData.fuelConsumptionRate || 25.0) / 50.0;
   const oxyRate = 1.0;
@@ -1146,7 +1180,11 @@ function solveLevel(levelData) {
         const nextTile = rows[nextRow][nextLane];
         let canStep = false;
         let stepHeight = h;
-        if (nextTile && nextTile.top_color !== 13) {
+        if (nextTile && Array.isArray(nextTile.spans)) {
+          const res = spanStep(nextTile, nextLane, nextRow, h);
+          canStep = res.canStep;
+          stepHeight = res.stepHeight;
+        } else if (nextTile && nextTile.top_color !== 13) {
           // Obstacles (full/half) are WALLS — never walkable or landable
           const isObstacle = !!(nextTile.full || nextTile.half);
           if (!isObstacle) {
@@ -1218,6 +1256,28 @@ function solveLevel(levelData) {
               crashed = true;
               break;
             }
+          }
+
+          if (checkTile && Array.isArray(checkTile.spans)) {
+            const ss = spanTops(checkTile, nextLane, checkRow);
+            let landTop = null, headClip = false, bodyHit = false;
+            for (const s of ss) {
+              // land onto a non-wall span top while falling into its window
+              if (!s.isWall && t >= tUp && yPrev >= s.entryTop - 0.5 && yFlight <= s.entryTop + 0.5) {
+                if (landTop === null || s.exitTop > landTop) landTop = s.exitTop;
+              }
+              // ship bottom inside a solid span body → crash
+              if (yFlight < s.entryTop - 0.1 && yFlight >= s.floorY) bodyHit = true;
+              // span floor clips the head → crash
+              if (s.floorY > yFlight && s.floorY < yFlight + SHIP_HEIGHT) headClip = true;
+            }
+            if (landTop !== null) {
+              landed = true; jumpTime = t; landingTileHeight = landTop; break;
+            }
+            if (bodyHit || headClip) { crashed = true; break; }
+            yPrev = yFlight;
+            step++;
+            continue;
           }
 
           const checkTileHeight = (checkTile && checkTile.ramp) ? checkTile.endY : getTileObstacleHeight(checkTile);
@@ -2046,6 +2106,43 @@ function generateVoidLevel(levelIndex, difficulty, seed) {
       const h1 = -2.0 + (i / 10) * 2.0;
       const h2 = -2.0 + ((i + 1) / 10) * 2.0;
       state.rows.push(createRampRow(h1, h2, [1, 2, 3, 4, 5]));
+    }
+
+    // SECTION 5d: OVERPASS SHOWCASE — a true multi-span bridge (native `spans`).
+    // The racing line ramps UP onto an elevated deck and drives OVER it; a ground
+    // road runs beneath the same cells (the pass-UNDER route), so each deck cell
+    // renders as a slab with a visible underside, not a ground pillar. This proves
+    // the whole pipeline (build → bake → normalize → serialize → runtime + solver)
+    // handles stacked spans end-to-end. Enters/exits at ground height 0 on lane 3.
+    {
+      const deckH = 2.0, rampLen = 5, deckLen = 8;
+      // A two-span cell: ground road (drive-under) + elevated deck (drive-over).
+      const overpassCell = () => ({
+        spans: [
+          { floorY: -0.1, topEntryY: 0.0, topExitY: 0.0, bottom_color: 1 },
+          { floorY: deckH - 0.3, topEntryY: deckH, topExitY: deckH, bottom_color: 1 },
+        ],
+      });
+      // Ramp up 0 → deckH on the center lanes.
+      for (let i = 0; i < rampLen; i++) {
+        const row = createEmptyRow();
+        for (let l = 1; l <= 5; l++) row[l] = createRampTile((i / rampLen) * deckH, ((i + 1) / rampLen) * deckH, 1);
+        state.rows.push(row);
+      }
+      // Drive across the elevated deck; ground road passes beneath the same cells.
+      for (let i = 0; i < deckLen; i++) {
+        const row = createEmptyRow();
+        for (let l = 1; l <= 5; l++) row[l] = overpassCell();
+        state.rows.push(row);
+      }
+      // Ramp back down deckH → 0.
+      for (let i = 0; i < rampLen; i++) {
+        const row = createEmptyRow();
+        for (let l = 1; l <= 5; l++) row[l] = createRampTile(deckH * (1 - i / rampLen), deckH * (1 - (i + 1) / rampLen), 1);
+        state.rows.push(row);
+      }
+      // Settle on flat ground before the next section.
+      for (let i = 0; i < 3; i++) state.rows.push(createRoadRow(3, 5, 1));
     }
 
     // SECTION 6: Burning Hazards & Boost Chain (rows 225-284)
@@ -2941,6 +3038,10 @@ function injectCheckpoints(levelData) {
         for (let colIdx = 0; colIdx < 7; colIdx++) {
           const tile = row[colIdx];
           if (tile) {
+            // Multi-span cells (stacked decks) are never valid checkpoint ground:
+            // the checkpoint writer flattens the row to a single road tile, which
+            // would destroy an overpass. Treat like a ramp/obstacle.
+            if (Array.isArray(tile.spans)) { valid = false; break; }
             // No sloped ramps, tunnels, obstacles, or special tiles in the first pass
             const isSlopedRamp = tile.ramp && tile.startY !== tile.endY;
             if (isSlopedRamp || tile.tunnel || tile.full || tile.half ||
@@ -2982,7 +3083,7 @@ function injectCheckpoints(levelData) {
             const tile = row[colIdx];
             if (tile) {
               const isSlopedRamp = tile.ramp && tile.startY !== tile.endY;
-              if (isSlopedRamp || tile.tunnel) {
+              if (isSlopedRamp || tile.tunnel || Array.isArray(tile.spans)) {
                 valid = false;
                 break;
               }

@@ -278,4 +278,109 @@ describe('Editor State Manager Unit Tests', () => {
     state.redo();
     expect(state.level.rows).toHaveLength(50);
   });
+
+  // ── P4.1 multi-span tests ──────────────────────────────────────────────────
+
+  it('P4.1: multi-span draft cell round-trips draft→serialize→deserialize losslessly', () => {
+    // A hand-authored overpass: ground road at y=0, slab at y=3–3.2
+    const spansCell = {
+      type: 'spans',
+      spans: [
+        { floorY: -0.1, topEntryY: 0,   topExitY: 0,   bottom_color: 1 },
+        { floorY: 3.0,  topEntryY: 3.2, topExitY: 3.2, bottom_color: 1 }
+      ]
+    };
+    state.setCellRaw(3, 0, spansCell);
+
+    const serialized = state.serialize();
+    const loaded = new EditorStateManager();
+    expect(loaded.deserialize(serialized)).toBe(true);
+
+    const cell = loaded.level.rows[0][3];
+    expect(cell.type).toBe('spans');
+    expect(cell.spans).toHaveLength(2);
+    expect(cell.spans[0].floorY).toBe(-0.1);
+    expect(cell.spans[0].topEntryY).toBe(0);
+    expect(cell.spans[1].floorY).toBe(3.0);
+    expect(cell.spans[1].topExitY).toBe(3.2);
+  });
+
+  it('P4.1: cook emits spans array; reload round-trip is lossless', () => {
+    const spansCell = {
+      type: 'spans',
+      spans: [
+        { floorY: -0.1, topEntryY: 0,   topExitY: 0,   bottom_color: 1 },
+        { floorY: 3.0,  topEntryY: 3.2, topExitY: 3.2, bottom_color: 1 }
+      ]
+    };
+    state.setCellRaw(2, 1, spansCell);
+
+    const cooked = state.cook();
+    const cookedCell = cooked.rows[1][2];
+
+    // Cooked tile has spans array, no legacy flags
+    expect(Array.isArray(cookedCell.spans)).toBe(true);
+    expect(cookedCell.spans).toHaveLength(2);
+    expect(cookedCell.spans[0].floorY).toBe(-0.1);
+    expect(cookedCell.spans[1].floorY).toBe(3.0);
+    expect(cookedCell.val).toBeUndefined(); // spans cells have no legacy flat fields
+
+    // Re-load the cooked JSON — spans survive as draft type:'spans'
+    const reloaded = new EditorStateManager();
+    expect(reloaded.deserialize(JSON.stringify(cooked))).toBe(true);
+    const reloadedCell = reloaded.level.rows[1][2];
+    expect(reloadedCell.type).toBe('spans');
+    expect(reloadedCell.spans).toHaveLength(2);
+    expect(reloadedCell.spans[1].topEntryY).toBe(3.2);
+  });
+
+  it('P4.1: normal (non-spans) cells are completely unaffected by multi-span changes', () => {
+    state.executeCommand(new PaintCellCommand(3, 5, { type: 'road', colorIdx: 11 }));
+    state.executeCommand(new PaintCellCommand(2, 6, { type: 'obstacle-full', colorIdx: 13 }));
+    state.executeCommand(new PaintCellCommand(1, 8, {
+      type: 'ramp', colorIdx: 1,
+      ramp: { direction: 'forward', startY: 0, endY: 2 }
+    }));
+
+    const cooked = state.cook();
+    // road cell
+    expect(cooked.rows[5][3].val).toBe(11);
+    expect(cooked.rows[5][3].bottom_color).toBe(11);
+    expect(cooked.rows[5][3].spans).toBeUndefined();
+    // obstacle cell
+    expect(cooked.rows[6][2].full).toBe(true);
+    expect(cooked.rows[6][2].spans).toBeUndefined();
+    // ramp cell
+    expect(cooked.rows[8][1].ramp).toBe(true);
+    expect(cooked.rows[8][1].startY).toBe(0);
+    expect(cooked.rows[8][1].spans).toBeUndefined();
+  });
+
+  it('P4.1: deserialize cooked JSON with spans array produces type:spans draft', () => {
+    const cookedJson = JSON.stringify({
+      level_index: 7,
+      gravity: 8, fuel: 130, oxygen: 60,
+      rows: [
+        [
+          null,
+          { spans: [
+              { floorY: -0.1, topEntryY: 0, topExitY: 0, bottom_color: 1 },
+              { floorY: 3.0,  topEntryY: 3.2, topExitY: 3.2, bottom_color: 1 }
+            ]
+          },
+          { val: 11, full: false, half: false, tunnel: false } // normal road, unchanged
+        ]
+      ]
+    });
+
+    expect(state.deserialize(cookedJson)).toBe(true);
+    const spansCell = state.level.rows[0][1];
+    expect(spansCell.type).toBe('spans');
+    expect(spansCell.spans).toHaveLength(2);
+    expect(spansCell.spans[0].floorY).toBe(-0.1);
+
+    const normalCell = state.level.rows[0][2];
+    expect(normalCell.type).toBe('road');
+    expect(normalCell.colorIdx).toBe(11);
+  });
 });

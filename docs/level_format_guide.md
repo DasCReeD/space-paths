@@ -92,6 +92,62 @@ Tile physics and special properties are determined by mapping the tile's active 
 
 ---
 
+## 4b. Multi-Span Cells (`spans`)
+
+A tile object may carry a `spans` array in place of (or instead of) the legacy boolean flags. When `spans` is present it is **authoritative** — the legacy adapter is bypassed entirely. Both forms coexist; no existing level files need migration.
+
+### `spans` array element schema
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `floorY` | number | yes | Underside (bottom face) of this solid in local Y. Flat ground spans use `-0.1` to keep physics snappy. |
+| `topEntryY` | number | yes | Drivable top height at the **entry edge** (`maxZ` — the side approached first). |
+| `topExitY` | number | yes | Drivable top height at the **exit edge** (`minZ`). Set equal to `topEntryY` for a flat top; differ for a ramp. |
+| `behavior` | string\|null | no | Surface behavior override: `'boost'`, `'super_boost'`, `'sticky'`, `'slippery'`, `'burning'`, `'high_jump'`, `'refill'`, or `null`. If omitted, behavior is derived from `top_color`/`bottom_color` via the standard color table (§4). |
+| `top_color` | integer 0–15 | no | Palette index for the top face (renderer hint). |
+| `bottom_color` | integer 0–15 | no | Palette index for the sides and underside (renderer hint). |
+| `xMin` | number\|null | no | Optional partial-width X bound for thin wall spans (e.g. tunnel side legs). When set, the span only occupies `[xMin, xMax]` within the cell instead of the full cell footprint. |
+| `xMax` | number\|null | no | Upper X bound for partial-width spans. |
+| `isWallObstacle` | boolean | no | Marks the span as an opaque obstacle (telegraph/quality hint; collision is generic). |
+
+### Semantics
+
+- **Stacked solids:** a cell with two spans models surfaces you can drive over *and* pass under. The space between the spans is open air.
+- **Head-bonk:** if the ship's top enters a span's `floorY` from below, it is ejected downward (ceiling collision).
+- **Sloped tops:** `topEntryY !== topExitY` creates a ramp surface; the height interpolates linearly across the tile's Z extent.
+- **Entry/exit convention:** `topEntryY` is the height at the approaching (`maxZ`) edge — the same convention as the legacy `startY`/`endY` ramp fields.
+- **Underside rendering:** a span whose `floorY` is above 0 renders a visible underside face, making overpasses look like slabs seen from below.
+
+### Example: overpass cell (ground road under an elevated deck)
+
+```json
+{
+  "val": 0,
+  "spans": [
+    {
+      "floorY": -0.1,
+      "topEntryY": 0.0,
+      "topExitY": 0.0,
+      "bottom_color": 1
+    },
+    {
+      "floorY": 3.0,
+      "topEntryY": 3.2,
+      "topExitY": 3.2,
+      "bottom_color": 1
+    }
+  ]
+}
+```
+
+This cell is drivable at `Y = 0` (lower road) and also at `Y = 3.2` (elevated deck). A ship at ground level passes under the slab and head-bonks if it jumps past `Y = 3.0` (`floorY` of the upper span). A ship on the deck drives on the flat `3.2` surface.
+
+### Backward compatibility
+
+All existing level files remain valid and unchanged. Legacy tiles (`full`, `half`, `ramp`, `tunnel`, `null`) are automatically converted to spans at load time by `legacyTileToSpans` in `heightfield.js`. The runtime, editor, and worldBuilder all understand both forms.
+
+---
+
 ## 5. Annotated JSON Example: Road Segment
 
 Below is a complete JSON slice representing a 5-row segment showcasing various elements:
