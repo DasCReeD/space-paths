@@ -212,6 +212,37 @@ export class DrawRampCommand extends Command {
 }
 
 /**
+ * Command to set a cell to a multi-span cell and support undo.
+ */
+export class EditSpansCommand extends Command {
+  constructor(lane, row, spans) {
+    super();
+    this.lane = lane;
+    this.row = row;
+    this.spans = JSON.parse(JSON.stringify(spans)); // deep copy to guard history
+    this.prevCell = null;
+  }
+
+  execute(manager) {
+    this.prevCell = manager.level.rows[this.row][this.lane];
+    // Null first to drop stale legacy fields (setCellRaw merges), then set clean spans cell
+    manager.setCellRaw(this.lane, this.row, null);
+    manager.setCellRaw(this.lane, this.row, { type: 'spans', spans: JSON.parse(JSON.stringify(this.spans)) });
+  }
+
+  undo(manager) {
+    manager.setCellRaw(this.lane, this.row, null);
+    if (this.prevCell !== null) {
+      manager.setCellRaw(this.lane, this.row, this.prevCell);
+    }
+  }
+
+  toString() {
+    return `Edited spans at Lane ${this.lane + 1}, Row ${this.row} (${this.spans.length} spans)`;
+  }
+}
+
+/**
  * Command to resize the track grid length.
  */
 export class ResizeGridCommand extends Command {

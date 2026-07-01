@@ -8,7 +8,8 @@ import {
   UpdatePhysicsCommand,
   ConfigureMaterialCommand,
   DrawRampCommand,
-  ResizeGridCommand
+  ResizeGridCommand,
+  EditSpansCommand
 } from './editorCommands.js';
 import * as THREE from 'three';
 import { PhysicsEngine } from './physics.js';
@@ -306,16 +307,17 @@ function updateSelectionPanel() {
     document.getElementById('sel-decal-face').value = 'top';
     document.getElementById('group-decal-text').style.display = 'none';
     document.getElementById('sel-ramp-specifics').style.display = 'none';
+    document.getElementById('sel-spans-specifics').style.display = 'none';
   } else {
     // Populated cell
     document.getElementById('sel-tile-type').value = cell.type;
     document.getElementById('sel-tile-material').value = cell.materialId || 'default';
-    
+
     // Decal selections
     const activeFace = document.getElementById('sel-decal-face').value;
     const decalVal = cell.decals?.[activeFace] || 'none';
     document.getElementById('sel-decal-type').value = decalVal;
-    
+
     if (decalVal === 'custom') {
       document.getElementById('group-decal-text').style.display = 'block';
       document.getElementById('sel-decal-text').value = cell.decalText || '';
@@ -332,7 +334,87 @@ function updateSelectionPanel() {
     } else {
       document.getElementById('sel-ramp-specifics').style.display = 'none';
     }
+
+    // Spans panel
+    renderSpansPanel(lane, row, cell);
   }
+}
+
+/**
+ * Render the stacked-spans editing panel for the selected cell.
+ * Called from updateSelectionPanel when a populated cell is selected.
+ */
+function renderSpansPanel(lane, row, cell) {
+  const spansSection = document.getElementById('sel-spans-specifics');
+  const convertBtn = document.getElementById('sel-convert-spans-btn');
+  const spansList = document.getElementById('sel-spans-list');
+
+  if (cell.type === 'spans') {
+    spansSection.style.display = 'block';
+    convertBtn.style.display = 'none';
+
+    // Rebuild span rows
+    spansList.innerHTML = '';
+    (cell.spans || []).forEach((span, i) => {
+      const row_ = document.createElement('div');
+      row_.style.cssText = 'display:flex;align-items:center;gap:4px;margin-bottom:4px;';
+      row_.innerHTML = `
+        <label style="font-size:11px;min-width:18px;">F</label>
+        <input type="number" step="0.1" value="${span.floorY ?? 0}" data-idx="${i}" data-field="floorY" style="width:52px;">
+        <label style="font-size:11px;min-width:42px;">Top-In</label>
+        <input type="number" step="0.1" value="${span.topEntryY ?? 0}" data-idx="${i}" data-field="topEntryY" style="width:52px;">
+        <label style="font-size:11px;min-width:46px;">Top-Out</label>
+        <input type="number" step="0.1" value="${span.topExitY ?? 0}" data-idx="${i}" data-field="topExitY" style="width:52px;">
+        <button data-remove="${i}" style="margin-left:4px;">&#10005;</button>
+      `;
+      spansList.appendChild(row_);
+    });
+
+    // Listeners: input changes
+    spansList.querySelectorAll('input[type="number"]').forEach(input => {
+      input.addEventListener('change', () => {
+        const currentCell = state.level.rows[state.ui.selectedCell.row]?.[state.ui.selectedCell.lane];
+        if (!currentCell || currentCell.type !== 'spans') return;
+        const newSpans = currentCell.spans.map(s => ({ ...s }));
+        const idx = parseInt(input.dataset.idx);
+        newSpans[idx][input.dataset.field] = parseFloat(input.value);
+        state.executeCommand(new EditSpansCommand(state.ui.selectedCell.lane, state.ui.selectedCell.row, newSpans));
+        updateUIFromState();
+      });
+    });
+
+    // Listeners: remove buttons
+    spansList.querySelectorAll('button[data-remove]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const currentCell = state.level.rows[state.ui.selectedCell.row]?.[state.ui.selectedCell.lane];
+        if (!currentCell || currentCell.type !== 'spans') return;
+        const idx = parseInt(btn.dataset.remove);
+        const newSpans = currentCell.spans.filter((_, i) => i !== idx);
+        state.executeCommand(new EditSpansCommand(state.ui.selectedCell.lane, state.ui.selectedCell.row, newSpans));
+        updateUIFromState();
+      });
+    });
+
+  } else {
+    // Non-spans populated cell: show convert button, hide list
+    spansSection.style.display = 'block';
+    convertBtn.style.display = 'block';
+    spansList.innerHTML = '';
+  }
+}
+
+/** Convert a legacy draft cell to a single starting span (inline, no import needed). */
+function legacyDraftToStartingSpans(cell) {
+  if (!cell || cell.type === 'spans') return cell?.spans || [];
+  if (cell.type === 'ramp') {
+    const startY = cell.ramp?.startY ?? 0;
+    const endY = cell.ramp?.endY ?? 1;
+    return [{ floorY: Math.min(startY, endY) - 2, topEntryY: startY, topExitY: endY }];
+  }
+  if (cell.type === 'obstacle-half') return [{ floorY: 0, topEntryY: 1, topExitY: 1 }];
+  if (cell.type === 'obstacle-full') return [{ floorY: 0, topEntryY: 2, topExitY: 2 }];
+  // road / tunnel / default
+  return [{ floorY: -0.1, topEntryY: 0, topExitY: 0 }];
 }
 
 // Bind Global Keyboard Hotkeys
@@ -880,6 +962,35 @@ function setupPropertiesPanel() {
   document.getElementById('sel-ramp-direction').addEventListener('change', commitSelectedRamp);
   document.getElementById('sel-ramp-start-y').addEventListener('change', commitSelectedRamp);
   document.getElementById('sel-ramp-end-y').addEventListener('change', commitSelectedRamp);
+
+  // Spans panel buttons
+  document.getElementById('sel-add-span-btn').addEventListener('click', () => {
+    if (!state.ui.selectedCell) return;
+    const { lane, row } = state.ui.selectedCell;
+    const cell = state.level.rows[row]?.[lane];
+    if (!cell) return;
+    const h = state.ui.activePlaneHeight * 1.0;
+    const newSpan = { floorY: h, topEntryY: h + 0.2, topExitY: h + 0.2 };
+    let newSpans;
+    if (cell.type === 'spans') {
+      newSpans = [...cell.spans, newSpan];
+    } else {
+      // Convert legacy cell to spans first, then append new span
+      newSpans = [...legacyDraftToStartingSpans(cell), newSpan];
+    }
+    state.executeCommand(new EditSpansCommand(lane, row, newSpans));
+    updateUIFromState();
+  });
+
+  document.getElementById('sel-convert-spans-btn').addEventListener('click', () => {
+    if (!state.ui.selectedCell) return;
+    const { lane, row } = state.ui.selectedCell;
+    const cell = state.level.rows[row]?.[lane];
+    if (!cell || cell.type === 'spans') return;
+    const newSpans = legacyDraftToStartingSpans(cell);
+    state.executeCommand(new EditSpansCommand(lane, row, newSpans));
+    updateUIFromState();
+  });
 }
 
 function setupMaterialModal() {
