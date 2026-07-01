@@ -194,8 +194,13 @@ export function legacyTileToSpans(tile) {
     })];
   }
 
-  // Flat road (default)
-  return [makeSpan(-0.1, 0, 0, {
+  // Flat road (default). May be ELEVATED: a plain (ramp:false) tile can still carry
+  // startY (e.g. a flat platform surface). The renderer draws it flat at baseY=startY
+  // (levelLoader.computeTileGeometry, non-ramp branch ignores endY), so the drivable
+  // surface must sit at startY here too — otherwise collision (at 0) and the visible
+  // road (at startY) diverge and the ship floats or falls through. base=0 for ground.
+  const base = tile.startY ?? 0;
+  return [makeSpan(base - 0.1, base, base, {
     behavior:       behaviorForColor(tile.bottom_color ?? 0),
     isWallObstacle: false,
     topColor:       tile.top_color    ?? 0,

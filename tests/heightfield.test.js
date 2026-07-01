@@ -63,6 +63,17 @@ describe('legacyTileToSpans', () => {
     expect(spans[0].isWallObstacle).toBe(false);
   });
 
+  it('elevated flat tile (ramp:false, startY=1.5) => flat span at 1.5 (matches renderer)', () => {
+    // A plain tile can still carry startY (an elevated flat surface). The renderer
+    // draws it flat at baseY=startY; collision must match or the ship floats/falls.
+    const spans = legacyTileToSpans(flatTile({ startY: 1.5, endY: 2, ramp: false }));
+    expect(spans).toHaveLength(1);
+    expect(spans[0].topEntryY).toBe(1.5);
+    expect(spans[0].topExitY).toBe(1.5); // renderer's non-ramp branch draws flat at startY
+    expect(spans[0].floorY).toBeCloseTo(1.4, 6);
+    expect(spans[0].isWallObstacle).toBe(false);
+  });
+
   it('half block => [floorY:0, top:1.0, isWallObstacle]', () => {
     const spans = legacyTileToSpans(flatTile({ half: true }));
     expect(spans).toHaveLength(1);
