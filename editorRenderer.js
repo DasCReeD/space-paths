@@ -2,11 +2,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// Tile size constants matching game engine
-export const TILE_WIDTH = 2.0;
-export const TILE_LENGTH = 4.0;
-export const ROAD_WIDTH_LANES = 7;
-export const TOTAL_ROAD_WIDTH = TILE_WIDTH * ROAD_WIDTH_LANES;
+// Tile size constants — declared in heightfield.js (single source of truth)
+export { TILE_WIDTH, TILE_LENGTH, ROAD_WIDTH_LANES, TOTAL_ROAD_WIDTH } from './heightfield.js';
+import { TILE_WIDTH, TILE_LENGTH, ROAD_WIDTH_LANES, TOTAL_ROAD_WIDTH } from './heightfield.js';
 
 // VGA color mapping index to Hex
 const PALETTE_HEX = {

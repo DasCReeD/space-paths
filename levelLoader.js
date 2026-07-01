@@ -151,11 +151,9 @@ try {
   // Graceful fallback for test environments or failed load
 }
 
-// Tile width and Z-length configuration
-export const TILE_WIDTH = 2.0;
-export const TILE_LENGTH = 4.0;
-export const ROAD_WIDTH_LANES = 7;
-export const TOTAL_ROAD_WIDTH = TILE_WIDTH * ROAD_WIDTH_LANES;
+// Tile width and Z-length configuration — declared in heightfield.js (single source of truth)
+export { TILE_WIDTH, TILE_LENGTH, ROAD_WIDTH_LANES, TOTAL_ROAD_WIDTH } from './heightfield.js';
+import { TILE_WIDTH, TILE_LENGTH, ROAD_WIDTH_LANES, TOTAL_ROAD_WIDTH, buildColumnGrid, legacyTileToSpans } from './heightfield.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TRACK CURVATURE SYSTEM — Ring-road visual effect via vertex shader
@@ -2425,6 +2423,46 @@ function processTile(tile, r, c, palette, scene, collidables, specialTiles, road
   const levelIndex = levelData && typeof levelData.level_index === 'number' ? levelData.level_index : (typeof window !== 'undefined' ? window.currentLevelIndex : null);
   const isGenerated = (levelData && levelData.isGenerated) || (levelIndex >= 61) || (typeof window !== 'undefined' && window.currentGamePack === 'generated');
 
+  // ── P3.2: native multi-span cell — render every span as its own solid box ──
+  if (Array.isArray(tile.spans)) {
+    const spans = legacyTileToSpans(tile); // normalises span fields (floorY, topEntryY, etc.)
+    for (const span of spans) {
+      // Derive drive-surface color exactly like the ramp branch: top_color if set, else bottom_color
+      const activeColor = (span.topColor > 0 ? span.topColor : span.bottomColor);
+      const behaviorColor = activeColor > 0 ? activeColor + 1 : 0;
+      const { behavior, emissiveGlow, glowColor } = classifyTileBehavior(behaviorColor);
+      const baseColor = getPaletteColor(palette, behaviorColor);
+      const material = createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, behaviorColor, levelData, c, r, 1, 1);
+
+      // yBottom = span.floorY — NOT clamped to ground. An overpass slab (floorY≈3) renders
+      // as a thin slab at that height with a visible underside, NOT a ground-to-top pillar.
+      // ponytail: reuse createRampGeometry; it handles flat tops (y1==y2) just fine.
+      const geom = createRampGeometry(TILE_WIDTH, TILE_LENGTH, span.floorY, span.topEntryY, span.topExitY);
+      const mesh = new THREE.Mesh(geom, material);
+      mesh.position.set(xPos, 0, zPos - TILE_LENGTH / 2);
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      scene.add(mesh);
+      roadMeshes.push(mesh);
+
+      if (span.behavior) {
+        specialTiles.push({
+          boundingBox: {
+            minX: xPos - TILE_WIDTH / 2,
+            maxX: xPos + TILE_WIDTH / 2,
+            minY: Math.min(span.topEntryY, span.topExitY) - 0.05,
+            maxY: Math.max(span.topEntryY, span.topExitY) + 0.3,
+            minZ: zPos - TILE_LENGTH,
+            maxZ: zPos,
+          },
+          behavior: span.behavior,
+        });
+      }
+    }
+    // Do NOT push to collidables — physics uses the columnGrid for multi-span tiles.
+    return;
+  }
+
   if (tile.isSuperJump) {
     const baseColor = new THREE.Color(0xffd700); // Gold
     const material = applyCurvatureShader(new THREE.MeshStandardMaterial({
@@ -3681,6 +3719,9 @@ export function buildLevel(levelData, scene, zOffset = 0, isInfiniteMode = false
     });
   }
 
+  // P3.1 — authoritative column grid for physics (preferred over _buildGridFromCollidables fallback)
+  const { grid: columnGrid } = buildColumnGrid(levelData);
+
   return {
     trackLength,
     collidables,
@@ -3691,6 +3732,8 @@ export function buildLevel(levelData, scene, zOffset = 0, isInfiniteMode = false
     oxygen: initialOxygen,
     roadMeshes,
     checkpoints: levelData.checkpoints || [],
+    columnGrid,
+    numRows,
   };
 }
 
@@ -3726,12 +3769,15 @@ export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInf
       buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMeshes, zOffset);
       if (onProgress) onProgress(100);
       const finishZ = buildFinishLine(trackLength, scene, roadMeshes, zOffset, isInfiniteMode);
-      
+
       if (levelData.checkpoints) {
         levelData.checkpoints.forEach(checkpoint => {
           buildCheckpointArchway(checkpoint, scene, roadMeshes, zOffset);
         });
       }
+
+      // P3.1 — authoritative column grid for physics
+      const { grid: columnGrid } = buildColumnGrid(levelData);
 
       resolve({
         trackLength,
@@ -3743,6 +3789,8 @@ export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInf
         oxygen: initialOxygen,
         roadMeshes,
         checkpoints: levelData.checkpoints || [],
+        columnGrid,
+        numRows,
       });
       return;
     }
@@ -3773,12 +3821,15 @@ export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInf
       } else {
         // All rows processed — build finish line and resolve
         const finishZ = buildFinishLine(trackLength, scene, roadMeshes, zOffset, isInfiniteMode);
-        
+
         if (levelData.checkpoints) {
           levelData.checkpoints.forEach(checkpoint => {
             buildCheckpointArchway(checkpoint, scene, roadMeshes, zOffset);
           });
         }
+
+        // P3.1 — authoritative column grid for physics
+        const { grid: columnGrid } = buildColumnGrid(levelData);
 
         resolve({
           trackLength,
@@ -3790,6 +3841,8 @@ export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInf
           oxygen: initialOxygen,
           roadMeshes,
           checkpoints: levelData.checkpoints || [],
+          columnGrid,
+          numRows,
         });
       }
     }

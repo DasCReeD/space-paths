@@ -116,6 +116,8 @@ describe('Sloped Ramp Physics Engine Mechanics', () => {
       specialTiles: [],
       roadMeshes: []
     };
+    // columnGrid is built automatically from collidables by _buildGridFromCollidables
+    // inside _updateColumnCollision when useColumnCollision=true. No manual attachment needed.
   });
 
   it('should snap ship to ramp height and set onGround when driving onto it', () => {

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as THREE from 'three';
 import {
   buildLevel,
+  buildLevelAsync,
   TILE_WIDTH,
   TILE_LENGTH,
   ROAD_WIDTH_LANES,
@@ -11,6 +12,7 @@ import {
   buildDeckCeilingLight,
   buildDeckPillars
 } from '../levelLoader.js';
+import { buildColumnGrid, ceilingAbove, cellBounds } from '../heightfield.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -771,6 +773,213 @@ describe('buildLevel', () => {
       const group = makeGroup();
       buildDeckPillars(group, 0);
       expect(group.children.length).toBe(0);
+    });
+  });
+
+  // ── P3.1: columnGrid on levelInfo ─────────────────────────────────────
+  // Verifies that buildLevel (sync) and buildLevelAsync attach columnGrid and numRows
+  // to the returned levelInfo, and that the grid matches what buildColumnGrid produces
+  // directly from the same levelData.
+
+  describe('P3.1 — columnGrid on levelInfo', () => {
+    it('buildLevel returns columnGrid and numRows', () => {
+      const rows = [createFullFlatRow(), createFullFlatRow(), createFullFlatRow()];
+      const levelData = createBaseLevelData({ rows });
+      const result = buildLevel(levelData, createMockScene());
+      expect(result.columnGrid).toBeDefined();
+      expect(result.numRows).toBe(3);
+    });
+
+    it('columnGrid matches buildColumnGrid for a flat level', () => {
+      const rows = [createFullFlatRow()];
+      const levelData = createBaseLevelData({ rows });
+      const result = buildLevel(levelData, createMockScene());
+      const { grid } = buildColumnGrid(levelData);
+      // Same structure: 1 row × 7 columns, each a non-gap column with 1 span (flat road)
+      expect(result.columnGrid.length).toBe(grid.length);
+      for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
+        expect(result.columnGrid[0][c].isGap).toBe(grid[0][c].isGap);
+        expect(result.columnGrid[0][c].spans.length).toBe(grid[0][c].spans.length);
+        expect(result.columnGrid[0][c].spans[0].topEntryY).toBe(grid[0][c].spans[0].topEntryY);
+      }
+    });
+
+    it('columnGrid gap cells match null tiles', () => {
+      const row = createNullRow();
+      const levelData = createBaseLevelData({ rows: [row] });
+      const result = buildLevel(levelData, createMockScene());
+      for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
+        expect(result.columnGrid[0][c].isGap).toBe(true);
+      }
+    });
+
+    it('buildLevelAsync returns columnGrid and numRows', async () => {
+      const rows = [createFullFlatRow(), createFullFlatRow()];
+      const levelData = createBaseLevelData({ rows });
+      const result = await buildLevelAsync(levelData, createMockScene());
+      expect(result.columnGrid).toBeDefined();
+      expect(result.numRows).toBe(2);
+      expect(result.columnGrid.length).toBe(2);
+    });
+  });
+
+  // ── P3.2: multi-span geometry (no-throw + single-span unchanged) ──────
+  // Verifies that a native 2-span cell doesn't throw during buildLevel and
+  // that single-span legacy tiles are unaffected (collidables/mesh counts match).
+
+  describe('P3.2 — multi-span geometry', () => {
+    it('2-span native cell builds without throwing', () => {
+      const twoSpanTile = {
+        val: 0,
+        full: false, half: false, tunnel: false,
+        top_color: 0, bottom_color: 0, low3: 0,
+        // Native spans: road at 0, then an overpass slab at floorY=3, top=3.2
+        spans: [
+          { floorY: -0.1, topEntryY: 0, topExitY: 0, bottom_color: 0 },
+          { floorY: 3.0, topEntryY: 3.2, topExitY: 3.2, bottom_color: 1 },
+        ],
+      };
+      const row = [null, null, null, twoSpanTile, null, null, null];
+      const levelData = createBaseLevelData({ rows: [row] });
+      expect(() => buildLevel(levelData, createMockScene())).not.toThrow();
+    });
+
+    it('2-span cell columnGrid has 2 spans in the right cell', () => {
+      const twoSpanTile = {
+        val: 0,
+        full: false, half: false, tunnel: false,
+        top_color: 0, bottom_color: 0, low3: 0,
+        spans: [
+          { floorY: -0.1, topEntryY: 0, topExitY: 0, bottom_color: 0 },
+          { floorY: 3.0, topEntryY: 3.2, topExitY: 3.2, bottom_color: 1 },
+        ],
+      };
+      const row = [null, null, null, twoSpanTile, null, null, null];
+      const levelData = createBaseLevelData({ rows: [row] });
+      const result = buildLevel(levelData, createMockScene());
+      // Lane 3 (centre) = column index 3 in grid row 0
+      expect(result.columnGrid[0][3].spans).toHaveLength(2);
+      expect(result.columnGrid[0][3].spans[0].topEntryY).toBeCloseTo(0, 6);
+      expect(result.columnGrid[0][3].spans[1].topEntryY).toBeCloseTo(3.2, 6);
+    });
+
+    it('2-span cell produces more roadMeshes than a plain flat-road cell (upper slab rendered)', () => {
+      // Plain flat road: 1 tile → 1 mesh + 4 finish elements = 5
+      const flatRow = [null, null, null, createFlatTile(), null, null, null];
+      const flatLevel = createBaseLevelData({ rows: [flatRow] });
+      const flatResult = buildLevel(flatLevel, createMockScene());
+      const flatMeshCount = flatResult.roadMeshes.length;
+
+      // 2-span native cell: road span + overpass slab span → 2 meshes for that cell + 4 finish = 6
+      const twoSpanTile = {
+        val: 0,
+        full: false, half: false, tunnel: false,
+        top_color: 0, bottom_color: 0, low3: 0,
+        spans: [
+          { floorY: -0.1, topEntryY: 0,   topExitY: 0,   bottom_color: 1 },
+          { floorY: 3.0,  topEntryY: 3.2, topExitY: 3.2, bottom_color: 1 },
+        ],
+      };
+      const spanRow = [null, null, null, twoSpanTile, null, null, null];
+      const spanLevel = createBaseLevelData({ rows: [spanRow] });
+      const spanResult = buildLevel(spanLevel, createMockScene());
+
+      // The overpass slab must have produced its own mesh — strictly MORE meshes than a flat tile
+      expect(spanResult.roadMeshes.length).toBeGreaterThan(flatMeshCount);
+      // Exact: 2 span meshes + 4 finish = 6 vs 1 flat mesh + 4 finish = 5
+      expect(spanResult.roadMeshes.length).toBe(flatMeshCount + 1);
+    });
+
+    it('multi-span cell does NOT push to collidables (physics uses columnGrid)', () => {
+      const twoSpanTile = {
+        val: 0,
+        full: false, half: false, tunnel: false,
+        top_color: 0, bottom_color: 0, low3: 0,
+        spans: [
+          { floorY: -0.1, topEntryY: 0,   topExitY: 0,   bottom_color: 1 },
+          { floorY: 3.0,  topEntryY: 3.2, topExitY: 3.2, bottom_color: 1 },
+        ],
+      };
+      const row = [null, null, null, twoSpanTile, null, null, null];
+      const levelData = createBaseLevelData({ rows: [row] });
+      const result = buildLevel(levelData, createMockScene());
+      expect(result.collidables).toHaveLength(0);
+    });
+
+    it('single-span flat tile: collidable count unchanged (0 for flat road)', () => {
+      const levelData = createBaseLevelData({ rows: [createFullFlatRow()] });
+      const result = buildLevel(levelData, createMockScene());
+      // Flat road produces no collidables in the legacy list (physics now uses columnGrid)
+      expect(result.collidables).toHaveLength(0);
+    });
+
+    it('single-span obstacle: collidable count unchanged (1)', () => {
+      const row = [null, null, null, createFullBlockTile(), null, null, null];
+      const levelData = createBaseLevelData({ rows: [row] });
+      const result = buildLevel(levelData, createMockScene());
+      expect(result.collidables).toHaveLength(1);
+    });
+  });
+
+  // ── P3.3: tunnel ceiling span height ─────────────────────────────────
+  // The collision ceiling span must be tall (floorY = tunnelClear, top = tunnelClear+6)
+  // so a fast vertical mover can't tunnel through it in one substep.
+  // The VISUAL archway in levelLoader remains thin/decorative (collidable isCeiling slab
+  // is still thin — that's a legacy collidable for the editor; physics uses columnGrid).
+
+  describe('tunnel ceiling span — rideable roof', () => {
+    it('tunnel cell = road + rideable roof + two lateral wall legs (containment)', () => {
+      const tunnelTile = createFlatTile(0, { tunnel: true, bottom_color: 1 });
+      const row = [null, null, null, tunnelTile, null, null, null];
+      const levelData = createBaseLevelData({ rows: [row] });
+      const result = buildLevel(levelData, createMockScene());
+      const col = result.columnGrid[0][3];
+      const archHeight = TILE_WIDTH / 2; // 1.0 single-lane default
+      // Full-width spans: road + rideable roof.
+      const full = col.spans.filter(s => s.xMin == null);
+      const road = full.find(s => s.floorY === -0.1);
+      const roof = full.find(s => s.floorY > 0);
+      expect(road.topEntryY).toBeCloseTo(0, 6);
+      expect(roof.topEntryY).toBeCloseTo(archHeight, 6);          // rideable top
+      expect(roof.floorY).toBeCloseTo(archHeight - 0.15, 6);      // bonk underside
+      expect(roof.topEntryY - roof.floorY).toBeGreaterThan(0.1);  // untunnelable
+      // Partial-width side walls — single-lane tunnel => both legs on this cell.
+      const walls = col.spans.filter(s => s.xMin != null);
+      expect(walls).toHaveLength(2);
+      const b = cellBounds(3, 0);
+      for (const w of walls) {
+        expect(w.floorY).toBeCloseTo(0, 6);                  // wall rises from the road
+        expect(w.topEntryY).toBeCloseTo(archHeight, 6);      // to the roof height
+        expect(w.xMax - w.xMin).toBeCloseTo(0.15, 6);        // thin leg
+      }
+      // One leg on the left edge, one on the right edge.
+      expect(walls.some(w => Math.abs(w.xMin - b.minX) < 1e-6)).toBe(true);
+      expect(walls.some(w => Math.abs(w.xMax - b.maxX) < 1e-6)).toBe(true);
+    });
+
+    it('full-block tunnel: roof rideable at 2.0, underside at 1.85', () => {
+      const tile = createFullBlockTile(0);
+      tile.tunnel = true;
+      tile.bottom_color = 1;
+      const row = [null, null, null, tile, null, null, null];
+      const levelData = createBaseLevelData({ rows: [row] });
+      const result = buildLevel(levelData, createMockScene());
+      const roof = result.columnGrid[0][3].spans.find(s => s.xMin == null && s.floorY > 0);
+      expect(roof.floorY).toBeCloseTo(1.85, 6);
+      expect(roof.topEntryY).toBeCloseTo(2.0, 6);
+    });
+
+    it('head-bonk: ceilingAbove at y=0 equals the roof underside (archHeight - 0.15)', () => {
+      const tunnelTile = createFlatTile(0, { tunnel: true, bottom_color: 1 });
+      const row = [null, null, null, tunnelTile, null, null, null];
+      const levelData = createBaseLevelData({ rows: [row] });
+      const result = buildLevel(levelData, createMockScene());
+      const b = cellBounds(3, 0);
+      const x = (b.minX + b.maxX) / 2;
+      const z = (b.minZ + b.maxZ) / 2;
+      const archHeight = TILE_WIDTH / 2;
+      expect(ceilingAbove(result.columnGrid, result.numRows, x, z, 0))
+        .toBeCloseTo(archHeight - 0.15, 6);
     });
   });
 });
