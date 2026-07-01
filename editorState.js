@@ -302,6 +302,12 @@ export class EditorStateManager {
               return cell;
             }
 
+            // Native multi-span tile: carry spans through as-is (lossless round-trip).
+            // ponytail: no translation needed — the runtime shape IS the draft shape for spans.
+            if (Array.isArray(cell.spans)) {
+              return { type: 'spans', spans: cell.spans };
+            }
+
             // Translate cooked cell format to editor draft format
             let type = 'road';
             if (cell.tunnel) {
@@ -361,7 +367,13 @@ export class EditorStateManager {
     const cookedRows = this.level.rows.map((row, r) => {
       return row.map((cell, c) => {
         if (!cell) return null;
-        
+
+        // Native multi-span cell: emit spans directly — lossless round-trip.
+        // ponytail: no transformation, runtime shape == wire shape for spans.
+        if (cell.type === 'spans' && Array.isArray(cell.spans)) {
+          return { spans: cell.spans };
+        }
+
         const cookedCell = {
           val: cell.colorIdx !== undefined ? cell.colorIdx : 1,
           full: cell.type === 'obstacle-full',
