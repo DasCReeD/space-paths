@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import { validateTrackQuality, forcedDemand } from './trackQuality.js';
+import { legacyTileToSpans, cellBounds, spanTopAtZ } from './heightfield.js';
 
 // ==========================================================================
 // TRACK-QUALITY GATE (Bucket A wiring) + SHUFFLE-BAG SELECTION (Bucket B)
@@ -1059,6 +1060,39 @@ function solveLevel(levelData) {
     return baseY + archHeight - archThickness;
   }
 
+  // ── Multi-span helpers (only used for cells carrying an explicit `spans` array) ──
+  // Legacy single-span cells never reach these; the legacy arithmetic below is
+  // left byte-for-byte unchanged for them (parity by construction).
+  function spanTops(tile, lane, row) {
+    // tops of landable (non-wall) spans and floors of all spans, at the cell entry edge.
+    const b = cellBounds(lane, row);
+    const spans = legacyTileToSpans(tile);
+    return spans.map(s => ({
+      entryTop: spanTopAtZ(s, b, b.maxZ),
+      exitTop: spanTopAtZ(s, b, b.minZ),
+      floorY: s.floorY,
+      isWall: !!s.isWallObstacle,
+    }));
+  }
+
+  // Step from surface height h into a spans-cell. Returns { canStep, stepHeight } or null.
+  function spanStep(tile, lane, row, h) {
+    const ss = spanTops(tile, lane, row);
+    // A step is legal onto a non-wall span whose entry top ≈ h.
+    let best = null;
+    for (const s of ss) {
+      if (!s.isWall && Math.abs(s.entryTop - h) < 0.1) {
+        if (best === null || s.exitTop > best) best = s.exitTop;
+      }
+    }
+    if (best === null) return { canStep: false, stepHeight: h };
+    // Head-bonk: any span floor sitting in (h, h + SHIP_HEIGHT) blocks the step.
+    for (const s of ss) {
+      if (s.floorY > h + 1e-6 && s.floorY < h + SHIP_HEIGHT) return { canStep: false, stepHeight: h };
+    }
+    return { canStep: true, stepHeight: best };
+  }
+
   const visited = new Set();
   const fuelRate = (levelData.fuelConsumptionRate || 25.0) / 50.0;
   const oxyRate = 1.0;
@@ -1146,7 +1180,11 @@ function solveLevel(levelData) {
         const nextTile = rows[nextRow][nextLane];
         let canStep = false;
         let stepHeight = h;
-        if (nextTile && nextTile.top_color !== 13) {
+        if (nextTile && Array.isArray(nextTile.spans)) {
+          const res = spanStep(nextTile, nextLane, nextRow, h);
+          canStep = res.canStep;
+          stepHeight = res.stepHeight;
+        } else if (nextTile && nextTile.top_color !== 13) {
           // Obstacles (full/half) are WALLS — never walkable or landable
           const isObstacle = !!(nextTile.full || nextTile.half);
           if (!isObstacle) {
@@ -1218,6 +1256,28 @@ function solveLevel(levelData) {
               crashed = true;
               break;
             }
+          }
+
+          if (checkTile && Array.isArray(checkTile.spans)) {
+            const ss = spanTops(checkTile, nextLane, checkRow);
+            let landTop = null, headClip = false, bodyHit = false;
+            for (const s of ss) {
+              // land onto a non-wall span top while falling into its window
+              if (!s.isWall && t >= tUp && yPrev >= s.entryTop - 0.5 && yFlight <= s.entryTop + 0.5) {
+                if (landTop === null || s.exitTop > landTop) landTop = s.exitTop;
+              }
+              // ship bottom inside a solid span body → crash
+              if (yFlight < s.entryTop - 0.1 && yFlight >= s.floorY) bodyHit = true;
+              // span floor clips the head → crash
+              if (s.floorY > yFlight && s.floorY < yFlight + SHIP_HEIGHT) headClip = true;
+            }
+            if (landTop !== null) {
+              landed = true; jumpTime = t; landingTileHeight = landTop; break;
+            }
+            if (bodyHit || headClip) { crashed = true; break; }
+            yPrev = yFlight;
+            step++;
+            continue;
           }
 
           const checkTileHeight = (checkTile && checkTile.ramp) ? checkTile.endY : getTileObstacleHeight(checkTile);
