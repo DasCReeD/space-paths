@@ -24,6 +24,8 @@ A modern WebGL recreation of the classic 1993 DOS game **SkyRoads** by BlueMoon 
 
 ### 🎨 Visual System
 - 14 visual themes: Core, Cyberpunk, Industrial, Organic, Alien, Furnace, Glitch, Pulse, Ridge, Shallows, Spire, Thrill, Tundra, Void
+- **Procedural neon texture sets for every level:** each of the 10 Standard worlds (RED HEAT…DRUIDIA), 10 Xmas worlds (SNOWBOUND…THE EVE), and 10 generated biomes has its own curated dark-based palette + a signature hand-authored motif, drawn at runtime on canvas (No Man's Sky-style palette-swatch approach). Per-road hue drift varies the three roads within a world; safety-critical hazards (boost/burn/refill/ice) keep universal colors for readability. See the [Standard](docs/standard-worlds-neon-brief.md) and [Xmas](docs/xmas-worlds-neon-brief.md) design briefs.
+- **Per-biome scene lighting:** the accent lights are re-tinted to each level's curated palette on load, so every biome/world is lit to match its art direction (works in classic, flow, and tower modes)
 - Procedural skybox with stars, nebulae, and planets
 - **Whitecap-style 3D music visualizer:** FFT-driven receding spectrum grid (64×48) with 4 cycling presets (Spectrum, Mirror, Matrix, Rainbow); bass-reactive bloom and emissive tile pulse
 - 3D cockpit HUD with real-time gauges and LCD readouts
@@ -153,6 +155,8 @@ graph TD
 |----------|-------------|
 | [Module Map](docs/module-map.md) | Complete code map with all exports and dependencies |
 | [Architecture](docs/architecture.md) | System design, state machines, data flow diagrams |
+| [Standard Worlds Neon Brief](docs/standard-worlds-neon-brief.md) | Per-world palette + motif design brief for the Standard pack |
+| [Xmas Worlds Neon Brief](docs/xmas-worlds-neon-brief.md) | Per-world palette + motif design brief for the Xmas pack |
 | [Asset Pipeline](docs/asset-generation-pipeline.md) | ComfyUI/Trellis2 3D model and texture generation |
 | [Trellis2 Guide](docs/trellis_pixal3d_workflow_guide.md) | Detailed ComfyUI workflow setup and configuration |
 | [Code Review](docs/code_review_report.md) | Code quality assessment and refactoring recommendations |

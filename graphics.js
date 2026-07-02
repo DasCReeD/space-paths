@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { SHIP_WIDTH, SHIP_HEIGHT, SHIP_LENGTH, LEGACY_MODEL_ALIASES } from './physics.js';
 import { CockpitConsole3D } from './cockpitConsole.js';
-import { getLevelObjUrl, getActiveThemeIndex, THEMES, curvatureUniforms, applyCurvatureShader } from './levelLoader.js';
+import { getLevelObjUrl, getActiveThemeIndex, THEMES, curvatureUniforms, applyCurvatureShader, voidVizUniforms, getActiveNeonSet } from './levelLoader.js';
 import { gameAudio } from './audio.js';
 import spaceshipHullPlatingUrl from './spaceship_hull_plating.png';
 import roadMetallicUrl from './road_metallic_plate.png';
@@ -230,7 +230,8 @@ export class GraphicsEngine {
     this.scene.add(sunKeyLight);
 
     // Bright overhead key light (white) — ensures the road is always visible
-    const overheadLight = new THREE.DirectionalLight(0xffffff, 1.8);
+    this.overheadLight = new THREE.DirectionalLight(0xffffff, 1.8);
+    const overheadLight = this.overheadLight;
     overheadLight.position.set(0, 80, -20);
     this.scene.add(overheadLight);
 
@@ -250,9 +251,15 @@ export class GraphicsEngine {
     this.scene.add(this.sunLight);
 
     // Neon cyan secondary fill light (from the opposite side)
-    const fillLight = new THREE.DirectionalLight(0x00ffff, 1.4); // Increased from 1.0
+    this.fillLight = new THREE.DirectionalLight(0x00ffff, 1.4); // Increased from 1.0
+    const fillLight = this.fillLight;
     fillLight.position.set(-50, 50, -50);
     this.scene.add(fillLight);
+
+    // Per-biome lighting: the two accent lights + a subtle overhead wash are re-tinted to the
+    // level's curated neon set on load (applyBiomeLighting). Remember the neutral defaults so
+    // legacy / non-neon levels restore the original rig.
+    this._defaultLightColors = { sun: 0xff007f, fill: 0x00ffff, overhead: 0xffffff };
 
     // 4. Create Background Skybox
     this.createSkybox();
@@ -522,6 +529,30 @@ export class GraphicsEngine {
       const pitchDeg = this.cameraPitchAdjust * (180 / Math.PI);
       pitchEl.innerText = `${pitchDeg.toFixed(1)}°`;
     }
+  }
+
+  /**
+   * Re-tint the scene's accent lights to the current level's curated neon set so each biome/world
+   * is lit to match its art direction. The warm key + white ambient stay neutral so the near-white
+   * road still reads true; only the two accent lights (full hue) + the overhead (subtle wash) take
+   * the colour. Pass the level's data (the active deck's data in flow/tower). A null set (legacy /
+   * non-neon level) restores the neutral defaults.
+   */
+  applyBiomeLighting(levelData) {
+    if (this.isTestEnv || !this.sunLight) return;
+    const d = this._defaultLightColors;
+    const set = getActiveNeonSet(levelData);
+    if (!set) {
+      this.sunLight.color.setHex(d.sun);
+      if (this.fillLight) this.fillLight.color.setHex(d.fill);
+      if (this.overheadLight) this.overheadLight.color.setHex(d.overhead);
+      return;
+    }
+    const primary = new THREE.Color(set.primary);
+    const secondary = new THREE.Color(set.secondary);
+    this.sunLight.color.copy(primary);
+    if (this.fillLight) this.fillLight.color.copy(secondary);
+    if (this.overheadLight) this.overheadLight.color.copy(new THREE.Color(0xffffff).lerp(primary, 0.22));
   }
 
   createSkybox() {
@@ -1300,6 +1331,15 @@ export class GraphicsEngine {
 
     // Update track curvature center point (follows camera Z for consistent ring-road bend)
     curvatureUniforms.uCameraZ.value = physics.position.z;
+
+    // Feed the live visualizer texture to the Void biome road (per-segment panels).
+    // Keep the fallback texture bound when unavailable; gate rendering with uVoidVizOn.
+    if (this.visualizerTexture) {
+      voidVizUniforms.uVoidViz.value = this.visualizerTexture;
+      voidVizUniforms.uVoidVizOn.value = 1.0;
+    } else {
+      voidVizUniforms.uVoidVizOn.value = 0.0;
+    }
 
     // Speed-dependent FOV widening: smoothly blend toward a wider FOV as speed approaches boost max
     let targetFov = this.cameraMode === 'cockpit' ? this.cockpitFov : this.baseFov;

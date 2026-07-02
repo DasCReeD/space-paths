@@ -37,3 +37,11 @@ test-results/
 # Large MP3 playlists (exceeding GitHub limit of 100MB)
 assets/Music/*.mp3
 
+# Local scratch, backups & generated artifacts (not for the repo)
+.agent/
+generations.db
+data/*_backup_*.json
+data/*.7z
+assets/custom/OLD/
+playtests/*_shots/
+

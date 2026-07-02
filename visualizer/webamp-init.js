@@ -38,12 +38,31 @@ let webampInstance = null
  * @param {{ initialTracks?: Array }} options
  * @returns {Promise<Webamp>} the webamp instance
  */
-// Startup position for the main window, tuned via layoutDebugPanel.js at a
-// 2560-wide viewport (top-right, clear of the title card / crossbar).
-const WINDOW_LAYOUT = { main: { position: { x: 2039, y: 0 } } }
+// Classic Winamp main-window height (px) — used to anchor the window to the bottom edge.
+const MAIN_WINDOW_HEIGHT = 116
+const EDGE_MARGIN = 8
+
+// Place the player's main window in the bottom-left corner of the viewport. Webamp re-centers its
+// windows on the detected browser size and IGNORES the constructor's `windowLayout` here, so we set
+// the position AFTER render via the store (UPDATE_WINDOW_POSITIONS, absolute). Re-applied a couple
+// of times to beat Webamp's async centering pass.
+function positionBottomLeft(webamp) {
+  const vh = (typeof window !== 'undefined' && window.innerHeight) || 720
+  const y = Math.max(0, vh - MAIN_WINDOW_HEIGHT - EDGE_MARGIN)
+  try {
+    webamp.store.dispatch({
+      type: 'UPDATE_WINDOW_POSITIONS',
+      positions: { main: { x: EDGE_MARGIN, y } },
+      absolute: true,
+    })
+  } catch (e) {
+    // Non-fatal: if Webamp's internal store shape changes, keep the default position.
+    console.warn('[Webamp] could not set start position:', e)
+  }
+}
 
 export async function init(container, { initialTracks = [] } = {}) {
-  webampInstance = new Webamp({ initialTracks, windowLayout: WINDOW_LAYOUT })
+  webampInstance = new Webamp({ initialTracks })
 
   // Webamp with no skin renders correct-size/position DOM but paints
   // nothing (no sprite texture to draw with) — load a real skin so the
@@ -51,6 +70,15 @@ export async function init(container, { initialTracks = [] } = {}) {
   webampInstance.setSkinFromUrl(baseSkinUrl)
 
   await webampInstance.renderWhenReady(container)
+
+  // Anchor to bottom-left once rendered, then re-apply after layout/centering settles.
+  positionBottomLeft(webampInstance)
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => positionBottomLeft(webampInstance))
+  }
+  if (typeof setTimeout === 'function') {
+    setTimeout(() => positionBottomLeft(webampInstance), 400)
+  }
 
   // Prevent Webamp from being closed (it would otherwise destroy itself).
   webampInstance.onClose(() => {

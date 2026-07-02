@@ -1,6 +1,6 @@
 # SkyRoads WebGL — Project Overview
 
-> **Last updated:** 2026-06-25
+> **Last updated:** 2026-07-01
 
 ---
 
@@ -58,6 +58,11 @@
 | 24 | Extract shared `shipCatalog.js` from graphics.js/preview.js | ✅ DONE |
 | 25 | Shape-aware procedural neon and biome textures (levels 61-90) | ✅ DONE |
 | 26 | Flow/Tower Mode intra-group and next-group transition routing | ✅ DONE |
+| 27 | Per-world procedural neon texture sets — Standard pack (RED HEAT…DRUIDIA), 10 worlds | ✅ DONE |
+| 28 | Per-world procedural neon texture sets — Xmas pack (SNOWBOUND…THE EVE), 10 worlds | ✅ DONE |
+| 29 | Guide-driven biome motif upgrade for generated levels 61–90 (world_design_docs.json) | ✅ DONE |
+| 30 | Per-biome scene lighting — accent lights tinted to each level's curated palette on load | ✅ DONE |
+| 31 | Flow-mode attract-bot input fix + single-run/interaction-latched attract; Webamp starts bottom-left | ✅ DONE |
 
 ---
 
@@ -65,11 +70,11 @@
 
 | # | Milestone | Status | Priority |
 |---|-----------|--------|----------|
-| 27 | VRAM garbage collection & memory optimization | ⏳ Planned | P1 |
-| 28 | E2E browser testing with Playwright | ⏳ Planned | P1 |
-| 29 | Audio-driven level generator (offline tool, baked JSON) | ⏳ Planned | P2 |
-| 30 | World Builder UI (in-game level editor) | ⏳ Planned | P2 |
-| 31 | Module splitting (app.js, graphics.js, levelLoader.js) | ⏳ Planned | P2 |
+| 32 | VRAM garbage collection & memory optimization | ⏳ Planned | P1 |
+| 33 | E2E browser testing with Playwright | ⏳ Planned | P1 |
+| 34 | Audio-driven level generator (offline tool, baked JSON) | ⏳ Planned | P2 |
+| 35 | World Builder UI (in-game level editor) | ⏳ Planned | P2 |
+| 36 | Module splitting (app.js, graphics.js, levelLoader.js) | ⏳ Planned | P2 |
 
 ---
 

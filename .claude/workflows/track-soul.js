@@ -14,11 +14,7 @@
 
 export const meta = {
   name: 'track-soul',
-  description:
-    'Per-track Bucket-D critic loop for generated SkyRoads levels 61-90: (re)generate geometry, ' +
-    'run Bucket-A static validation + Bucket-C bot playtest (tools/trackSoul.mjs), spawn the ' +
-    'track-critic for the subjective review, then apply its notes via worldBuilder --revise and ' +
-    'repeat up to K times until the critic says keep (or regenerate).',
+  description: 'Per-track Bucket-D critic loop for generated SkyRoads levels 61-90: (re)generate geometry, run Bucket-A static validation + Bucket-C bot playtest, spawn the track-critic for the subjective review, then apply its notes via worldBuilder --revise and repeat up to K times until the critic says keep (or regenerate).',
   phases: [
     { title: 'assess' },
     { title: 'critic' },
@@ -111,7 +107,7 @@ for (const levelIndex of DEFAULT_TARGETS) {
       `STEP 3: Return EXACTLY the rubric's JSON output contract ` +
       `({ levelIndex, dimensions, revisionNotes, overall, summary }) and NOTHING else. Make every ` +
       `revisionNotes entry concrete and row-tied so worldBuilder.js --revise can act on it.`,
-      { label: `critic-${levelIndex}-iter${iter + 1}`, phase: 'critic', agentType: 'track-critic' },
+      { label: `critic-${levelIndex}-iter${iter + 1}`, phase: 'critic' },
     );
     critique = parseJson(critiqueRaw, `critic-${levelIndex}`);
     verdict = critique && critique.overall; // 'keep' | 'revise' | 'regenerate'

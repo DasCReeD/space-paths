@@ -277,6 +277,26 @@ function summarizeSegmentUsage(usage, allIds) {
 }
 
 /**
+ * Derive a persisted `segments` array (row spans of each placed set-piece) from the
+ * internal `__assembly`, so the runtime can map per-segment visuals (e.g. the Void
+ * biome's live-visualizer road). Bespoke levels without assembly (level 61) fall back
+ * to fixed row chunks so they still have segment spans.
+ */
+function deriveSegments(levelData, chunk = 24) {
+  const asm = levelData && levelData.__assembly;
+  if (Array.isArray(asm) && asm.length) {
+    const segs = asm
+      .filter((p) => p && typeof p.startRow === 'number' && typeof p.length === 'number' && p.length > 0)
+      .map((p) => ({ startRow: p.startRow, endRow: p.startRow + p.length - 1 }));
+    if (segs.length) return segs;
+  }
+  const n = (levelData && levelData.rows && levelData.rows.length) || 0;
+  const segs = [];
+  for (let s = 0; s < n; s += chunk) segs.push({ startRow: s, endRow: Math.min(n - 1, s + chunk - 1) });
+  return segs;
+}
+
+/**
  * Combined quality assessment for the regenerate gate. Runs the Bucket-A static
  * validator and folds in any assembly-time (Bucket B) violations carried on the
  * level object (levelData.__assembly). Returns a single score/pass verdict.
@@ -3293,6 +3313,7 @@ function bakeAllWorlds() {
       }
       // Upsert by index: replace in place if present, otherwise insert. Keeps
       // unrelated entries (e.g. audio level 91) intact for both bake modes.
+      levelData.segments = deriveSegments(levelData); // persist per-segment row spans
       delete levelData.__assembly; // strip internal assembly metadata before persisting
       const existingIdx = generatedLevels.findIndex(lvl => lvl.level_index === levelIndex);
       if (existingIdx >= 0) generatedLevels[existingIdx] = levelData;
@@ -3525,6 +3546,7 @@ async function reviseLevel({ levelIndex, notes = [], seeds = 16, outPath, cGate 
       if (seg && seg.id != null) GLOBAL_SEG_USAGE.set(seg.id, (GLOBAL_SEG_USAGE.get(seg.id) || 0) + 1);
     }
   }
+  out.segments = deriveSegments(out); // persist per-segment row spans
   delete out.__assembly;
 
   let levels = [];

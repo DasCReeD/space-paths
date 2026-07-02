@@ -194,8 +194,11 @@ const CURVATURE_VERTEX_GLSL = `
  * Uses onBeforeCompile to modify the vertex shader at GPU compile time.
  * Zero per-frame cost beyond the single uniform update.
  */
-export function applyCurvatureShader(material) {
+export function applyCurvatureShader(material, opts) {
   if (!material || material.isShaderMaterial) return material;
+  const voidViz = !!(opts && opts.voidViz);
+  // Per-material: the world-Z where this tile's segment starts (drives the viz panel).
+  const zStartUniform = new THREE.Uniform(opts && typeof opts.zStart === 'number' ? opts.zStart : 0);
 
   material.onBeforeCompile = (shader) => {
     // Attach shared uniforms (single objects, so updating them in
@@ -210,22 +213,105 @@ export function applyCurvatureShader(material) {
       `uniform float uCurvatureRadius;
        uniform float uCameraZ;
        uniform float uCurvatureOn;
+       ${voidViz ? 'varying vec3 vWorldPos;' : ''}
        void main() {`
     );
 
-    // Inject curvature displacement after #include <begin_vertex>
+    // Inject curvature displacement after #include <begin_vertex>; capture the curved
+    // world position afterwards so the void viz panel sticks to the visible road.
     shader.vertexShader = shader.vertexShader.replace(
       '#include <begin_vertex>',
-      '#include <begin_vertex>\n' + CURVATURE_VERTEX_GLSL
+      '#include <begin_vertex>\n' + CURVATURE_VERTEX_GLSL +
+        (voidViz ? '\n  vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;' : '')
     );
+
+    // Void biome: sample the live music visualizer across each track segment.
+    if (voidViz) {
+      shader.uniforms.uVoidViz       = voidVizUniforms.uVoidViz;
+      shader.uniforms.uVoidVizOn     = voidVizUniforms.uVoidVizOn;
+      shader.uniforms.uVoidVizGain   = voidVizUniforms.uVoidVizGain;
+      shader.uniforms.uVoidVizUnits  = voidVizUniforms.uVoidVizUnits;
+      shader.uniforms.uVoidVizZStart = zStartUniform;
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'void main() {',
+        `uniform sampler2D uVoidViz;
+         uniform float uVoidVizOn;
+         uniform float uVoidVizGain;
+         uniform float uVoidVizUnits;
+         uniform float uVoidVizZStart;
+         varying vec3 vWorldPos;
+         void main() {`
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\n' + VOID_VIZ_FRAGMENT_GLSL
+      );
+    }
   };
 
-  // Force Three.js to recompile when curvature is toggled
+  // Force Three.js to recompile when curvature is toggled / for the void variant
   material.customProgramCacheKey = () =>
-    'curvature_' + (curvatureUniforms.uCurvatureOn.value > 0.5 ? '1' : '0');
+    'curvature_' + (curvatureUniforms.uCurvatureOn.value > 0.5 ? '1' : '0') + (voidViz ? '_vv' : '');
 
   return material;
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Live music-visualizer road for the Void biome (levels 61-63).
+// The milkdrop visualizer already renders to graphics.visualizerTexture each frame;
+// we sample it on the road, mapped per set-piece SEGMENT (each segment shows one
+// flowing panel). World-position sampling + a per-material segment Z-start needs no
+// custom geometry/attributes. The shared uniforms are fed once per frame by
+// GraphicsEngine — O(1) in the number of tiles.
+// ═══════════════════════════════════════════════════════════════════
+let _voidVizFallbackTex = null;
+function getVoidVizFallbackTex() {
+  if (!_voidVizFallbackTex && typeof THREE.DataTexture === 'function') {
+    // 1x1 black — keeps the sampler valid at first compile (a null sampler set later
+    // doesn't rebind reliably); GraphicsEngine swaps in the live visualizer texture.
+    _voidVizFallbackTex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+    _voidVizFallbackTex.needsUpdate = true;
+  }
+  return _voidVizFallbackTex;
+}
+
+// Master toggle for the Void road music-visualizer overlay. OFF for now — the whole
+// pipeline (shader variant, uniforms, graphics per-frame feed, worldBuilder `segments`)
+// is kept in place; flip this to true to bring the per-segment visualizer road back.
+const VOID_VIZ_ENABLED = false;
+
+export const voidVizUniforms = {
+  uVoidViz:      new THREE.Uniform(getVoidVizFallbackTex()),
+  uVoidVizOn:    new THREE.Uniform(0.0),   // 1 when the live visualizer texture is available
+  uVoidVizGain:  new THREE.Uniform(0.6),   // <1 so bright presets don't bloom to white
+  uVoidVizUnits: new THREE.Uniform(24.0),  // world units per visualizer frame along the track
+};
+
+// Rows-per-segment fallback when a level lacks `segments` metadata (e.g. bespoke 61).
+const VOID_SEGMENT_CHUNK = 24;
+function getVoidSegment(levelData, rowIndex) {
+  const r = typeof rowIndex === 'number' ? rowIndex : 0;
+  const segs = levelData && levelData.segments;
+  if (Array.isArray(segs)) {
+    for (let i = 0; i < segs.length; i++) {
+      if (r >= segs[i].startRow && r <= segs[i].endRow) return segs[i];
+    }
+  }
+  const startRow = Math.floor(r / VOID_SEGMENT_CHUNK) * VOID_SEGMENT_CHUNK;
+  return { startRow, endRow: startRow + VOID_SEGMENT_CHUNK - 1 };
+}
+
+// Sample the live visualizer across the segment: U spans the 14u road width, V flows
+// toward the player and resets at each segment's Z-start. sRGB→linear, gain-limited.
+const VOID_VIZ_FRAGMENT_GLSL = `
+  if (uVoidVizOn > 0.5) {
+    float vizAcross = clamp((vWorldPos.x + 7.0) / 14.0, 0.0, 1.0);                       // across road width
+    float vizAlong  = fract((uVoidVizZStart - vWorldPos.z) / max(1.0, uVoidVizUnits));   // down the track
+    // Rotated 90°: the visualizer's horizontal (U) axis reads DOWN the track.
+    vec3 vizCol = pow(texture2D(uVoidViz, vec2(vizAlong, vizAcross)).rgb, vec3(2.2));
+    totalEmissiveRadiance += vizCol * uVoidVizGain;
+  }
+`;
 
 /**
  * Flow/Tower "tunnel ceiling" lighting.
@@ -560,7 +646,10 @@ function adjustBoxUVs(geometry, width, height, length, xPos = 0, zPos = 0, yPos 
   const levelIndex = levelData && typeof levelData.level_index === 'number' ? levelData.level_index : (typeof window !== 'undefined' ? window.currentLevelIndex : null);
   const isGenerated = (levelData && levelData.isGenerated) || (levelIndex >= 61) || (typeof window !== 'undefined' && window.currentGamePack === 'generated');
   const isTestEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') || (typeof window !== 'undefined' && window.__vitest_worker__);
-  const isProcedural = (levelIndex === 0 || isGenerated) && !isTestEnv;
+  // Demo (0), generated biomes, AND standard-pack world-neon levels all use per-block 0..1 UVs
+  // so their span-sized neon canvas maps once across each merged block at constant world density
+  // (the else-branch's per-tile world-space tiling would repeat the span-sized canvas per tile).
+  const isProcedural = (levelIndex === 0 || isGenerated || !!getStandardWorld(levelData) || !!getXmasWorld(levelData)) && !isTestEnv;
   
   // If normals exist (e.g. RoundedBoxGeometry or standard BoxGeometry in-game), use world-space normal-aligned planar mapping
   if (normAttr && posAttr) {
@@ -1069,6 +1158,7 @@ function getProceduralTexture(behavior, baseColor, colorIndex, levelIndex = 0) {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 16; // keep procedural lines sharp at grazing angles (road → horizon)
   textureCache.set(cacheKey, texture);
   return texture;
 }
@@ -1359,6 +1449,81 @@ export function getActiveThemeIndex(levelData) {
   return worldToTheme[worldIdx] !== undefined ? worldToTheme[worldIdx] : 0;
 }
 
+// Master toggle for the per-world procedural neon skin on the STANDARD pack
+// (mirrors VOID_VIZ_ENABLED). Set false to fall back to the legacy PBR/profile path.
+const STANDARD_NEON_ENABLED = true;
+
+/**
+ * Resolve a STANDARD-pack level to its original SkyRoads world for the neon skin.
+ * Standard pack layout: idx 0 = DEMO ROAD (excluded), idx 1..30 = 10 worlds × 3 roads,
+ * so worldIdx uses (idx - 1) to stay aligned past the demo slot. Returns null (→ legacy
+ * path) for the demo, the standalone xmas pack, generated levels, or when disabled.
+ */
+function getStandardWorld(levelData) {
+  if (!STANDARD_NEON_ENABLED) return null;
+  const pack = (typeof window !== 'undefined') ? window.currentGamePack : null;
+  if (pack !== 'standard') return null;              // gate: only the standard pack (not xmas/custom/generated)
+  if (levelData && levelData.isGenerated) return null;
+  let idx = null;
+  if (levelData && typeof levelData.level_index === 'number') {
+    idx = levelData.level_index;
+  } else if (typeof window !== 'undefined' && typeof window.currentLevelIndex === 'number') {
+    idx = window.currentLevelIndex;
+  }
+  if (idx === null || idx < 1 || idx > 30) return null;
+  return { worldIdx: Math.floor((idx - 1) / 3), roadInWorld: (idx - 1) % 3 };
+}
+
+/**
+ * Resolve an Xmas-pack level to its world for the festive neon skin. Xmas worlds appear in TWO
+ * places: the standalone 'xmas' pack (idx 0 = XMAS DEMO, 1..30 = 10 worlds × 3) and the xmas half
+ * of the 'standard' pack (idx 31 = XMAS DEMO, 32..61 = the worlds). Both use a −1 demo offset.
+ * Returns null (→ legacy path) for the demos, other packs, generated levels, or when disabled.
+ */
+function getXmasWorld(levelData) {
+  if (!STANDARD_NEON_ENABLED) return null;
+  const pack = (typeof window !== 'undefined') ? window.currentGamePack : null;
+  if (levelData && levelData.isGenerated) return null;
+  let idx = null;
+  if (levelData && typeof levelData.level_index === 'number') {
+    idx = levelData.level_index;
+  } else if (typeof window !== 'undefined' && typeof window.currentLevelIndex === 'number') {
+    idx = window.currentLevelIndex;
+  }
+  if (idx === null) return null;
+  let rel = null;
+  if (pack === 'xmas' && idx >= 1 && idx <= 30) rel = idx;                 // standalone xmas (demo at 0)
+  else if (pack === 'standard' && idx >= 32 && idx <= 61) rel = idx - 31;  // xmas half of standard (demo at 31)
+  if (rel === null) return null;
+  return { worldIdx: Math.floor((rel - 1) / 3), roadInWorld: (rel - 1) % 3 };
+}
+
+/**
+ * The curated neon set actually driving a level's road ({base, primary, secondary, accent}),
+ * resolved in the SAME priority order as createTileMaterial so lighting always matches the road:
+ * standard world → xmas world → generated biome → demo → null. Used by graphics.js to tint the
+ * scene lights per biome/world. Returns null only for legacy non-neon levels (skin disabled).
+ */
+export function getActiveNeonSet(levelData) {
+  const sw = getStandardWorld(levelData);
+  if (sw) return tintNeonSet(WORLD_NEON_SETS[sw.worldIdx] || WORLD_NEON_SETS[0], sw.roadInWorld);
+  const xw = getXmasWorld(levelData);
+  if (xw) return tintNeonSet(XMAS_NEON_SETS[xw.worldIdx] || XMAS_NEON_SETS[0], xw.roadInWorld);
+
+  let idx = (levelData && typeof levelData.level_index === 'number') ? levelData.level_index
+    : (typeof window !== 'undefined' && typeof window.currentLevelIndex === 'number' ? window.currentLevelIndex : null);
+  const isGen = (levelData && levelData.isGenerated) || (idx !== null && idx >= 61)
+    || (typeof window !== 'undefined' && window.currentGamePack === 'generated');
+  if (isGen) {
+    const theme = THEMES[getActiveThemeIndex(levelData)];
+    const key = theme ? theme.key : 'void';
+    const lvlInBiome = idx !== null ? ((((idx - 61) % 3) + 3) % 3) : 0;
+    return tintNeonSet(BIOME_NEON_SETS[key] || BIOME_NEON_SETS.void, lvlInBiome);
+  }
+  if (idx === 0) return { base: '#06060c', primary: '#00ffff', secondary: '#ff00ff', accent: '#39ff14' }; // demo road
+  return null;
+}
+
 
 export const loadedTextureCache = new Map();
 
@@ -1416,9 +1581,18 @@ export function perturbColor(color, levelIndex, salt = 0) {
   return new THREE.Color().setHSL(temp.h, temp.s, temp.l);
 }
 
+// Curated neon palette for the Demo Road (levelIndex 0) — also reused by the Void
+// biome road so it matches the demo road exactly.
+const DEMO_NEON_COLORS = {
+  0: '#00ffff', 1: '#39ff14', 2: '#00ffcc', 3: '#ff00ff',
+  4: '#ffff00', 5: '#00e5ff', 6: '#ffaa00', 7: '#ccff00',
+  8: '#00f0ff', 9: '#7b00ff', 10: '#ccff00', 11: '#00ffff',
+  12: '#ff00aa', 13: '#9d00ff', 14: '#ff5500', 15: '#ffffff',
+};
+
 /**
  * Procedural neon texture generator for simple straight block and grate textures.
- * Used exclusively for the Demo Road (levelIndex === 0).
+ * Used by the Demo Road (levelIndex === 0) and the Void biome road.
  */
 function getDemoNeonTexture(behavior, colorIndex, colIndex, rowIndex, spanX = 1, spanZ = 1) {
   if (typeof document === 'undefined') return null;
@@ -1564,21 +1738,804 @@ function getDemoNeonTexture(behavior, colorIndex, colIndex, rowIndex, spanX = 1,
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 16; // keep the neon lines sharp at grazing angles (road → horizon)
   textureCache.set(cacheKey, texture);
   return texture;
 }
 
+const _PI2 = Math.PI * 2;
+
+function _hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function _rgbToHex(r, g, b) {
+  const t = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+  return `#${t(r)}${t(g)}${t(b)}`;
+}
+// Rotate a hex colour's hue by `deg` degrees in sRGB HSL space (canvas-friendly).
+function rotateHueHex(hex, deg) {
+  let [r, g, b] = _hexToRgb(hex);
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0; const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+  }
+  h = (h + deg / 360 + 1) % 1;
+  const hue2rgb = (p, q, t) => {
+    if (t < 0) t += 1; if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  let R = l, G = l, B = l;
+  if (s !== 0) {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    R = hue2rgb(p, q, h + 1 / 3);
+    G = hue2rgb(p, q, h);
+    B = hue2rgb(p, q, h - 1 / 3);
+  }
+  return _rgbToHex(R * 255, G * 255, B * 255);
+}
+
+// Per-level variation within a biome (0/1/2): a small hue rotation of the neon
+// strokes, keeping the dark base fixed so biome identity (motif + darkness) dominates.
+function tintNeonSet(set, lvlInBiome) {
+  if (!lvlInBiome) return set;
+  const deg = lvlInBiome === 1 ? 14 : -14;
+  return {
+    base: set.base,
+    primary: rotateHueHex(set.primary, deg),
+    secondary: rotateHueHex(set.secondary, deg),
+    accent: rotateHueHex(set.accent, deg),
+    motif: set.motif,
+  };
+}
+
+function _frame(ctx, W, H, color, lw, inset) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  ctx.strokeRect(inset, inset, W - inset * 2, H - inset * 2);
+}
+
+// Shared default-road framing so every biome keeps the demo's grate/block rhythm.
+function _defaultFrame(ctx, W, H, pal, isGrate) {
+  if (isGrate) {
+    ctx.fillStyle = pal.primary;
+    ctx.fillRect(0, 0, W, 5);
+    ctx.fillRect(0, H - 5, W, 5);
+  } else {
+    _frame(ctx, W, H, pal.primary, 4, 2);
+    _frame(ctx, W, H, pal.primary, 1.5, 10);
+  }
+}
+
+// --- Shared behaviour motifs (tinted per biome, but shapes fixed for readability) ---
+
+function drawObstacle(ctx, W, H, pal) {
+  _frame(ctx, W, H, pal.primary, 6, 3);
+  _frame(ctx, W, H, pal.primary, 2, 12);
+  ctx.strokeStyle = pal.primary;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(12, H / 2); ctx.lineTo(W - 12, H / 2);
+  ctx.moveTo(W / 2, 12); ctx.lineTo(W / 2, H - 12);
+  ctx.stroke();
+}
+
+// Boost: universal green chevrons (cyan for super) — readability over biome flavour.
+function drawBoostChevrons(ctx, W, H, isSuper) {
+  const col = isSuper ? '#00ffff' : '#39ff14';
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let y = 20; y < H; y += 40) {
+    ctx.beginPath();
+    ctx.moveTo(10, y + 12);
+    ctx.lineTo(W / 2, y - 12);
+    ctx.lineTo(W - 10, y + 12);
+    ctx.stroke();
+  }
+  ctx.fillStyle = col;
+  ctx.fillRect(0, 0, W, 4);
+  ctx.fillRect(0, H - 4, W, 4);
+}
+
+// Burning: universal red danger bars. Colour hardcoded regardless of biome.
+function drawBurningBars(ctx, W, H) {
+  ctx.strokeStyle = '#ff073a';
+  ctx.shadowBlur = 6;
+  ctx.shadowColor = '#ff073a';
+  ctx.lineWidth = 5;
+  for (let x = 16; x < W; x += 32) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ff073a';
+  ctx.fillRect(0, 0, W, 6);
+  ctx.fillRect(0, H - 6, W, 6);
+  for (let y = 128; y < H; y += 128) ctx.fillRect(0, y - 3, W, 6);
+}
+
+// Refill: universal cyan concentric rings.
+function drawRefillRings(ctx, W, H) {
+  ctx.strokeStyle = '#00ffff';
+  ctx.lineWidth = 4;
+  for (let y = 64; y < H; y += 128) {
+    ctx.beginPath();
+    ctx.arc(W / 2, y, Math.min(W / 2 - 10, 48), 0, _PI2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(W / 2, y, Math.min(W / 2 - 10, 24), 0, _PI2);
+    ctx.stroke();
+  }
+}
+
+// Sticky: rounded blobs, biome-accent fill with a magenta rim.
+function drawStickyBlobs(ctx, W, H, pal) {
+  ctx.fillStyle = pal.accent;
+  ctx.strokeStyle = '#ff00ff';
+  ctx.lineWidth = 3;
+  const n = Math.max(3, Math.round(W / 48));
+  for (let i = 0; i < n; i++) {
+    const cx = ((i * 53) % Math.max(1, W - 24)) + 12;
+    const cy = ((i * 89) % Math.max(1, H - 24)) + 12;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 11, 0, _PI2);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+// Slippery: universal ice-cyan diagonals (kept fixed; material also enforces ice).
+function drawSlipperyDiagonals(ctx, W, H) {
+  ctx.strokeStyle = '#00f0ff';
+  ctx.lineWidth = 3;
+  for (let x = -H; x < W; x += 28) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + H, H);
+    ctx.stroke();
+  }
+}
+
+// Tunnel: biome-accent grid grate.
+function drawTunnelGrid(ctx, W, H, pal) {
+  ctx.strokeStyle = pal.accent;
+  ctx.lineWidth = 4;
+  for (let y = 16; y < H; y += 32) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  for (let x = 16; x < W; x += 32) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+}
+
+// --- Per-biome default-road signature motifs (demo grammar, biome flavour) ---
+
+function motifVoid(ctx, W, H, pal, isGrate) {
+  // The live music visualizer is drawn in the fragment shader (VOID_VIZ_FRAGMENT_GLSL),
+  // sampled per segment. The diffuse stays mostly DARK so the visualizer pops; we only
+  // lay down a faint baseline so the road still reads when the visualizer is off.
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = pal.secondary;
+  ctx.fillRect(0, 4, W, 4);
+  ctx.globalAlpha = 1.0;
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+function motifRidge(ctx, W, H, pal, isGrate) {
+  // Guide: high verticality, tiered climb-then-plunge crests with marker arches at each apex.
+  ctx.shadowBlur = 6; ctx.shadowColor = pal.primary;
+  ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  for (let i = 1; i <= 3; i++) {
+    const y = (i * H) / 4;
+    ctx.strokeStyle = i === 2 ? pal.primary : pal.secondary;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.bezierCurveTo(W / 3, y - 26, (2 * W) / 3, y - 26, W, y);
+    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W / 2, y - 20); ctx.lineTo(W / 2, y - 30); ctx.stroke(); // marker post at crest
+  }
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = pal.accent;
+  for (let i = 1; i <= 3; i++) { ctx.beginPath(); ctx.arc(W / 2, (i * H) / 4 - 30, 2, 0, _PI2); ctx.fill(); }
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+function motifThrill(ctx, W, H, pal, isGrate) {
+  // Guide: neon rollercoaster — glowing rails + ties + forward speed chevrons down the centre.
+  const x1 = W * 0.28, x2 = W * 0.72;
+  ctx.shadowBlur = 6; ctx.shadowColor = pal.primary;
+  ctx.strokeStyle = pal.secondary; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x1, H); ctx.moveTo(x2, 0); ctx.lineTo(x2, H); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = pal.accent; ctx.lineWidth = 3;
+  for (let y = 14; y < H; y += 26) { ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke(); }
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 2.5;
+  for (let y = 20; y < H; y += 34) { ctx.beginPath(); ctx.moveTo(W / 2 - 7, y + 6); ctx.lineTo(W / 2, y - 4); ctx.lineTo(W / 2 + 7, y + 6); ctx.stroke(); }
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+function motifCore(ctx, W, H, pal, isGrate) {
+  // Guide: supercomputer circuit board — traces, an IC die, gold vias with solder halos.
+  ctx.strokeStyle = pal.secondary; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(15, 15); ctx.lineTo(W * 0.4, 15); ctx.lineTo(W * 0.6, H * 0.5); ctx.lineTo(W * 0.6, H - 15);
+  ctx.moveTo(W - 15, 15); ctx.lineTo(W - 15, H * 0.4); ctx.lineTo(W * 0.7, H * 0.7); ctx.lineTo(15, H * 0.7);
+  ctx.moveTo(W * 0.3, H - 15); ctx.lineTo(W * 0.3, H * 0.6); ctx.lineTo(15, H * 0.45);
+  ctx.stroke();
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 1.5;
+  ctx.strokeRect(W * 0.42, H * 0.4, W * 0.16, H * 0.16); // IC die
+  const vias = [[15, 15], [W * 0.6, H - 15], [W - 15, 15], [15, H * 0.7], [W * 0.3, H - 15]];
+  vias.forEach(([vx, vy]) => {
+    ctx.fillStyle = pal.accent; ctx.beginPath(); ctx.arc(vx, vy, 3.5, 0, _PI2); ctx.fill();
+    ctx.strokeStyle = pal.accent; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(vx, vy, 6, 0, _PI2); ctx.stroke();
+  });
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+function motifGlitch(ctx, W, H, pal, isGrate, seed) {
+  // Guide: phasing/unreliable ground — RGB-split datamosh blocks + scanlines + torn slivers.
+  const rng = _srng(seed);
+  for (let i = 0; i < 6; i++) {
+    const w = 14 + rng() * 30, h = 4 + rng() * 9;
+    const x = rng() * Math.max(1, W - w), y = rng() * Math.max(1, H - h);
+    ctx.fillStyle = pal.secondary; ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = 0.6; ctx.fillStyle = pal.primary; ctx.fillRect(x + 3, y, w, h); ctx.globalAlpha = 1; // channel split
+  }
+  ctx.strokeStyle = pal.accent; ctx.lineWidth = 1;
+  for (let y = 4; y < H; y += 8) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  ctx.fillStyle = pal.primary;
+  for (let i = 0; i < 3; i++) ctx.fillRect(0, rng() * H, W, 1.5); // torn bright slivers
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+function motifTundra(ctx, W, H, pal, isGrate, seed) {
+  // Guide: frictionless ice glide — frost cracks + a hex ice crystal + faint drift sheen.
+  // Thin strokes keep the white area low for bloom safety.
+  ctx.strokeStyle = pal.accent; ctx.lineWidth = 1.5;
+  const cx = W / 2, cy = H / 2;
+  for (let i = 0; i < 6; i++) {
+    const ang = (i / 6) * _PI2 + (seed % 7) * 0.12;
+    const ex = cx + Math.cos(ang) * W * 0.5, ey = cy + Math.sin(ang) * H * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy); ctx.lineTo(ex, ey);
+    ctx.moveTo((cx + ex) / 2, (cy + ey) / 2);
+    ctx.lineTo((cx + ex) / 2 + Math.cos(ang + 1) * 9, (cy + ey) / 2 + Math.sin(ang + 1) * 9);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 1.2;
+  const hr = Math.min(W, H) * 0.12;
+  ctx.beginPath();
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * _PI2, x = cx + Math.cos(a) * hr, y = cy + Math.sin(a) * hr; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.closePath(); ctx.stroke();
+  ctx.globalAlpha = 0.3; ctx.strokeStyle = pal.secondary; ctx.lineWidth = 1;
+  for (let y = 10; y < H; y += 20) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y - 3); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+function motifFurnace(ctx, W, H, pal, isGrate, seed) {
+  // Guide: lava burn-grid with a safe centre lane — branching glowing magma cracks + embers.
+  ctx.shadowBlur = 8; ctx.shadowColor = pal.primary;
+  ctx.strokeStyle = pal.secondary; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(15, H - 15); ctx.lineTo(W * 0.35, H * 0.55); ctx.lineTo(W * 0.6, H * 0.62); ctx.lineTo(W - 15, 15);
+  ctx.moveTo(W * 0.35, H * 0.55); ctx.lineTo(15, 20);
+  ctx.moveTo(W * 0.6, H * 0.62); ctx.lineTo(W * 0.75, H - 15);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  const rng = _srng(seed); ctx.fillStyle = pal.accent;
+  for (let i = 0; i < 8; i++) { ctx.beginPath(); ctx.arc(rng() * W, rng() * H, 1.4, 0, _PI2); ctx.fill(); }
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+function motifShallows(ctx, W, H, pal, isGrate, seed) {
+  // Guide: cosmic fog + tunnels — soft nebula fog bands, half-wall guide rails, bubbles + stars.
+  const rng = _srng(seed);
+  for (let i = 0; i < 3; i++) {
+    const y = rng() * H, h = 10 + rng() * 16;
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.5, pal.secondary); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = 0.22; ctx.fillStyle = g; ctx.fillRect(0, y, W, h); ctx.globalAlpha = 1;
+  }
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(W * 0.22, 0); ctx.lineTo(W * 0.22, H); ctx.moveTo(W * 0.78, 0); ctx.lineTo(W * 0.78, H); ctx.stroke();
+  ctx.strokeStyle = pal.accent; ctx.lineWidth = 1.5;
+  for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(rng() * W, rng() * H, 6 + rng() * 6, 0, _PI2); ctx.stroke(); }
+  _stars(ctx, W, H, pal.accent, 8, rng, 1.2);
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+function motifSpire(ctx, W, H, pal, isGrate, seed) {
+  // Guide: low-gravity floating sky-islands — faceted diamonds of varying size + platform dashes.
+  const rng = _srng(seed);
+  const diamond = (cx, cy, r) => {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r, cy); ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r, cy); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy); ctx.stroke();
+  };
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 2;
+  diamond(W / 2, H * 0.38, Math.min(W, H) * 0.22);
+  ctx.strokeStyle = pal.secondary; ctx.lineWidth = 1.4;
+  diamond(W * 0.28, H * 0.72, Math.min(W, H) * 0.1);
+  diamond(W * 0.74, H * 0.7, Math.min(W, H) * 0.08);
+  ctx.strokeStyle = pal.accent; ctx.lineWidth = 2;
+  for (let i = 0; i < 3; i++) { const x = rng() * W, y = rng() * H; ctx.beginPath(); ctx.moveTo(x - 6, y); ctx.lineTo(x + 6, y); ctx.stroke(); }
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+function motifPulse(ctx, W, H, pal, isGrate) {
+  // Guide: mechanical timing gates — thick/thin gate bars with steel bolts + a centre pulse line
+  // whose beat ticks land on each gate (brake-into-the-gate rhythm).
+  let gi = 0;
+  for (let x = 18; x < W; x += 30) {
+    ctx.strokeStyle = pal.secondary; ctx.lineWidth = (gi % 2) ? 4 : 2;
+    ctx.beginPath(); ctx.moveTo(x, 10); ctx.lineTo(x, H - 10); ctx.stroke();
+    ctx.fillStyle = pal.accent; ctx.beginPath(); ctx.arc(x, 8, 2, 0, _PI2); ctx.fill(); // bolt
+    gi++;
+  }
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
+  ctx.fillStyle = pal.primary;
+  for (let x = 18; x < W; x += 30) { ctx.beginPath(); ctx.arc(x, H / 2, 2.5, 0, _PI2); ctx.fill(); } // beat ticks
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+function motifDefault(ctx, W, H, pal, isGrate) {
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// --- Standard-pack per-world motifs (demo grammar; one signature per world) -------------
+// Small deterministic RNG so scatter placement is stable per cache key (no Math.random —
+// keeps textures reproducible). See docs/standard-worlds-neon-brief.md.
+function _srng(seed) {
+  let s = (seed | 0) || 1;
+  return () => {
+    s = (s * 1664525 + 1013904223) | 0;
+    return ((s >>> 8) & 0xffffff) / 0x1000000;
+  };
+}
+
+function _stars(ctx, W, H, color, n, rng, maxR) {
+  ctx.fillStyle = color;
+  for (let i = 0; i < n; i++) {
+    ctx.globalAlpha = 0.45 + rng() * 0.55;
+    ctx.beginPath();
+    ctx.arc(rng() * W, rng() * H, 0.6 + rng() * (maxR || 1.6), 0, _PI2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// RED HEAT — molten: flowing lava fissures + ember dots.
+function motifMolten(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  ctx.strokeStyle = pal.primary;
+  ctx.shadowBlur = 8; ctx.shadowColor = pal.secondary;
+  ctx.lineWidth = 3; ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    const x0 = (i + 0.5) * W / 3 + (rng() - 0.5) * 10;
+    ctx.beginPath(); ctx.moveTo(x0, 0);
+    for (let y = H / 4; y <= H; y += H / 4) ctx.lineTo(x0 + (rng() - 0.5) * 22, y);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = pal.accent;
+  for (let i = 0; i < 10; i++) { ctx.beginPath(); ctx.arc(rng() * W, rng() * H, 1.6, 0, _PI2); ctx.fill(); }
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// INTO THE SUN — solar: radiant corona rays + flare ring.
+function motifSolar(ctx, W, H, pal, isGrate) {
+  const cx = W / 2, cy = H / 2;
+  ctx.strokeStyle = pal.primary;
+  ctx.shadowBlur = 10; ctx.shadowColor = pal.secondary;
+  ctx.lineWidth = 2.5;
+  const rays = 12;
+  for (let i = 0; i < rays; i++) {
+    const a = (i / rays) * _PI2;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * 10, cy + Math.sin(a) * 10);
+    ctx.lineTo(cx + Math.cos(a) * W * 0.7, cy + Math.sin(a) * H * 0.7);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = pal.accent; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx, cy, Math.min(W, H) * 0.28, 0, _PI2); ctx.stroke();
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// BLUE PLANET — ocean: rolling wave crests + caustic sparkles.
+function motifOcean(ctx, W, H, pal, isGrate, seed) {
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  ctx.shadowBlur = 6; ctx.shadowColor = pal.secondary;
+  for (let i = 1; i <= 4; i++) {
+    const y = i * H / 5;
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 4) {
+      const yy = y + Math.sin((x / W) * Math.PI * 4 + i) * 4;
+      x === 0 ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy);
+    }
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = pal.accent; ctx.lineWidth = 1.2;
+  const rng = _srng(seed);
+  for (let i = 0; i < 8; i++) {
+    const x = rng() * W, y = rng() * H, s = 3 + rng() * 3;
+    ctx.beginPath(); ctx.moveTo(x - s, y); ctx.lineTo(x + s, y); ctx.moveTo(x, y - s); ctx.lineTo(x, y + s); ctx.stroke();
+  }
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// SATELLITE — orbital tech: hull panel seams + rivet ticks.
+function motifOrbital(ctx, W, H, pal, isGrate) {
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 2;
+  const cols = 2, rows = Math.max(2, Math.round(H / 64));
+  for (let i = 1; i < cols; i++) { const x = i * W / cols; ctx.beginPath(); ctx.moveTo(x, 4); ctx.lineTo(x, H - 4); ctx.stroke(); }
+  for (let j = 1; j < rows; j++) { const y = j * H / rows; ctx.beginPath(); ctx.moveTo(4, y); ctx.lineTo(W - 4, y); ctx.stroke(); }
+  ctx.fillStyle = pal.accent;
+  for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) {
+    const x = Math.min(W - 4, Math.max(4, i * W / cols)), y = Math.min(H - 4, Math.max(4, j * H / rows));
+    ctx.beginPath(); ctx.arc(x, y, 1.6, 0, _PI2); ctx.fill();
+  }
+  ctx.strokeStyle = pal.secondary; ctx.lineWidth = 1; ctx.strokeRect(8, 8, W - 16, H - 16);
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// MISTY — ether/fog: soft horizontal fog bands + faint stars.
+function motifMist(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  for (let i = 0; i < 5; i++) {
+    const y = rng() * H, h = 8 + rng() * 18;
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(0.5, pal.secondary);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = 0.25; ctx.fillStyle = g; ctx.fillRect(0, y, W, h); ctx.globalAlpha = 1;
+  }
+  _stars(ctx, W, H, pal.primary, 10, rng, 1.4);
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// ASTEROID BELT — rocky debris: cratered rock chips + debris.
+function motifBelt(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 1.8;
+  for (let i = 0; i < 7; i++) {
+    const cx = rng() * W, cy = rng() * H, r = 4 + rng() * 9, sides = 5 + ((rng() * 3) | 0);
+    ctx.beginPath();
+    for (let k = 0; k < sides; k++) {
+      const a = (k / sides) * _PI2, rr = r * (0.7 + rng() * 0.5);
+      const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+      k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath(); ctx.stroke();
+  }
+  ctx.fillStyle = pal.accent;
+  for (let i = 0; i < 12; i++) { ctx.beginPath(); ctx.arc(rng() * W, rng() * H, 1.1, 0, _PI2); ctx.fill(); }
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// CRAB NEBULA — cosmic gas: drifting gas filaments + star specks.
+function motifNebula(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 5; i++) {
+    ctx.strokeStyle = i % 2 ? pal.primary : pal.secondary;
+    ctx.shadowBlur = 8; ctx.shadowColor = ctx.strokeStyle;
+    ctx.lineWidth = 1.5 + rng() * 2;
+    ctx.beginPath();
+    let x = rng() * W; ctx.moveTo(x, 0);
+    for (let yy = 0; yy <= H; yy += H / 4) {
+      x += (rng() - 0.5) * 40;
+      ctx.quadraticCurveTo(x, yy, x + (rng() - 0.5) * 20, Math.min(H, yy + H / 4));
+    }
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  _stars(ctx, W, H, pal.accent, 14, rng, 1.8);
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// OVER THE BASE — industrial hazard: stencil hazard band + corner brackets + chevron ticks.
+function motifBase(ctx, W, H, pal, isGrate) {
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, H / 2 - 10, W, 20); ctx.clip();
+  ctx.strokeStyle = pal.secondary; ctx.lineWidth = 6;
+  for (let x = -H; x < W + H; x += 16) { ctx.beginPath(); ctx.moveTo(x, H / 2 - 12); ctx.lineTo(x + 24, H / 2 + 12); ctx.stroke(); }
+  ctx.restore();
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 2.5;
+  const b = 14;
+  [[6, 6, 1, 1], [W - 6, 6, -1, 1], [6, H - 6, 1, -1], [W - 6, H - 6, -1, -1]].forEach(([x, y, sx, sy]) => {
+    ctx.beginPath(); ctx.moveTo(x + sx * b, y); ctx.lineTo(x, y); ctx.lineTo(x, y + sy * b); ctx.stroke();
+  });
+  ctx.strokeStyle = pal.accent; ctx.lineWidth = 2;
+  for (let y = 18; y < H; y += 28) { ctx.beginPath(); ctx.moveTo(W / 2 - 8, y + 6); ctx.lineTo(W / 2, y - 4); ctx.lineTo(W / 2 + 8, y + 6); ctx.stroke(); }
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// THE EARTH — terrestrial: globe graticule + a continent blob.
+function motifTerra(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 1.5;
+  for (let i = 1; i <= 3; i++) { const y = i * H / 4; ctx.beginPath(); ctx.moveTo(0, y); ctx.bezierCurveTo(W / 3, y - 6, 2 * W / 3, y + 6, W, y); ctx.stroke(); }
+  for (let i = 1; i <= 2; i++) { const x = i * W / 3; ctx.beginPath(); ctx.moveTo(x, 0); ctx.bezierCurveTo(x - 8, H / 3, x + 8, 2 * H / 3, x, H); ctx.stroke(); }
+  const cx = W * 0.5, cy = H * 0.5, seg = 8;
+  ctx.globalAlpha = 0.5; ctx.fillStyle = pal.secondary;
+  ctx.beginPath();
+  for (let k = 0; k < seg; k++) {
+    const a = (k / seg) * _PI2, rr = Math.min(W, H) * 0.18 * (0.7 + rng() * 0.6);
+    const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+    k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = pal.accent; ctx.lineWidth = 1.2; ctx.stroke();
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// DRUIDIA — mystic grove: central vine, leaves, gold berries.
+function motifGrove(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(W / 2, 0);
+  for (let y = 0; y <= H; y += H / 6) ctx.quadraticCurveTo(W / 2 + (y / H < 0.5 ? 12 : -12), y, W / 2 + (rng() - 0.5) * 6, Math.min(H, y + H / 6));
+  ctx.stroke();
+  ctx.fillStyle = pal.secondary;
+  let li = 0;
+  for (let y = 12; y < H; y += 22) {
+    const side = (li++ % 2) ? 1 : -1, lx = W / 2 + side * 14;
+    ctx.save(); ctx.translate(lx, y); ctx.rotate(side * 0.6);
+    ctx.beginPath(); ctx.ellipse(0, 0, 8, 4, 0, 0, _PI2); ctx.fill(); ctx.restore();
+  }
+  ctx.fillStyle = pal.accent;
+  for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(rng() * W, rng() * H, 1.8, 0, _PI2); ctx.fill(); }
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// --- Xmas-pack per-world motifs (festive / winter identities) ---------------------------
+// SNOWBOUND — falling six-point flakes over a drift mound.
+function motifSnow(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  ctx.fillStyle = pal.primary; ctx.globalAlpha = 0.5;
+  ctx.beginPath(); ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += W / 6) ctx.quadraticCurveTo(x + W / 12, H - 10 - rng() * 8, x + W / 6, H);
+  ctx.lineTo(W, H); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = pal.secondary; ctx.lineWidth = 1.2;
+  for (let i = 0; i < 7; i++) {
+    const x = rng() * W, y = rng() * H * 0.8, r = 3 + rng() * 3;
+    for (let k = 0; k < 3; k++) { const a = k * Math.PI / 3; ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * r, y - Math.sin(a) * r); ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); ctx.stroke(); }
+  }
+  _stars(ctx, W, H, pal.accent, 5, rng, 1);
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// AT THE OUTER RIM — a glowing planetary rim arc over a starfield.
+function motifRim(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  ctx.shadowBlur = 10; ctx.shadowColor = pal.primary;
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(W / 2, H * 1.4, W * 0.9, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = pal.secondary; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(W / 2, H * 1.4, W * 0.9 + 8, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke();
+  _stars(ctx, W, H, pal.accent, 14, rng, 1.6);
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// TWILIGHT ZONE — dusk gradient wash + horizon lines + stars.
+function motifTwilight(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, pal.secondary); g.addColorStop(0.5, pal.primary); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalAlpha = 0.28; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+  ctx.strokeStyle = pal.accent; ctx.lineWidth = 1.2;
+  for (let i = 1; i <= 3; i++) { const y = i * H / 4; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  _stars(ctx, W, H, pal.accent, 8, rng, 1.3);
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// THE GUIDING STAR — a radiant four-point star.
+function motifGuidingStar(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  const cx = W / 2, cy = H / 2;
+  ctx.shadowBlur = 10; ctx.shadowColor = pal.primary;
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - H * 0.42); ctx.lineTo(cx, cy + H * 0.42);
+  ctx.moveTo(cx - W * 0.4, cy); ctx.lineTo(cx + W * 0.4, cy);
+  ctx.moveTo(cx - W * 0.16, cy - H * 0.16); ctx.lineTo(cx + W * 0.16, cy + H * 0.16);
+  ctx.moveTo(cx + W * 0.16, cy - H * 0.16); ctx.lineTo(cx - W * 0.16, cy + H * 0.16);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = pal.secondary; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, _PI2); ctx.fill();
+  _stars(ctx, W, H, pal.accent, 8, rng, 1.2);
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// METEOR STORM — diagonal meteor streaks with glowing heads.
+function motifMeteor(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 6; i++) {
+    const x = rng() * W, y = rng() * H, len = 20 + rng() * 30;
+    ctx.strokeStyle = pal.primary; ctx.shadowBlur = 6; ctx.shadowColor = pal.primary; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - len * 0.7, y - len); ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = pal.secondary; ctx.beginPath(); ctx.arc(x, y, 2, 0, _PI2); ctx.fill();
+  }
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// MYSTERIOUS PLANET — orbit rings + alien rune glyphs.
+function motifMystery(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  const cx = W / 2, cy = H / 2;
+  ctx.strokeStyle = pal.secondary; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(cx, cy, W * 0.36, H * 0.2, 0, 0, _PI2); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(cx, cy, W * 0.2, H * 0.36, 0, 0, _PI2); ctx.stroke();
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 2;
+  for (let i = 0; i < 4; i++) {
+    const x = 12 + rng() * (W - 24), y = 12 + rng() * (H - 24);
+    ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x, y + 5); ctx.moveTo(x - 4, y - 2); ctx.lineTo(x + 4, y - 2); ctx.moveTo(x - 4, y + 2); ctx.lineTo(x + 4, y + 2); ctx.stroke();
+  }
+  ctx.fillStyle = pal.accent; ctx.beginPath(); ctx.arc(cx, cy, 3, 0, _PI2); ctx.fill();
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// NORTHERN LIGHTS — wavy aurora ribbons + stars.
+function motifAurora(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 4; i++) {
+    ctx.strokeStyle = i % 2 ? pal.primary : pal.secondary;
+    ctx.shadowBlur = 10; ctx.shadowColor = ctx.strokeStyle; ctx.lineWidth = 2 + rng() * 2;
+    ctx.beginPath();
+    const baseY = (i + 0.5) * H / 4;
+    for (let x = 0; x <= W; x += 6) { const y = baseY + Math.sin(x / W * Math.PI * 3 + i * 1.3) * 10; x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  _stars(ctx, W, H, pal.accent, 6, rng, 1);
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// OVER THE POLE — concentric polar rings + compass cross with a north marker.
+function motifPole(ctx, W, H, pal, isGrate) {
+  const cx = W / 2, cy = H / 2, m = Math.min(W, H);
+  ctx.strokeStyle = pal.secondary; ctx.lineWidth = 1.4;
+  for (let r = m * 0.14; r < Math.max(W, H); r += m * 0.16) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, _PI2); ctx.stroke(); }
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.moveTo(0, cy); ctx.lineTo(W, cy); ctx.stroke();
+  ctx.fillStyle = pal.accent;
+  ctx.beginPath(); ctx.moveTo(cx, cy - m * 0.3); ctx.lineTo(cx - 4, cy - m * 0.3 + 8); ctx.lineTo(cx + 4, cy - m * 0.3 + 8); ctx.closePath(); ctx.fill();
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// UNDER THE ICE — angular ice-sheet cracks + trapped rising bubbles.
+function motifSubIce(ctx, W, H, pal, isGrate, seed) {
+  const rng = _srng(seed);
+  ctx.strokeStyle = pal.primary; ctx.lineWidth = 1.8;
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    let x = rng() * W; ctx.moveTo(x, 0);
+    for (let yy = 0; yy <= H; yy += H / 4) { x += (rng() - 0.5) * 40; ctx.lineTo(x, yy); }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = pal.accent; ctx.lineWidth = 1.2;
+  for (let i = 0; i < 7; i++) { ctx.beginPath(); ctx.arc(rng() * W, rng() * H, 2 + rng() * 4, 0, _PI2); ctx.stroke(); }
+  ctx.globalAlpha = 0.25; ctx.strokeStyle = pal.secondary; ctx.lineWidth = 1;
+  for (let y = 12; y < H; y += 22) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// THE EVE — festive garland swags with alternating baubles + a topper star.
+function motifEve(ctx, W, H, pal, isGrate) {
+  ctx.strokeStyle = pal.secondary; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  for (let i = 0; i <= 2; i++) {
+    const y = 10 + i * (H - 20) / 2;
+    ctx.beginPath(); ctx.moveTo(0, y);
+    for (let x = 0; x <= W; x += W / 3) ctx.quadraticCurveTo(x + W / 6, y + 14, x + W / 3, y);
+    ctx.stroke();
+    let b = 0;
+    for (let x = W / 6; x < W; x += W / 3) {
+      ctx.fillStyle = (b++ % 2) ? pal.primary : pal.accent;
+      ctx.beginPath(); ctx.arc(x, y + 14, 3.5, 0, _PI2); ctx.fill();
+    }
+  }
+  ctx.fillStyle = pal.accent; ctx.beginPath(); ctx.arc(W / 2, 6, 3, 0, _PI2); ctx.fill();
+  _defaultFrame(ctx, W, H, pal, isGrate);
+}
+
+// Curated neon "sets" per biome — mapped from each biome's paletteIntent in
+// data/world_design_docs.json. Bases are always dark for demo-style punch + bloom
+// safety (tundra/spire kept dark too; their light identity lives in the material).
+const BIOME_NEON_SETS = {
+  void:     { base: '#0a0410', primary: '#ff2d95', secondary: '#39ff14', accent: '#b026ff', motif: motifVoid },
+  ridge:    { base: '#04080f', primary: '#00e5ff', secondary: '#2f6bff', accent: '#0a3a8f', motif: motifRidge },
+  thrill:   { base: '#0c0a08', primary: '#ff7a00', secondary: '#ffe14d', accent: '#ff3d00', motif: motifThrill },
+  core:     { base: '#05100a', primary: '#39ff14', secondary: '#ff9d3d', accent: '#ffd700', motif: motifCore },
+  glitch:   { base: '#0a0410', primary: '#ff00d4', secondary: '#00f0ff', accent: '#b026ff', motif: motifGlitch },
+  tundra:   { base: '#0a1620', primary: '#8ff0ff', secondary: '#ffffff', accent: '#00cfff', motif: motifTundra },
+  furnace:  { base: '#120704', primary: '#ff3b00', secondary: '#ffcc00', accent: '#ff7a00', motif: motifFurnace },
+  shallows: { base: '#08040f', primary: '#b388ff', secondary: '#8a4dff', accent: '#00e5ff', motif: motifShallows },
+  spire:    { base: '#101418', primary: '#ffd700', secondary: '#c8d0e0', accent: '#8a94a8', motif: motifSpire },
+  pulse:    { base: '#0c0e12', primary: '#ffe14d', secondary: '#c0c8d4', accent: '#00e5ff', motif: motifPulse },
+};
+
+// Curated neon "sets" for the 10 STANDARD-pack worlds (RED HEAT … DRUIDIA), indexed by
+// worldIdx = floor((level_index - 1) / 3). Authored in docs/standard-worlds-neon-brief.md.
+// Dark bases (bloom-safe); the neon strokes + per-world motif carry the identity. Per-road
+// variation within a world is a small hue rotation via tintNeonSet(set, roadInWorld).
+const WORLD_NEON_SETS = [
+  { base: '#100303', primary: '#ff2a1a', secondary: '#ff7a00', accent: '#ffd23b', motif: motifMolten },  // 0 RED HEAT
+  { base: '#0e0b03', primary: '#ffd447', secondary: '#ff8a00', accent: '#fff6d0', motif: motifSolar },   // 1 INTO THE SUN
+  { base: '#02060f', primary: '#22d3ee', secondary: '#2f8fff', accent: '#aefcff', motif: motifOcean },   // 2 BLUE PLANET
+  { base: '#080b10', primary: '#39c6ff', secondary: '#dfe9f5', accent: '#7fb0ff', motif: motifOrbital }, // 3 SATELLITE
+  { base: '#0b0c14', primary: '#c9b7ff', secondary: '#9fb4d8', accent: '#ffffff', motif: motifMist },    // 4 MISTY
+  { base: '#0a0806', primary: '#d9a066', secondary: '#8a7f74', accent: '#ff7a3c', motif: motifBelt },    // 5 ASTEROID BELT
+  { base: '#0a0414', primary: '#ff3db4', secondary: '#8a5cff', accent: '#ffd6f2', motif: motifNebula },  // 6 CRAB NEBULA
+  { base: '#0b0a05', primary: '#ffc400', secondary: '#ffe14d', accent: '#39ff14', motif: motifBase },    // 7 OVER THE BASE
+  { base: '#040814', primary: '#3aa0ff', secondary: '#38d66b', accent: '#eef6ff', motif: motifTerra },   // 8 THE EARTH
+  { base: '#050e06', primary: '#39d95a', secondary: '#8fe36b', accent: '#ffd54a', motif: motifGrove },   // 9 DRUIDIA
+];
+
+// Curated neon sets for the 10 XMAS-pack worlds (SNOWBOUND … THE EVE), indexed by worldIdx.
+// Festive/winter identities; authored in docs/xmas-worlds-neon-brief.md. Same dark-base rule.
+const XMAS_NEON_SETS = [
+  { base: '#0a1420', primary: '#bfe9ff', secondary: '#ffffff', accent: '#7fd6ff', motif: motifSnow },        // 0 SNOWBOUND
+  { base: '#05060f', primary: '#6f9bff', secondary: '#b0c4ff', accent: '#9d7bff', motif: motifRim },         // 1 AT THE OUTER RIM
+  { base: '#0d0714', primary: '#ff9e5c', secondary: '#b06bff', accent: '#ffd08a', motif: motifTwilight },    // 2 TWILIGHT ZONE
+  { base: '#0b0a04', primary: '#ffe08a', secondary: '#fff6d0', accent: '#ffd23b', motif: motifGuidingStar }, // 3 THE GUIDING STAR
+  { base: '#0c0605', primary: '#ff6a3d', secondary: '#ffd27f', accent: '#fff0d0', motif: motifMeteor },      // 4 METEOR STORM
+  { base: '#04100e', primary: '#35f0c8', secondary: '#ff5cc8', accent: '#8affff', motif: motifMystery },     // 5 MYSTERIOUS PLANET
+  { base: '#04100a', primary: '#39ff9a', secondary: '#00e5ff', accent: '#b06bff', motif: motifAurora },      // 6 NORTHERN LIGHTS
+  { base: '#081420', primary: '#9fe8ff', secondary: '#ffffff', accent: '#4fb8ff', motif: motifPole },        // 7 OVER THE POLE
+  { base: '#03101c', primary: '#4fd0ff', secondary: '#bfefff', accent: '#2f8fd0', motif: motifSubIce },      // 8 UNDER THE ICE
+  { base: '#0a0806', primary: '#ff4d4d', secondary: '#39d95a', accent: '#ffd54a', motif: motifEve },         // 9 THE EVE
+];
+
 /**
- * Procedural texture generator for the 10 biomes.
+ * Procedural neon texture generator for the 10 generated-level biomes.
+ *
+ * Shares the demo road's drawing grammar (dark base, grate/block checkerboard,
+ * curated neon strokes) but swaps in a per-biome palette + signature motif from
+ * BIOME_NEON_SETS. Safety-critical behaviours (boost/burning/refill/slippery) use
+ * fixed shapes AND colours so gameplay reads identically across biomes; only the
+ * default road, obstacle border and tunnel take biome flavour.
  */
 function getBiomeProceduralTexture(biomeKey, behavior, colorIndex, colIndex, rowIndex, spanX = 1, spanZ = 1, levelIndex = 0) {
   if (typeof document === 'undefined') return null;
 
-  const isObstacle = behavior === 'obstacle';
+  const behaviorKey = behavior || 'default';
+  const isDefault = behaviorKey === 'default';
   const rVal = typeof rowIndex === 'number' ? rowIndex : 0;
   const cVal = typeof colIndex === 'number' ? colIndex : 3;
+  const isGrate = isDefault && ((cVal + rVal) % 2 === 1);
+  const lvlInBiome = typeof levelIndex === 'number' ? ((((levelIndex - 61) % 3) + 3) % 3) : 0;
 
-  const cacheKey = `procedural_biome_${biomeKey}_${behavior || 'default'}_${colorIndex}_${cVal}_${rVal}_${spanX}_${spanZ}`;
+  const cacheKey = `procedural_biome_${biomeKey}_${behaviorKey}_${colorIndex}_${cVal}_${rVal}_${spanX}_${spanZ}_${lvlInBiome}_${isGrate ? 'g' : 'b'}`;
   if (textureCache.has(cacheKey)) {
     return textureCache.get(cacheKey);
   }
@@ -1588,324 +2545,176 @@ function getBiomeProceduralTexture(biomeKey, behavior, colorIndex, colIndex, row
   canvas.height = Math.round(128 * spanZ);
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
+  const W = canvas.width, H = canvas.height;
 
-  const profiles = BIOME_COLOR_PROFILES[biomeKey] || BIOME_COLOR_PROFILES.void;
-  const levelIdx = typeof levelIndex === 'number' ? levelIndex : 0;
-  const profile = profiles[levelIdx % profiles.length];
+  const set = tintNeonSet(BIOME_NEON_SETS[biomeKey] || BIOME_NEON_SETS.void, lvlInBiome);
+  const seed = ((cVal * 13 + rVal * 7) % 97) + 1;
 
-  const toCSSColor = (arr, scale = 255) => {
-    const r = Math.max(0, Math.min(255, Math.round(arr[0] * scale)));
-    const g = Math.max(0, Math.min(255, Math.round(arr[1] * scale)));
-    const b = Math.max(0, Math.min(255, Math.round(arr[2] * scale)));
-    return `rgb(${r}, ${g}, ${b})`;
-  };
-  const toCSSAlphaColor = (arr, alpha, scale = 255) => {
-    const r = Math.max(0, Math.min(255, Math.round(arr[0] * scale)));
-    const g = Math.max(0, Math.min(255, Math.round(arr[1] * scale)));
-    const b = Math.max(0, Math.min(255, Math.round(arr[2] * scale)));
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-
-  const roadBase = toCSSColor(profile.road, 45);
-  const railColor = toCSSColor(profile.rail, 255);
-  const accentColor = toCSSColor(profile.accent, 255);
-
-  ctx.fillStyle = roadBase;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  if (behavior === 'boost' || behavior === 'super_boost') {
-    ctx.strokeStyle = behavior === 'boost' ? '#39ff14' : '#00ffff';
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    for (let y = 30; y < canvas.height; y += 40) {
-      ctx.beginPath();
-      ctx.moveTo(15, y + 15);
-      ctx.lineTo(canvas.width / 2, y - 15);
-      ctx.lineTo(canvas.width - 15, y + 15);
-      ctx.stroke();
-    }
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.fillRect(0, 0, canvas.width, 4);
-    ctx.fillRect(0, canvas.height - 4, canvas.width, 4);
-  } else if (behavior === 'burning') {
-    ctx.strokeStyle = '#ff073a';
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = '#ff073a';
-    ctx.lineWidth = 4;
-    for (let y = 16; y < canvas.height; y += 32) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
-      ctx.stroke();
-    }
-    ctx.shadowBlur = 0;
-  } else if (behavior === 'sticky') {
-    ctx.fillStyle = '#aa00ff';
-    ctx.strokeStyle = '#ff00ff';
-    ctx.lineWidth = 3;
-    for (let i = 0; i < spanX * 3; i++) {
-      const cx = (i * 0.3 + 0.2) * canvas.width;
-      const cy = (i * 0.4 + 0.1) * canvas.height % canvas.height;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 20, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-  } else if (behavior === 'refill') {
-    ctx.strokeStyle = '#00ffff';
-    ctx.lineWidth = 4;
-    for (let y = 64; y < canvas.height; y += 128) {
-      ctx.beginPath();
-      ctx.arc(canvas.width / 2, y, Math.min(canvas.width / 2 - 10, 48), 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(canvas.width / 2, y, Math.min(canvas.width / 2 - 10, 24), 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  } else if (behavior === 'slippery') {
-    ctx.strokeStyle = '#00f0ff';
-    ctx.lineWidth = 3;
-    for (let x = -canvas.height; x < canvas.width; x += 32) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x + canvas.height, canvas.height);
-      ctx.stroke();
-    }
-  } else {
-    switch (biomeKey) {
-      case 'void': {
-        ctx.strokeStyle = railColor;
-        ctx.lineWidth = isObstacle ? 5 : 3;
-        ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
-        
-        ctx.strokeStyle = accentColor;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(12, 12, canvas.width - 24, canvas.height - 24);
-        
-        ctx.beginPath();
-        ctx.moveTo(canvas.width / 2, 12);
-        ctx.lineTo(canvas.width / 2, canvas.height - 12);
-        ctx.moveTo(12, canvas.height / 2);
-        ctx.lineTo(canvas.width - 12, canvas.height / 2);
-        ctx.stroke();
-        break;
-      }
-      case 'ridge': {
-        ctx.strokeStyle = toCSSAlphaColor(profile.accent, 0.4);
-        ctx.lineWidth = 2;
-        for (let i = 1; i <= 3; i++) {
-          ctx.beginPath();
-          ctx.moveTo(0, (i * canvas.height) / 4);
-          ctx.bezierCurveTo(
-            canvas.width / 3, (i * canvas.height) / 4 - 30,
-            (2 * canvas.width) / 3, (i * canvas.height) / 4 + 30,
-            canvas.width, (i * canvas.height) / 4
-          );
-          ctx.stroke();
-        }
-        ctx.strokeStyle = railColor;
-        ctx.lineWidth = isObstacle ? 6 : 3;
-        ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-        break;
-      }
-      case 'thrill': {
-        ctx.strokeStyle = railColor;
-        ctx.lineWidth = 3;
-        ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
-        
-        ctx.strokeStyle = toCSSAlphaColor(profile.accent, 0.3);
-        ctx.lineWidth = 4;
-        for (let y = -20; y < canvas.height; y += 30) {
-          ctx.beginPath();
-          ctx.moveTo(4, y);
-          ctx.lineTo(24, y + 20);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(canvas.width - 24, y);
-          ctx.lineTo(canvas.width - 4, y + 20);
-          ctx.stroke();
-        }
-        break;
-      }
-      case 'core': {
-        ctx.strokeStyle = railColor;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(15, 15);
-        ctx.lineTo(canvas.width * 0.4, 15);
-        ctx.lineTo(canvas.width * 0.6, canvas.height * 0.5);
-        ctx.lineTo(canvas.width * 0.6, canvas.height - 15);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(canvas.width - 15, 15);
-        ctx.lineTo(canvas.width - 15, canvas.height * 0.4);
-        ctx.lineTo(canvas.width * 0.7, canvas.height * 0.7);
-        ctx.lineTo(15, canvas.height * 0.7);
-        ctx.stroke();
-
-        ctx.fillStyle = accentColor;
-        const vias = [
-          [15, 15], [canvas.width * 0.6, canvas.height - 15],
-          [canvas.width - 15, 15], [15, canvas.height * 0.7]
-        ];
-        vias.forEach(([vx, vy]) => {
-          ctx.beginPath();
-          ctx.arc(vx, vy, 4, 0, Math.PI * 2);
-          ctx.fill();
-        });
-        
-        ctx.strokeStyle = accentColor;
-        ctx.lineWidth = isObstacle ? 5 : 3;
-        ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
-        break;
-      }
-      case 'glitch': {
-        ctx.fillStyle = toCSSAlphaColor(profile.rail, 0.45);
-        const seedVal = (cVal * 13 + rVal * 7) % 50;
-        for (let i = 0; i < 4 + (seedVal % 5); i++) {
-          const w = 15 + ((seedVal * (i + 1)) % 30);
-          const h = 6 + ((seedVal * (i + 2)) % 10);
-          const x = (seedVal * 19 * (i + 1)) % (canvas.width - w);
-          const y = (seedVal * 31 * (i + 2)) % (canvas.height - h);
-          ctx.fillRect(x, y, w, h);
-        }
-        
-        ctx.strokeStyle = toCSSAlphaColor(profile.accent, 0.25);
-        ctx.lineWidth = 1;
-        for (let y = 4; y < canvas.height; y += 8) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(canvas.width, y);
-          ctx.stroke();
-        }
-
-        ctx.strokeStyle = railColor;
-        ctx.lineWidth = isObstacle ? 5 : 3;
-        ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
-        break;
-      }
-      case 'tundra': {
-        ctx.strokeStyle = toCSSAlphaColor(profile.accent, 0.3);
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(10, 10);
-        ctx.lineTo(canvas.width * 0.4, canvas.height * 0.4);
-        ctx.lineTo(canvas.width * 0.8, canvas.height * 0.2);
-        ctx.moveTo(canvas.width * 0.4, canvas.height * 0.4);
-        ctx.lineTo(canvas.width * 0.3, canvas.height - 20);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(canvas.width - 15, canvas.height - 15);
-        ctx.lineTo(canvas.width * 0.6, canvas.height * 0.6);
-        ctx.lineTo(canvas.width * 0.9, 15);
-        ctx.stroke();
-
-        ctx.strokeStyle = railColor;
-        ctx.lineWidth = isObstacle ? 5 : 3;
-        ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
-        break;
-      }
-      case 'furnace': {
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = railColor;
-        ctx.strokeStyle = railColor;
-        ctx.lineWidth = 3.5;
-        ctx.beginPath();
-        ctx.moveTo(15, canvas.height - 15);
-        ctx.lineTo(canvas.width * 0.3, canvas.height * 0.55);
-        ctx.lineTo(canvas.width * 0.65, canvas.height * 0.65);
-        ctx.lineTo(canvas.width - 15, 15);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(canvas.width * 0.3, canvas.height * 0.55);
-        ctx.lineTo(15, 15);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        ctx.strokeStyle = accentColor;
-        ctx.lineWidth = isObstacle ? 5 : 3;
-        ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
-        break;
-      }
-      case 'shallows': {
-        ctx.strokeStyle = toCSSAlphaColor(profile.rail, 0.4);
-        ctx.lineWidth = 3;
-        for (let i = 1; i <= 2; i++) {
-          ctx.beginPath();
-          ctx.moveTo(0, (i * canvas.height) / 3);
-          ctx.bezierCurveTo(
-            canvas.width / 4, (i * canvas.height) / 3 + 25,
-            (3 * canvas.width) / 4, (i * canvas.height) / 3 - 25,
-            canvas.width, (i * canvas.height) / 3
-          );
-          ctx.stroke();
-        }
-
-        ctx.strokeStyle = accentColor;
-        ctx.lineWidth = 1.5;
-        const bubbleX = (cVal * 29) % (canvas.width - 20) + 10;
-        const bubbleY = (rVal * 37) % (canvas.height - 20) + 10;
-        ctx.beginPath();
-        ctx.arc(bubbleX, bubbleY, 14, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(bubbleX + 3, bubbleY - 3, 5, 0, Math.PI * 2);
-        ctx.stroke();
-
-        ctx.strokeStyle = railColor;
-        ctx.lineWidth = isObstacle ? 5 : 3;
-        ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
-        break;
-      }
-      case 'spire': {
-        ctx.strokeStyle = railColor;
-        ctx.lineWidth = isObstacle ? 5 : 3;
-        ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
-        
-        ctx.strokeStyle = accentColor;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(canvas.width / 2, 12);
-        ctx.lineTo(canvas.width - 12, canvas.height / 2);
-        ctx.lineTo(canvas.width / 2, canvas.height - 12);
-        ctx.lineTo(12, canvas.height / 2);
-        ctx.closePath();
-        ctx.stroke();
-        break;
-      }
-      case 'pulse': {
-        ctx.strokeStyle = toCSSAlphaColor(profile.accent, 0.45);
-        ctx.lineWidth = 2.5;
-        for (let x = 20; x < canvas.width; x += 40) {
-          ctx.beginPath();
-          ctx.moveTo(x, 10);
-          ctx.lineTo(x, canvas.height - 10);
-          ctx.stroke();
-        }
-
-        ctx.strokeStyle = railColor;
-        ctx.lineWidth = isObstacle ? 5 : 3;
-        ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
-        break;
-      }
-      default: {
-        ctx.strokeStyle = railColor;
-        ctx.lineWidth = isObstacle ? 4 : 2;
-        ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-        break;
-      }
-    }
-  }
+  drawNeonRoad(ctx, W, H, set, behaviorKey, isGrate, seed);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 16; // keep procedural lines sharp at grazing angles (road → horizon)
   textureCache.set(cacheKey, texture);
   return texture;
+}
+
+/**
+ * Shared neon-road painter used by BOTH the generated-biome and standard-world texture
+ * generators. Paints the dark base + one behaviour pattern into an existing 2D context.
+ * Safety-critical hazards (boost/burning/refill/slippery) draw with FIXED shapes AND colours
+ * for readability; only default road / obstacle / tunnel take the palette's flavour + motif.
+ */
+function drawNeonRoad(ctx, W, H, set, behaviorKey, isGrate, seed) {
+  ctx.fillStyle = set.base;
+  ctx.fillRect(0, 0, W, H);
+
+  if (behaviorKey === 'obstacle') {
+    drawObstacle(ctx, W, H, set);
+  } else if (behaviorKey === 'boost' || behaviorKey === 'super_boost') {
+    drawBoostChevrons(ctx, W, H, behaviorKey === 'super_boost');
+  } else if (behaviorKey === 'burning') {
+    drawBurningBars(ctx, W, H);
+  } else if (behaviorKey === 'refill') {
+    drawRefillRings(ctx, W, H);
+  } else if (behaviorKey === 'sticky') {
+    drawStickyBlobs(ctx, W, H, set);
+  } else if (behaviorKey === 'slippery') {
+    drawSlipperyDiagonals(ctx, W, H);
+  } else if (behaviorKey === 'tunnel') {
+    drawTunnelGrid(ctx, W, H, set);
+  } else {
+    (set.motif || motifDefault)(ctx, W, H, set, isGrate, seed);
+  }
+}
+
+/**
+ * Generic procedural neon texture generator for a curated `set` ({base, primary, secondary,
+ * accent, motif}). Same drawing grammar as getBiomeProceduralTexture. Used by both the STANDARD
+ * (WORLD_NEON_SETS) and XMAS (XMAS_NEON_SETS) worlds; `cacheTag` keeps their caches distinct and
+ * encodes the per-road hue-drift variant. See docs/standard-worlds-neon-brief.md + xmas brief.
+ */
+function getNeonWorldTexture(cacheTag, set, behavior, colorIndex, colIndex, rowIndex, spanX = 1, spanZ = 1) {
+  if (typeof document === 'undefined') return null;
+
+  const behaviorKey = behavior || 'default';
+  const isDefault = behaviorKey === 'default';
+  const rVal = typeof rowIndex === 'number' ? rowIndex : 0;
+  const cVal = typeof colIndex === 'number' ? colIndex : 3;
+  const isGrate = isDefault && ((cVal + rVal) % 2 === 1);
+
+  const cacheKey = `procedural_${cacheTag}_${behaviorKey}_${colorIndex}_${cVal}_${rVal}_${spanX}_${spanZ}_${isGrate ? 'g' : 'b'}`;
+  if (textureCache.has(cacheKey)) {
+    return textureCache.get(cacheKey);
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(128 * spanX);
+  canvas.height = Math.round(128 * spanZ);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const W = canvas.width, H = canvas.height;
+
+  const seed = ((cVal * 13 + rVal * 7) % 97) + 1;
+  drawNeonRoad(ctx, W, H, set, behaviorKey, isGrate, seed);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 16;
+  textureCache.set(cacheKey, texture);
+  return texture;
+}
+
+/**
+ * The Demo Road's (level 0) exact neon material logic: the demo grate/block canvas
+ * texture tinted by the curated neon palette, with per-behavior colour overrides,
+ * roughness/metalness and emissive. Shared by level 0 AND the Void biome so the Void
+ * road matches the demo road exactly. `opts.voidViz` overlays the live music
+ * visualizer (per segment, anchored at `opts.zStart`).
+ */
+function createDemoNeonMaterial(behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ, opts = {}) {
+  const isObstacle = behaviorKey === 'obstacle';
+  const isSpecial = behaviorKey && behaviorKey !== 'default' && behaviorKey !== 'obstacle';
+
+  let neonColorHex = DEMO_NEON_COLORS[colorIndex] || '#00ffff';
+  if (behaviorKey === 'boost' || behaviorKey === 'super_boost') neonColorHex = '#39ff14';
+  else if (behaviorKey === 'burning') neonColorHex = '#ff073a';
+  else if (behaviorKey === 'sticky') neonColorHex = '#ff00ff';
+  else if (behaviorKey === 'refill') neonColorHex = '#00ffff';
+  else if (behaviorKey === 'slippery') neonColorHex = '#00f0ff';
+  else if (isObstacle) neonColorHex = colorIndex === 0 ? '#ffff00' : (DEMO_NEON_COLORS[colorIndex] || '#ff007f');
+
+  const matColor = new THREE.Color(neonColorHex);
+  const texture = getDemoNeonTexture(behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
+
+  const matParams = { color: matColor, roughness: 0.45, metalness: 0.15 };
+  if (texture) matParams.map = texture;
+  if (isSpecial) {
+    matParams.emissive = matColor;
+    matParams.emissiveIntensity = behaviorKey === 'burning' ? 1.5 : 0.85;
+  } else {
+    matParams.emissive = new THREE.Color(0, 0, 0);
+    matParams.emissiveIntensity = 0.0;
+  }
+  if (isObstacle) matParams.side = THREE.DoubleSide;
+
+  const shaderOpts = opts.voidViz ? { voidViz: true, zStart: opts.zStart || 0 } : undefined;
+  return applyCurvatureShader(new THREE.MeshStandardMaterial(matParams), shaderOpts);
+}
+
+/**
+ * Material for a STANDARD-pack world neon tile. Mirrors the generated-biome (non-void) material
+ * so the neon canvas texture shows true: near-white base tinted 0.18 toward the world's primary,
+ * matte finish, universal hazard glow, obstacle rim in the world accent. `set` is already the
+ * per-road-drifted world set; `texture` comes from getWorldNeonTexture.
+ */
+function createWorldNeonMaterial(set, behaviorKey, texture) {
+  const isObstacle = behaviorKey === 'obstacle';
+  const isSpecial = behaviorKey && behaviorKey !== 'default' && behaviorKey !== 'obstacle';
+  const primaryColor = new THREE.Color(set.primary);
+  const accentColor = new THREE.Color(set.accent);
+
+  let matColor;
+  if (behaviorKey === 'slippery') {
+    matColor = new THREE.Color(0x2f8fd0).multiplyScalar(0.65);   // glossy ice, bloom-safe
+  } else if (isSpecial) {
+    matColor = new THREE.Color(0xffffff);                        // hazard textures carry fixed colours
+  } else {
+    matColor = new THREE.Color(0xffffff).lerp(primaryColor, 0.18); // road/obstacle: near-white, faint world tint
+  }
+
+  const matParams = {
+    color: matColor,
+    roughness: behaviorKey === 'slippery' ? 0.12 : 0.4,
+    metalness: behaviorKey === 'slippery' ? 0.6 : 0.2,
+  };
+  if (texture) matParams.map = texture;
+  if (isObstacle) matParams.side = THREE.DoubleSide;
+
+  const normalTexture = getLoadedTexture(customRoadNormalUrl);
+  if (normalTexture) {
+    matParams.normalMap = normalTexture;
+    matParams.normalScale = new THREE.Vector2(1.0, 1.0);
+  }
+
+  const SPECIAL_GLOW = { boost: 0x39ff14, super_boost: 0x00ffff, burning: 0xff073a, refill: 0x00ffff, sticky: 0xff00ff };
+  if (behaviorKey === 'slippery') {
+    matParams.emissive = new THREE.Color(0x0b2a44);
+    matParams.emissiveIntensity = 0.18;
+  } else if (isSpecial) {
+    matParams.emissive = new THREE.Color(SPECIAL_GLOW[behaviorKey] || 0xffffff);
+    matParams.emissiveIntensity = behaviorKey === 'burning' ? 1.4 : 0.7;
+  } else if (isObstacle) {
+    matParams.emissive = accentColor;
+    matParams.emissiveIntensity = 0.22;
+  } else {
+    matParams.emissive = primaryColor;
+    matParams.emissiveIntensity = 0.12;
+  }
+
+  return applyCurvatureShader(new THREE.MeshStandardMaterial(matParams));
 }
 
 /**
@@ -1930,76 +2739,52 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
     const isSpecial = behaviorKey && behaviorKey !== 'default' && behaviorKey !== 'obstacle';
     const biomeKey = theme.key;
 
-    const profiles = BIOME_COLOR_PROFILES[biomeKey] || BIOME_COLOR_PROFILES.void;
-    const levelIdx = typeof levelIndex === 'number' ? levelIndex : 0;
-    const profile = profiles[levelIdx % profiles.length];
+    // Void biome uses the demo road's (level 0) EXACT neon material for every tile type.
+    // The live per-segment music visualizer on the default road is gated by
+    // VOID_VIZ_ENABLED (currently off; kept for later).
+    if (biomeKey === 'void') {
+      const voidViz = VOID_VIZ_ENABLED && behaviorKey === 'default';
+      const zStart = voidViz ? -getVoidSegment(levelData, rowIndex).startRow * TILE_LENGTH : 0;
+      return createDemoNeonMaterial(behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ,
+        { voidViz, zStart });
+    }
 
-    let roadColor = new THREE.Color(...profile.road);
-    let railColor = new THREE.Color(...profile.rail);
-    let accentColor = new THREE.Color(...profile.accent);
-
-    roadColor = perturbColor(roadColor, levelIdx, 1);
-    railColor = perturbColor(railColor, levelIdx, 2);
-    accentColor = perturbColor(accentColor, levelIdx, 3);
+    // Tint + glow come from the curated neon set (the SAME palette the texture uses),
+    // with the same per-level hue rotation — so the biome identity holds instead of
+    // drifting to the old profile hues (which turned e.g. green 'core' pink). matColor
+    // itself stays near-white so the neon texture shows true.
+    const levelIdx = typeof levelIndex === 'number' ? levelIndex : 61;
+    const lvlInBiome = (((levelIdx - 61) % 3) + 3) % 3;
+    const nset = tintNeonSet(BIOME_NEON_SETS[biomeKey] || BIOME_NEON_SETS.void, lvlInBiome);
+    const railColor = new THREE.Color(nset.primary);
+    const accentColor = new THREE.Color(nset.accent);
 
     const texture = getBiomeProceduralTexture(biomeKey, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ, levelIndex);
 
-    let matColor = roadColor;
-    if (isObstacle) {
-      matColor = accentColor;
-    } else if (behaviorKey === 'boost' || behaviorKey === 'super_boost') {
-      matColor = railColor;
+    let matColor;
+    if (behaviorKey === 'slippery') {
+      // Glossy ice — dark glossy blue reads as ice without blowing out under bloom.
+      matColor = new THREE.Color(0x2f8fd0).multiplyScalar(0.65);
     } else if (isSpecial) {
-      // Slippery = ice. Give it a dark glossy BLUE so it reads clearly as ice
-      // rather than a glowing special tile. (themeBehavior.color + high emissive
-      // below made it blow out to white under bloom.)
-      matColor = behaviorKey === 'slippery'
-        ? new THREE.Color(0x2f8fd0).multiplyScalar(0.65)
-        : (themeBehavior.color || railColor);
+      // Boost/burning/refill/sticky textures already carry fixed hazard colours —
+      // keep the material white so they show true instead of multiplying to mud.
+      matColor = new THREE.Color(0xffffff);
+    } else if (biomeKey === 'void' && behaviorKey === 'default') {
+      // Void default road stays DARK so the shader's live spectrum bars read as neon
+      // green rather than summing with a bright base and blowing out to white.
+      matColor = new THREE.Color(0x0a0410);
     } else {
-      const cIdx = typeof colIndex === 'number' ? colIndex : 3;
-      const rIdx = typeof rowIndex === 'number' ? rowIndex : 0;
-      const layoutStyle = levelIdx % 4;
-
-      if (layoutStyle === 0) {
-        if (cIdx === 3) matColor = accentColor;
-        else if (cIdx === 2 || cIdx === 4) matColor = roadColor;
-        else if (cIdx === 1 || cIdx === 5) matColor = roadColor.clone().multiplyScalar(0.85);
-        else matColor = railColor.clone().multiplyScalar(0.7);
-      } else if (layoutStyle === 1) {
-        if (cIdx === 1 || cIdx === 5) matColor = roadColor.clone().multiplyScalar(0.85);
-        else if (cIdx === 0 || cIdx === 6) matColor = railColor.clone().multiplyScalar(0.7);
-        else {
-          const isCheck = (cIdx + rIdx) % 2 === 0;
-          matColor = isCheck ? roadColor.clone().lerp(accentColor, 0.4) : roadColor;
-        }
-      } else if (layoutStyle === 2) {
-        if (cIdx === 2 || cIdx === 4) matColor = accentColor;
-        else if (cIdx === 3) matColor = roadColor;
-        else if (cIdx === 1 || cIdx === 5) matColor = roadColor.clone().multiplyScalar(0.85);
-        else matColor = railColor.clone().multiplyScalar(0.7);
-      } else {
-        if (cIdx === 1 || cIdx === 5) matColor = accentColor;
-        else if (cIdx === 2 || cIdx === 3 || cIdx === 4) matColor = roadColor;
-        else matColor = railColor.clone().multiplyScalar(0.7);
-      }
-
-      if (typeof rowIndex === 'number') {
-        const rowRhythms = {
-          glitch: 2, furnace: 2, pulse: 2, void: 8, spire: 8, cyberpunk: 4, ridge: 4, thrill: 4, core: 4, organic: 6, tundra: 6, shallows: 6, industrial: 4, alien: 4
-        };
-        const rhythm = rowRhythms[biomeKey] || 4;
-        const alternatingFactor = (Math.floor(rowIndex / rhythm) % 2 === 0) ? 1.0 : 0.85;
-        matColor = matColor.clone().multiplyScalar(alternatingFactor);
-      }
+      // Default road + obstacle: near-white with a faint biome tint. Tundra/spire read
+      // "light" here (their high roughness below sells the snow/off-white identity).
+      matColor = new THREE.Color(0xffffff).lerp(railColor, 0.18);
     }
 
     const matParams = {
       color: matColor,
-      // Glossy ice: very smooth + reflective, but NOT a perfect 0.95 mirror (which
-      // blew out to white). Reflects the dark sky → reads as ice, not light.
-      roughness: behaviorKey === 'slippery' ? 0.12 : (['spire', 'tundra'].includes(biomeKey) ? 0.5 : 0.2),
-      metalness: behaviorKey === 'slippery' ? 0.6 : (['spire', 'tundra'].includes(biomeKey) ? 0.15 : 0.8),
+      // Glossy ice: very smooth + reflective, but NOT a perfect mirror (which blew out
+      // to white). Matte-ish elsewhere (demo-like) so the neon strokes read, not shine.
+      roughness: behaviorKey === 'slippery' ? 0.12 : (['spire', 'tundra'].includes(biomeKey) ? 0.5 : 0.4),
+      metalness: behaviorKey === 'slippery' ? 0.6 : (['spire', 'tundra'].includes(biomeKey) ? 0.15 : 0.2),
     };
 
     if (texture) {
@@ -2010,96 +2795,56 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
       matParams.side = THREE.DoubleSide;
     }
 
+    // Gentle physical depth only — a strong normal fought the flat neon look.
     let normalTexture = getLoadedTexture(customRoadNormalUrl);
     if (normalTexture) {
       matParams.normalMap = normalTexture;
-      matParams.normalScale = new THREE.Vector2(2.5, 2.5);
+      matParams.normalScale = new THREE.Vector2(1.0, 1.0);
     }
 
+    // Hazards glow in their fixed colour (readability); default road + obstacles get a
+    // dim biome-tinted glow so the neon texture — not the emissive — carries the look.
+    const SPECIAL_GLOW = { boost: 0x39ff14, super_boost: 0x00ffff, burning: 0xff073a, refill: 0x00ffff, sticky: 0xff00ff };
     if (behaviorKey === 'slippery') {
       // Ice doesn't self-illuminate — a faint cold glow only, so the frost texture
       // and reflections read instead of blowing out to white.
       matParams.emissive = new THREE.Color(0x0b2a44);
       matParams.emissiveIntensity = 0.18;
     } else if (isSpecial) {
-      matParams.emissive = matColor;
-      matParams.emissiveIntensity = behaviorKey === 'burning' ? 1.5 : 0.9;
+      matParams.emissive = new THREE.Color(SPECIAL_GLOW[behaviorKey] || 0xffffff);
+      matParams.emissiveIntensity = behaviorKey === 'burning' ? 1.4 : 0.7;
     } else if (isObstacle) {
       matParams.emissive = accentColor;
-      matParams.emissiveIntensity = 0.35;
+      matParams.emissiveIntensity = 0.22;
     } else {
       matParams.emissive = railColor;
-      matParams.emissiveIntensity = 0.25;
+      matParams.emissiveIntensity = 0.12;
     }
 
     return applyCurvatureShader(new THREE.MeshStandardMaterial(matParams));
   }
 
   if (levelIndex === 0 && !isTestEnv) {
-    const isObstacle = behaviorKey === 'obstacle';
-    const rVal = typeof rowIndex === 'number' ? rowIndex : 0;
-    const cVal = typeof colIndex === 'number' ? colIndex : 3;
-    const isGrate = !behaviorKey || behaviorKey === 'default' ? ((cVal + rVal) % 2 === 1) : false;
+    return createDemoNeonMaterial(behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
+  }
 
-    const neonColors = {
-      0: '#00ffff',   // Neon Cyan
-      1: '#39ff14',   // Neon Green
-      2: '#00ffcc',   // Neon Teal
-      3: '#ff00ff',   // Neon Magenta
-      4: '#ffff00',   // Neon Yellow (replaced Red!)
-      5: '#00e5ff',   // Neon Bright Blue
-      6: '#ffaa00',   // Neon Orange
-      7: '#ccff00',   // Neon Lime
-      8: '#00f0ff',   // Neon Ice Blue
-      9: '#7b00ff',   // Neon Purple
-      10: '#ccff00',  // Lime
-      11: '#00ffff',  // Neon Cyan
-      12: '#ff00aa',  // Neon Hot Pink (replaced Rose Red!)
-      13: '#9d00ff',  // Neon Violet
-      14: '#ff5500',  // Bright Neon Orange
-      15: '#ffffff'   // Neon White
-    };
-    
-    let neonColorHex = neonColors[colorIndex] || '#00ffff';
-    if (behaviorKey === 'boost' || behaviorKey === 'super_boost') {
-      neonColorHex = '#39ff14';
-    } else if (behaviorKey === 'burning') {
-      neonColorHex = '#ff073a';
-    } else if (behaviorKey === 'sticky') {
-      neonColorHex = '#ff00ff';
-    } else if (behaviorKey === 'refill') {
-      neonColorHex = '#00ffff';
-    } else if (behaviorKey === 'slippery') {
-      neonColorHex = '#00f0ff';
-    } else if (isObstacle) {
-      neonColorHex = colorIndex === 0 ? '#ffff00' : (neonColors[colorIndex] || '#ff007f');
-    }
+  // Standard-pack worlds (RED HEAT … DRUIDIA): per-world procedural neon skin. getStandardWorld
+  // returns null for the demo, the xmas pack, generated levels, or when disabled — so those
+  // fall through to the xmas check / legacy PBR path below.
+  const stdWorld = !isTestEnv ? getStandardWorld(levelData) : null;
+  if (stdWorld) {
+    const set = tintNeonSet(WORLD_NEON_SETS[stdWorld.worldIdx] || WORLD_NEON_SETS[0], stdWorld.roadInWorld);
+    const texture = getNeonWorldTexture(`world_${stdWorld.worldIdx}_${stdWorld.roadInWorld}`, set, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
+    return createWorldNeonMaterial(set, behaviorKey, texture);
+  }
 
-    const matColor = new THREE.Color(neonColorHex);
-    const texture = getDemoNeonTexture(behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
-
-    const isSpecial = behaviorKey && behaviorKey !== 'default' && behaviorKey !== 'obstacle';
-
-    const matParams = {
-      color: matColor,
-      roughness: 0.45,
-      metalness: 0.15,
-      map: texture,
-    };
-
-    if (isSpecial) {
-      matParams.emissive = matColor;
-      matParams.emissiveIntensity = behaviorKey === 'burning' ? 1.5 : 0.85;
-    } else {
-      matParams.emissive = new THREE.Color(0, 0, 0);
-      matParams.emissiveIntensity = 0.0;
-    }
-
-    if (isObstacle) {
-      matParams.side = THREE.DoubleSide;
-    }
-
-    return applyCurvatureShader(new THREE.MeshStandardMaterial(matParams));
+  // Xmas-pack worlds (SNOWBOUND … THE EVE): per-world festive neon skin. Resolves in both the
+  // standalone 'xmas' pack and the xmas half of the 'standard' pack; null → legacy PBR path.
+  const xmasWorld = !isTestEnv ? getXmasWorld(levelData) : null;
+  if (xmasWorld) {
+    const set = tintNeonSet(XMAS_NEON_SETS[xmasWorld.worldIdx] || XMAS_NEON_SETS[0], xmasWorld.roadInWorld);
+    const texture = getNeonWorldTexture(`xmas_${xmasWorld.worldIdx}_${xmasWorld.roadInWorld}`, set, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
+    return createWorldNeonMaterial(set, behaviorKey, texture);
   }
 
   let activeMap = themeBehavior.map;
@@ -3286,6 +4031,12 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
     return false;
   }
 
+  // When the Void per-segment music visualizer is enabled, its road blocks must not
+  // merge across a segment boundary (each block maps to one visualizer panel). With the
+  // visualizer off, void meshes normally.
+  const _mergeTheme = THEMES[getActiveThemeIndex(levelData)];
+  const isVoidBiome = VOID_VIZ_ENABLED && !!(_mergeTheme && _mergeTheme.key === 'void');
+
   // Greedy 2D meshing loop for Pass 1
   for (let r = 0; r < numRows; r++) {
     for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
@@ -3294,9 +4045,11 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
 
       const { height, yPos, isObstacle } = computeTileGeometry(tile); // height: 0.45, yPos: -0.225, isObstacle: false
 
-      // Find vertical (Z) contiguous run
+      // Find vertical (Z) contiguous run (void: never cross a segment boundary)
+      const segStartRow = isVoidBiome ? getVoidSegment(levelData, r).startRow : -1;
       let r_end = r;
-      while (r_end + 1 < numRows && !rendered1[r_end + 1][c] && areTilesIdentical(tile, pass1Rows[r_end + 1][c])) {
+      while (r_end + 1 < numRows && !rendered1[r_end + 1][c] && areTilesIdentical(tile, pass1Rows[r_end + 1][c])
+             && (!isVoidBiome || getVoidSegment(levelData, r_end + 1).startRow === segStartRow)) {
         r_end++;
       }
 
@@ -3373,9 +4126,27 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
         const railTheme = THEMES[railThemeIndex];
         const railProfiles = railTheme ? BIOME_COLOR_PROFILES[railTheme.key] : null;
         const levelIdx = levelIndexForGlow !== null ? levelIndexForGlow : 0;
-        const railColor = railProfiles && railProfiles.length > 0
-          ? new THREE.Color(...railProfiles[levelIdx % railProfiles.length].rail)
-          : (railTheme ? railTheme.defaultColor.clone() : new THREE.Color(0.0, 0.8, 1.0));
+        // Generated levels: match the rail trim to the biome's curated neon set (with the
+        // same per-level hue rotation as the road) so it reinforces the biome instead of
+        // clashing — the old profile rail turned e.g. green 'core' pink. Standard packs
+        // keep their profile-based rails.
+        const railStdWorld = getStandardWorld(levelData);
+        const railXmasWorld = getXmasWorld(levelData);
+        let railColor;
+        if (levelIdx >= 61 && railTheme && BIOME_NEON_SETS[railTheme.key]) {
+          const railLvlInBiome = (((levelIdx - 61) % 3) + 3) % 3;
+          railColor = new THREE.Color(tintNeonSet(BIOME_NEON_SETS[railTheme.key], railLvlInBiome).primary);
+        } else if (railStdWorld) {
+          // Standard-pack world neon: match the rail trim to the world's curated set (same
+          // per-road hue drift as the road) so it reinforces the world instead of clashing.
+          railColor = new THREE.Color(tintNeonSet(WORLD_NEON_SETS[railStdWorld.worldIdx] || WORLD_NEON_SETS[0], railStdWorld.roadInWorld).primary);
+        } else if (railXmasWorld) {
+          railColor = new THREE.Color(tintNeonSet(XMAS_NEON_SETS[railXmasWorld.worldIdx] || XMAS_NEON_SETS[0], railXmasWorld.roadInWorld).primary);
+        } else {
+          railColor = railProfiles && railProfiles.length > 0
+            ? new THREE.Color(...railProfiles[levelIdx % railProfiles.length].rail)
+            : (railTheme ? railTheme.defaultColor.clone() : new THREE.Color(0.0, 0.8, 1.0));
+        }
         const stripW = 0.14;  // thin trim — not full column width
         const stripH = 0.10;
         const stripGeom = new THREE.BoxGeometry(stripW, stripH, length, 1, 1, depthSegments);

@@ -1,22 +1,26 @@
 # Collision & Physics Redesign — Multi-Span Column Model
 
-## ═══════════ RESUME HERE (handoff 2026-06-30) ═══════════
+## ═══════════ RESUME HERE (handoff 2026-07-01) ═══════════
 
-**Where we are:** **P6.1 (docs) is the current task.** P4.3, P5.1, P5.2, P5.3 are all DONE (see commits below). The full pipeline — engine rewrite, editor span authoring, worldBuilder multi-span solver, trackQuality A8_clearance, and procedural multi-span generation — is complete and committed. Only **P6.2** (final regression playtest) remains.
+**Where we are:** **MERGED TO `main`.** The whole redesign (P0–P6.1) landed on `main` via merge `da8a69f`, on top of the track-quality commit `3a3f510`. Two post-merge fell-through fixes followed (see below). Full suite **763/763 green** (2026-07-01). Only **P6.2** (final regression + manual playtest sign-off) remains.
 
-**Branch:** `collision-engine-redesign`
+**Branch:** `collision-engine-redesign` → **merged into `main` (`da8a69f`)**.
 - `fd5bada` — engine rewrite (P0–P3 + tunnel/floor/corner fixes): heightfield.js, collision.js, physics.js, levelLoader.js, editorRenderer.js constants, tests, this plan.
 - `57de910` — editor multi-span load/cook/render (P4.1/P4.2).
 - `ec1f7f4` — **P4.3 DONE**: span authoring UI (add/edit/remove spans per cell; `EditSpansCommand` in editorCommands.js; plane-height selection in editor.js).
 - `3e9fb37` — **P5.1 DONE**: `solveLevel` DFS upgraded to multi-span (heightfield.js queries; state key tracks active span; pass-under clearance; legacy parity).
 - `5c1ed8c` — **P5.2 DONE**: `trackQuality.js` `A8_clearance` rule (vertical clearance between spans; forced-demand verticality awareness).
-- `be86521` — **P5.3 DONE**: `bridge`/`overpass` set-piece builder in worldBuilder; re-baked `data/generated_levels.json`; at least one generated level ships a native overpass.
+- `be86521` — **P5.3 DONE**: `bridge`/`overpass` set-piece builder in worldBuilder; re-baked `data/generated_levels.json` (L61 DEMO ships a native overpass, 40 span cells); at least one generated level ships a native overpass.
+- `40c8265` — **P6.1 DONE**: docs close-out.
+- `da8a69f` — **MERGE** `collision-engine-redesign` → `main`.
+- `0a8ced2` — post-merge fix(collision): elevated OBSTACLES fell through the track — default-branch adapter now respects `startY`.
+- `f7f0664` — post-merge fix(collision): elevated FLAT tiles also fell through — same `startY` fix in the flat-road branch.
 
 **New modules:** `heightfield.js` (pure THREE-free column model + legacy→spans adapter + queries), `collision.js` (swept-AABB velocity-aware MTV resolver). Both fully unit-tested.
 
-**Uncommitted in tree = UNRELATED pre-existing work** (huge `data/generated_levels.json` diff, `data/critic-payloads/*`, `.agent/*`, `.claude/workflows/track-soul.js`, `app.js`, `worldBuilder.js`, etc.) — NOT part of this redesign; leave it alone.
+**Reconciliation with the track-quality work (now co-resident on `main`):** the merge preserved `SHIP_COLLISION_WIDTH=0.44` and wires it into the new resolver (`shipDims`, footprint-aware `supportSurface`); the `worldBuilder.js` `--revise`/C-gate machinery is committed; `data/generated_levels.json` is the P5.3 re-bake through the new quality gate (this superseded the track-quality session's critic-driven per-level revisions — re-run those via the track-soul loop if wanted). Working tree is clean apart from `.claude/workflows/track-soul.js` + 3 playtest PNGs.
 
-**NEXT STEP:** **P6.2** — final regression + manual playtest: `npm test`, `npx playwright test`, manual §7 smoke across classic/flow/tower + a multi-span level. Mark Status: Done when clean.
+**NEXT STEP:** **P6.2** — final regression + manual playtest: `npm test` (currently 763/763), `npx playwright test`, manual §7 smoke across classic/flow/tower + a multi-span level (incl. the L61 overpass). Mark Status: Done when clean.
 
 **HOW TO WORK:** `npm test` = vitest (jsdom). `npm run dev` = Vite (was on :3001 as :3000 in use). In-browser smoke pattern used throughout: `localStorage.setItem('skyroads_override_standard_0', JSON.stringify(level)); gm.physics.difficulty='easy'; await gm.startLevel(0)` then sample `gm.physics` in a rAF loop (drive via `page.keyboard` or `window.dispatchEvent(new KeyboardEvent(...))`). Temp e2e specs go in tests/e2e/_name.spec.js and are deleted after. **Execution policy:** hard-algorithmic (MTV resolver, worldBuilder solver) → opus + invoke `/ponytail`; everything else → sonnet/haiku. Supervisor (Opus) reviews EVERY agent's actual code + tests before releasing the next task — agents have punted hard parts and hidden test weakenings; verify with in-browser smokes, not just unit tests (they've caught ~6 real bugs unit tests missed).
 

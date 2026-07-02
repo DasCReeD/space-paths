@@ -70,10 +70,14 @@ class GameManager {
     this.animationFrameId = null;
     this._webampStarted = false;
 
-    // Idle attract mode: bot drives after inactivity, loops until real input cancels it.
+    // Idle attract mode: the bot demo-drives ONCE after inactivity on the main menu. The first
+    // real interaction sets _userInteracted permanently, after which it can never auto-start again.
     this.autopilot = new Autopilot();
     this._botActive = false;
     this._idleSeconds = 0;
+    this._userInteracted = false; // set true on first real input — permanently disables attract
+    this._attractHasRun = false;  // attract auto-starts at most once per session
+
     this.ghost = null;
     this.loadedGhost = null;
     this.ghostElapsed = 0;
@@ -472,9 +476,11 @@ class GameManager {
       if (crossbar) crossbar.stopHold();
     });
 
-    // Any real input cancels attract mode / resets the idle timer.
+    // Any real input cancels attract mode / resets the idle timer AND permanently latches the
+    // interacted flag so the attract bot can never auto-start again this session.
     const cancelIdleAndBot = () => {
       this._idleSeconds = 0;
+      this._userInteracted = true;
       if (this._botActive) {
         this._botActive = false;
         if (this.keyboard && typeof this.keyboard.resetKeys === 'function') {
@@ -3517,6 +3523,9 @@ class GameManager {
     // Spawn low-poly city scenery flanking both sides of the track
     this.graphics.spawnCityScenery(this.levelInfo.trackLength, this.infiniteZOffset);
 
+    // Light the scene to match this level's neon palette (per biome/world art direction).
+    this.graphics.applyBiomeLighting?.(this.currentLevelData);
+
     // 3. Reset Physics ship state
     this.physics.reset(this.levelInfo.fuel, this.levelInfo.oxygen);
 
@@ -3723,6 +3732,7 @@ class GameManager {
 
         // Spawn city scenery flanking the new track length at the new offset
         this.graphics.spawnCityScenery(nextLevelInfo.trackLength, this.infiniteZOffset);
+        this.graphics.applyBiomeLighting?.(this.currentLevelData);
 
         if (this.collisionViewEnabled) {
           this.toggleSceneCollisionView(true);
@@ -4181,20 +4191,26 @@ class GameManager {
       }
       this.graphics.render();
 
-      // Idle attract mode: start the bot after ~10s of no input on the menu.
-      if (this.gameState === 'menu') {
+      // Idle attract mode: start the bot ONCE after ~10s of no input on the main menu — and only
+      // if the player has never interacted. After any interaction (_userInteracted) or after it has
+      // already run once (_attractHasRun), it can never auto-start again this session.
+      if (this.gameState === 'menu' && !this._userInteracted && !this._attractHasRun) {
         this._idleSeconds += dt;
         if (this._idleSeconds >= 10) {
           this._idleSeconds = 0;
+          this._attractHasRun = true;
           this._startBotRun();
         }
       }
 
-      // Bot loop: after death/success while bot-driven, pause briefly then retry another level.
+      // Attract runs once: when the single demo level ends, drop the bot and return to the menu
+      // (no re-loop). _attractHasRun keeps it from arming again.
       if (this._botActive && (this.gameState === 'death' || this.gameState === 'success') && !this._botLoopTimeoutId) {
         this._botLoopTimeoutId = setTimeout(() => {
           this._botLoopTimeoutId = null;
-          if (this._botActive) this._startBotRun();
+          this._botActive = false;
+          if (this.keyboard && typeof this.keyboard.resetKeys === 'function') this.keyboard.resetKeys();
+          if (this.gameState !== 'menu') this.returnToMenu();
         }, 2000);
       }
     }
@@ -5345,6 +5361,14 @@ class GameManager {
     this.activeLevelIndex = 0;
     this.physics.activeLevelIndex = 0;
 
+    // Flow/tower are always user-driven. Clear any lingering attract-mode bot so the autopilot
+    // can't keep injecting throttle/steering into the run (startLevel resets this via opts.bot,
+    // but startGroup previously never did — leaving a stale bot driving flow/tower games).
+    this._botActive = false;
+    if (this._botLoopTimeoutId) { clearTimeout(this._botLoopTimeoutId); this._botLoopTimeoutId = null; }
+    this.autopilot.reset();
+    if (this.keyboard && typeof this.keyboard.resetKeys === 'function') this.keyboard.resetKeys();
+
     const packLevels = getCachedPack(this.currentPack);
     const lvlA = JSON.parse(JSON.stringify(packLevels[worldIdx * 3]));
     const lvlB = JSON.parse(JSON.stringify(packLevels[worldIdx * 3 + 1]));
@@ -5450,6 +5474,9 @@ class GameManager {
     window.currentLevelIndex = worldIdx * 3;
 
     this.graphics.spawnCityScenery(this.levelInfo.trackLength);
+
+    // Light the stacked group to the lead deck's neon palette (per world/biome art direction).
+    this.graphics.applyBiomeLighting?.(lvlA);
 
     // Tunnel-ceiling lighting for stacked decks: light the underside of any deck
     // that can have the player beneath it. Deck B (top) sits over A; deck A (mid)

@@ -3,6 +3,8 @@
 > **Last updated:** 2026-06-25
 > Authoritative code map for all source modules, their exports, dependencies, and relationships.
 >
+> **2026-07-01 — Procedural neon everywhere + per-biome lighting:** The neon texture-set approach (curated dark-base palette + a signature canvas motif per world/biome) now covers ALL levels — the demo road, the 10 Standard worlds (`WORLD_NEON_SETS`), the 10 Xmas worlds (`XMAS_NEON_SETS`, resolved in both the standalone `xmas` pack and the xmas half of `standard`), and the 10 generated biomes (`BIOME_NEON_SETS`, motifs rewritten to match each biome's `world_design_docs.json` guide). New exported helper `getActiveNeonSet(levelData)` returns the set driving a level; `graphics.applyBiomeLighting(levelData)` re-tints the scene's accent lights to it on load (classic/flow/tower). Per-world design briefs: `docs/standard-worlds-neon-brief.md`, `docs/xmas-worlds-neon-brief.md`. `BIOME_COLOR_PROFILES` now only feeds the legacy PBR path for uncovered levels.
+>
 > **2026-06-30 — Multi-span column collision:** Collision engine rewritten into a unified column model. New modules `heightfield.js` (pure, THREE-free, shared browser+Node) and `collision.js` (swept-AABB MTV resolver); `physics.js` uses the column grid as the only collision path; `levelLoader.js` attaches `columnGrid` + `numRows` to `levelInfo`. `worldBuilder.js` `solveLevel` upgraded to multi-span; `trackQuality.js` gained rule `A8_clearance`. See `docs/collision-redesign-plan.md`.
 >
 > **2026-06-25 — Visualizer Preset Variety:** Added 179 pre-converted Waveform presets from the projectM "presets-cream-of-the-crop" repository, loaded asynchronously on demand.
@@ -378,7 +380,11 @@ Axis selection is velocity-aware (`chooseAxis`): resolves along the face the shi
 | `getActiveThemeIndex(levelData)` | function | Determines which theme for a level |
 | `getDemoNeonTexture(behavior, colorIndex, col, row, spanX, spanZ)` | function (internal) | Canvas-drawn neon block/grate textures for the Demo Road (level 0); cached under `demo_neon_*` keys (exempt from theme disposal) |
 | `getBiomeProceduralTexture(biomeKey, behavior, colorIndex, col, row, spanX, spanZ, levelIndex)` | function (internal) | Canvas-drawn per-biome tile textures for generated levels (61+); cached under `procedural_biome_*` keys |
-| `BIOME_COLOR_PROFILES` | const array (exported) | Per-biome road/rail/accent color profiles driving procedural texture + material color |
+| `getNeonWorldTexture(cacheTag, set, behavior, colorIndex, col, row, spanX, spanZ)` | function (internal) | Generic neon texture painter for a curated `set`; shared by the Standard + Xmas world roads |
+| `getActiveNeonSet(levelData)` | function (exported) | The curated neon set `{base,primary,secondary,accent}` driving a level's road (standard→xmas→biome→demo); used by `graphics.applyBiomeLighting` so lights match the road |
+| `getStandardWorld(levelData)` / `getXmasWorld(levelData)` | function (internal) | Resolve a Standard/Xmas level → `{worldIdx, roadInWorld}` (−1 demo offset), gated to the right pack + `STANDARD_NEON_ENABLED` |
+| `WORLD_NEON_SETS` / `XMAS_NEON_SETS` / `BIOME_NEON_SETS` | const array/map (internal) | Curated dark-base neon palettes + signature motif per Standard world / Xmas world / generated biome |
+| `BIOME_COLOR_PROFILES` | const array (exported) | Legacy per-biome road/rail/accent profiles — now only feeds the PBR fallback path for levels the neon skin doesn't cover |
 | `buildDeckCeilingLight(group, trackLength, opts)` | function | Flow/Tower tunnel-ceiling lighting: hangs curvature-shaded emissive light rails + cross-rungs under a stacked deck so the deck below reads as a lit tunnel roof |
 | `buildDeckPillars(group, trackLength, opts)` | function | Flow/Tower tunnel shell: raises a curvature-shaded colonnade (dark columns + emissive trim) from a deck up to the deck above, enclosing the stacked decks into a tunnel |
 | `getCustomAssetUrl(filename)` | function | Resolves custom asset path via import.meta.glob |
