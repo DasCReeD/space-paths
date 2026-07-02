@@ -117,6 +117,11 @@ export class PhysicsEngine {
     this._colNumRows = 0;
     this._colLevelId = null;      // tracks levelInfo object identity
     this._colCollidablesLen = -1; // tracks collidables.length to detect push()
+    // deathY depends only on the (immutable) column grid, so cache it by grid identity
+    // instead of rescanning every frame. Each flow deck has its own grid object, so the
+    // ref-compare re-scans correctly on deck wrap and reuses otherwise.
+    this._deathYGrid = null;
+    this._cachedDeathY = -4.0;
     
     // Physics constants
     this.maxSpeedNormal = 32.0; // Z speed in units/s
@@ -773,22 +778,29 @@ export class PhysicsEngine {
     // collidable went below -4. The ramps test for deathY (line 290-315) uses a
     // ramp ending at -6.0 → old deathY = min(-4, -6 - 4) = -10. With the column
     // model we query the grid's minimum floor Y instead.
-    let deathY = -4.0;
-    if (grid && numRows > 0) {
-      let minRoadY = 0.0;
-      for (let r = 0; r < numRows; r++) {
-        for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
-          const col = grid[r]?.[c];
-          if (!col || col.isGap) continue;
-          for (const span of col.spans) {
-            if (!span.isWallObstacle) {
-              const spanMinY = Math.min(span.topEntryY, span.topExitY);
-              if (spanMinY < minRoadY) minRoadY = spanMinY;
+    let deathY;
+    if (grid === this._deathYGrid) {
+      deathY = this._cachedDeathY; // grid is immutable → reuse last frame's scan
+    } else {
+      deathY = -4.0;
+      if (grid && numRows > 0) {
+        let minRoadY = 0.0;
+        for (let r = 0; r < numRows; r++) {
+          for (let c = 0; c < ROAD_WIDTH_LANES; c++) {
+            const col = grid[r]?.[c];
+            if (!col || col.isGap) continue;
+            for (const span of col.spans) {
+              if (!span.isWallObstacle) {
+                const spanMinY = Math.min(span.topEntryY, span.topExitY);
+                if (spanMinY < minRoadY) minRoadY = spanMinY;
+              }
             }
           }
         }
+        deathY = Math.min(-4.0, minRoadY - 4.0);
       }
-      deathY = Math.min(-4.0, minRoadY - 4.0);
+      this._deathYGrid = grid;
+      this._cachedDeathY = deathY;
     }
     this.deathY = deathY;
 

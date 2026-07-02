@@ -120,6 +120,14 @@ const CAMERA_MODE_HUD = {
   cockpit: { text: 'COCKPIT', color: '#ff00ff' },
 };
 
+// Decorative roadside buildings sit ~18u off to the sides and never throw a shadow
+// onto the ridden road, yet each clone's meshes default to castShadow=true and get
+// re-rasterized into the shadow map every frame (tripled in flow). Drop them as
+// shadow CASTERS only — they still receive scene light + reflections unchanged.
+function disableSceneryShadowCasting(obj) {
+  obj.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+}
+
 export class GraphicsEngine {
   constructor() {
     this.scene = null;
@@ -136,6 +144,16 @@ export class GraphicsEngine {
     // Pre-allocated ribbon trail position buffers — reused every frame instead of new Float32Array
     this._leftTrailPositions = new Float32Array(15 * 2 * 3);
     this._rightTrailPositions = new Float32Array(15 * 2 * 3);
+    // Pre-allocated scratch reused each frame in update()/updateParticles() so the
+    // per-frame camera + particle math allocates nothing (avoids steady GC hitches).
+    this._scaledOffset = new THREE.Vector3();
+    this._scaledTargetOffset = new THREE.Vector3();
+    this._idealCamPos = new THREE.Vector3();
+    this._idealCamTarget = new THREE.Vector3();
+    this._cockpitOffset = new THREE.Vector3();
+    this._forward = new THREE.Vector3();
+    this._pitchEuler = new THREE.Euler();
+    this._particleOffsetScratch = new THREE.Vector3();
     this.starField = null;
     this.starSizeMultiplier = 1.0;
     this.starCount = 1500;
@@ -242,7 +260,10 @@ export class GraphicsEngine {
     this.sunLight.shadow.mapSize.width = 1024;
     this.sunLight.shadow.mapSize.height = 1024;
     this.sunLight.shadow.camera.near = 0.5;
-    this.sunLight.shadow.camera.far = 300;
+    // Far only needs to reach the furthest deck (bottom deck at y=-25 sits ~119u from the
+    // light); 160 keeps every deck's casters in-frustum while spending shadow-map depth
+    // precision on the range that actually matters instead of an unused 300u.
+    this.sunLight.shadow.camera.far = 160;
     const d = 30;
     this.sunLight.shadow.camera.left = -d;
     this.sunLight.shadow.camera.right = d;
@@ -1373,7 +1394,7 @@ export class GraphicsEngine {
     this.shipMesh.rotation.x += (targetPitch - this.shipMesh.rotation.x) * 0.15;
 
     // 2. Smooth Chase Camera (with distance scaling and multiple camera modes)
-    const scaledOffset = this.camOffset.clone();
+    const scaledOffset = this._scaledOffset.copy(this.camOffset);
     
     // Apply speed-dependent distance pullback
     if (this.speedCamPullback) {
@@ -1385,11 +1406,11 @@ export class GraphicsEngine {
     scaledOffset.y *= (0.85 + 0.15 * this.followDistanceScale);
     scaledOffset.y += this.cameraHeightAdjust;
 
-    const scaledTargetOffset = this.camTargetOffset.clone();
+    const scaledTargetOffset = this._scaledTargetOffset.copy(this.camTargetOffset);
     scaledTargetOffset.z *= this.followDistanceScale;
 
-    const idealCamPos = physics.position.clone().add(scaledOffset);
-    const idealCamTarget = physics.position.clone().add(scaledTargetOffset);
+    const idealCamPos = this._idealCamPos.copy(physics.position).add(scaledOffset);
+    const idealCamTarget = this._idealCamTarget.copy(physics.position).add(scaledTargetOffset);
 
     if (this.cameraMode === 'fixed') {
       // Fixed / Retro original mode: lock horizontally to X=0, and lock vertically to ground height (doesn't jump)
@@ -1420,7 +1441,7 @@ export class GraphicsEngine {
         heightOffset += 0.5;
       }
 
-      const cockpitOffset = new THREE.Vector3(offsetX, heightOffset, -metrics.offset - 0.2 + offsetZ);
+      const cockpitOffset = this._cockpitOffset.set(offsetX, heightOffset, -metrics.offset - 0.2 + offsetZ);
       // Apply ship rotation
       cockpitOffset.applyEuler(this.shipMesh.rotation);
       
@@ -1430,8 +1451,8 @@ export class GraphicsEngine {
       // When curvature is on, look further ahead (40 units instead of 10) so the camera
       // tracks ALONG the ring arc instead of staring at its steep base.
       const lookDist = this.trackCurvatureEnabled ? 40.0 : 10.0;
-      const forward = new THREE.Vector3(0, 0, -lookDist);
-      const pitchEuler = new THREE.Euler(this.cameraPitchAdjust, 0, 0);
+      const forward = this._forward.set(0, 0, -lookDist);
+      const pitchEuler = this._pitchEuler.set(this.cameraPitchAdjust, 0, 0);
       forward.applyEuler(pitchEuler);
       
       forward.applyEuler(this.shipMesh.rotation);
@@ -1555,11 +1576,8 @@ export class GraphicsEngine {
 
     this.uTimeAccumulator += dt;
 
-    // Static bloom — no audio-reactive modulation
-    if (this.bloomPass) {
-      this.bloomPass.strength  = 0.35;
-      this.bloomPass.threshold = 0.88;
-    }
+    // Bloom strength/threshold are constants set once at construction (UnrealBloomPass
+    // args) and nothing modulates them, so there is no per-frame bloom work here.
 
     // ── SPACESHIP EXHAUST FLAME MESHS PULSING ──
     // Exhaust flame scale pulsing using a periodic sin wave to look incredibly alive and organic
@@ -1810,7 +1828,7 @@ export class GraphicsEngine {
           : (Math.random() < 0.5 ? 0.30 : 0.10);
 
         // Spawn slightly behind engine nozzles (with ship rotation applied)
-        const particleOffset = new THREE.Vector3(
+        const particleOffset = this._particleOffsetScratch.set(
           engineOffset + (Math.random() * 0.05 - 0.025),
           verticalOffset + (Math.random() * 0.05 - 0.025),
           SHIP_LENGTH / 2 + 0.1
@@ -2229,6 +2247,7 @@ export class GraphicsEngine {
         bLeft.position.set(leftX - Math.random() * 8.0, -1.0, z + (Math.random() * 10.0 - 5.0));
         bLeft.rotation.y = Math.random() * Math.PI * 2;
         bLeft.scale.setScalar(0.045 + Math.random() * 0.02);
+        disableSceneryShadowCasting(bLeft);
         this.sceneryGroup.add(bLeft);
       }
 
@@ -2239,6 +2258,7 @@ export class GraphicsEngine {
         bRight.position.set(rightX + Math.random() * 8.0, -1.0, z + (Math.random() * 10.0 - 5.0));
         bRight.rotation.y = Math.random() * Math.PI * 2;
         bRight.scale.setScalar(0.045 + Math.random() * 0.02);
+        disableSceneryShadowCasting(bRight);
         this.sceneryGroup.add(bRight);
       }
     }

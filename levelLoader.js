@@ -175,7 +175,16 @@ export const curvatureUniforms = {
 const CURVATURE_VERTEX_GLSL = `
   // ── Track Curvature (ring-road effect) ──
   if (uCurvatureOn > 0.5) {
-    vec4 wp = modelMatrix * vec4(transformed, 1.0);
+    // Local→world matrix. For InstancedMesh, fold the per-instance transform in so
+    // each instance curves by its own world Z. THREE auto-defines USE_INSTANCING and
+    // declares instanceMatrix for instanced draws; the #else path is byte-identical to
+    // the original non-instanced code so every existing mesh is unchanged.
+    #ifdef USE_INSTANCING
+      mat4 _curveModel = modelMatrix * instanceMatrix;
+    #else
+      mat4 _curveModel = modelMatrix;
+    #endif
+    vec4 wp = _curveModel * vec4(transformed, 1.0);
     float d = uCameraZ - wp.z;        // distance ahead (positive = in front)
     float ang = d / uCurvatureRadius;
 
@@ -183,9 +192,9 @@ const CURVATURE_VERTEX_GLSL = `
     wp.y += uCurvatureRadius * (1.0 - cos(ang));   // always >= 0 (curves up)
     wp.z += uCurvatureRadius * sin(ang) - d;        // Z compression
 
-    // Convert displaced world position back to MODEL space
-    // This correctly handles meshes with rotation (tunnels, ribs, etc.)
-    transformed = (inverse(modelMatrix) * wp).xyz;
+    // Convert displaced world position back to the pre-transform space that
+    // <project_vertex> expects (it re-applies instanceMatrix then modelMatrix).
+    transformed = (inverse(_curveModel) * wp).xyz;
   }
 `;
 
@@ -363,14 +372,31 @@ export function buildDeckCeilingLight(group, trackLength, opts = {}) {
   }
 
   // Periodic cross rungs — the fixtures that read as ceiling lights sweeping past.
+  // Identical geometry+material per rung, so draw them as one InstancedMesh instead of
+  // one mesh each. Its own material (identical look to the rails) keeps the instanced
+  // program variant separate from the non-instanced rails above.
+  const rungMat = applyCurvatureShader(new THREE.MeshStandardMaterial({
+    color: 0x05070a,
+    emissive: color,
+    emissiveIntensity: intensity,
+    roughness: 0.4,
+    metalness: 0.0,
+  }));
   const rungSpacing = (opts.rungSpacingRows || 5) * TILE_LENGTH;
   const rungGeom = new THREE.BoxGeometry(TOTAL_ROAD_WIDTH * 0.74, 0.05, 0.5);
-  for (let z = -rungSpacing; z > -trackLength; z -= rungSpacing) {
-    const rung = new THREE.Mesh(rungGeom, fixtureMat);
-    rung.position.set(0, underY - 0.02, z);
-    rung.frustumCulled = false;
-    rung.userData.isDeckCeilingLight = true;
-    group.add(rung);
+  const rungZs = [];
+  for (let z = -rungSpacing; z > -trackLength; z -= rungSpacing) rungZs.push(z);
+  if (rungZs.length > 0) {
+    const rungs = new THREE.InstancedMesh(rungGeom, rungMat, rungZs.length);
+    rungs.frustumCulled = false;
+    rungs.userData.isDeckCeilingLight = true;
+    const m = new THREE.Matrix4();
+    for (let i = 0; i < rungZs.length; i++) {
+      m.makeTranslation(0, underY - 0.02, rungZs[i]);
+      rungs.setMatrixAt(i, m);
+    }
+    rungs.instanceMatrix.needsUpdate = true;
+    group.add(rungs);
   }
 }
 
@@ -419,23 +445,39 @@ export function buildDeckPillars(group, trackLength, opts = {}) {
   const trimGeom = new THREE.BoxGeometry(0.12, height * 0.92, 0.12);
   const midY = height / 2;
 
+  // Every column/trim is identical geometry+material differing only by position, so
+  // draw them as two InstancedMesh (2 draw calls) instead of ~440 individual meshes
+  // per deck. The instance-aware curvature shader bends each instance by its own Z,
+  // so the colonnade is pixel-identical to the per-mesh version.
+  const positions = [];
   for (let z = -spacing; z > -trackLength; z -= spacing) {
-    for (const sx of [-sideX, sideX]) {
-      const column = new THREE.Mesh(columnGeom, columnMat);
-      column.position.set(sx, midY, z);
-      column.frustumCulled = false; // curvature invalidates the static AABB
-      column.castShadow = false;
-      column.userData.isDeckPillar = true;
-      group.add(column);
-
-      // Emissive trim on the inner face (toward road center).
-      const trim = new THREE.Mesh(trimGeom, trimMat);
-      trim.position.set(sx + (sx < 0 ? 0.26 : -0.26), midY, z);
-      trim.frustumCulled = false;
-      trim.userData.isDeckPillar = true;
-      group.add(trim);
-    }
+    for (const sx of [-sideX, sideX]) positions.push([sx, z]);
   }
+  const n = positions.length;
+  if (n === 0) return;
+
+  const columns = new THREE.InstancedMesh(columnGeom, columnMat, n);
+  const trims = new THREE.InstancedMesh(trimGeom, trimMat, n);
+  columns.frustumCulled = false; // curvature invalidates the static AABB
+  trims.frustumCulled = false;
+  columns.castShadow = false;
+  trims.castShadow = false;
+  columns.userData.isDeckPillar = true;
+  trims.userData.isDeckPillar = true;
+
+  const m = new THREE.Matrix4();
+  for (let i = 0; i < n; i++) {
+    const [sx, z] = positions[i];
+    m.makeTranslation(sx, midY, z);
+    columns.setMatrixAt(i, m);
+    // Emissive trim on the inner face (toward road center).
+    m.makeTranslation(sx + (sx < 0 ? 0.26 : -0.26), midY, z);
+    trims.setMatrixAt(i, m);
+  }
+  columns.instanceMatrix.needsUpdate = true;
+  trims.instanceMatrix.needsUpdate = true;
+  group.add(columns);
+  group.add(trims);
 }
 
 // Number of rows to process per async chunk before yielding

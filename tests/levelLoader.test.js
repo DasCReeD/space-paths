@@ -735,6 +735,18 @@ describe('buildLevel', () => {
       expect(group.children.every((m) => m.frustumCulled === false)).toBe(true);
     });
 
+    it('draws the cross rungs as a single InstancedMesh with one instance per rung', () => {
+      const group = makeGroup();
+      buildDeckCeilingLight(group, 80); // default rungSpacingRows = 5
+      // Mirror the production loop exactly so the assertion tracks any spacing change.
+      const rungSpacing = 5 * TILE_LENGTH;
+      let expectedRungCount = 0;
+      for (let z = -rungSpacing; z > -80; z -= rungSpacing) expectedRungCount++;
+      const rungMeshes = group.children.filter((m) => m.isInstancedMesh && m.userData.isDeckCeilingLight);
+      expect(rungMeshes.length).toBe(1);
+      expect(rungMeshes[0].count).toBe(expectedRungCount);
+    });
+
     it('no-ops on a missing group or non-positive length', () => {
       expect(() => buildDeckCeilingLight(null, 80)).not.toThrow();
       const group = makeGroup();
@@ -750,22 +762,44 @@ describe('buildLevel', () => {
       return new THREE.Group();
     }
 
-    it('raises paired left/right pillars along the deck, tagged for cleanup', () => {
+    it('raises paired left/right pillars along the deck as instanced columns+trims, tagged for cleanup', () => {
       const group = makeGroup();
       buildDeckPillars(group, 80); // 20 tiles, spacingRows 4 → ~5 pillar rows
-      expect(group.children.length).toBeGreaterThan(0);
+      // Drawn as two InstancedMesh (columns + trims) instead of one mesh per pillar.
+      expect(group.children.length).toBe(2);
       expect(group.children.every((m) => m.userData.isDeckPillar)).toBe(true);
-      // column + trim per side, both sides → multiple of 4 per pillar row
-      expect(group.children.length % 4).toBe(0);
+      expect(group.children.every((m) => m.isInstancedMesh)).toBe(true);
+      const [columns, trims] = group.children;
+      // both sides at each pillar row → instance count is a positive multiple of 2
+      expect(columns.count).toBeGreaterThan(0);
+      expect(columns.count % 2).toBe(0);
+      expect(trims.count).toBe(columns.count);
+
+      // Each trim sits ~0.26u inboard of its column (emissive strip on the inner face).
+      const cm = new THREE.Matrix4();
+      const tm = new THREE.Matrix4();
+      const cp = new THREE.Vector3();
+      const tp = new THREE.Vector3();
+      columns.getMatrixAt(0, cm); cp.setFromMatrixPosition(cm);
+      trims.getMatrixAt(0, tm); tp.setFromMatrixPosition(tm);
+      expect(Math.abs(tp.x)).toBeLessThan(Math.abs(cp.x)); // trim inboard of its column
+      expect(Math.abs(Math.abs(cp.x) - Math.abs(tp.x))).toBeCloseTo(0.26, 5);
     });
 
     it('columns span the deck gap and sit just outside the road, culling disabled', () => {
       const group = makeGroup();
       buildDeckPillars(group, 80, { height: 25 });
-      const columns = group.children.filter((m) => m.geometry.parameters.height === 25);
-      expect(columns.length).toBeGreaterThan(0);
-      expect(columns.every((m) => Math.abs(m.position.x) > TOTAL_ROAD_WIDTH / 2)).toBe(true);
-      expect(columns.every((m) => m.frustumCulled === false)).toBe(true);
+      const columns = group.children.find((m) => m.geometry.parameters.height === 25);
+      expect(columns).toBeDefined();
+      expect(columns.frustumCulled).toBe(false);
+      // Every instance's X translation sits just beyond the road half-width.
+      const mat = new THREE.Matrix4();
+      const pos = new THREE.Vector3();
+      for (let i = 0; i < columns.count; i++) {
+        columns.getMatrixAt(i, mat);
+        pos.setFromMatrixPosition(mat);
+        expect(Math.abs(pos.x)).toBeGreaterThan(TOTAL_ROAD_WIDTH / 2);
+      }
     });
 
     it('no-ops on a missing group or non-positive length', () => {
