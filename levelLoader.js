@@ -764,6 +764,40 @@ function adjustBoxUVs(geometry, width, height, length, xPos = 0, zPos = 0, yPos 
 
 export const textureCache = new Map();
 
+// ── Tile MATERIAL cache ──────────────────────────────────────────────────────
+// Tiles with identical appearance previously each got their OWN MeshStandardMaterial
+// (createTileMaterial ran per tile). A unique material object per draw defeats Three's
+// per-draw uniform-skip fast path (_currentMaterialId), so ~thousands of draws each did
+// a full StandardMaterial uniform refresh — measured as the dominant flow-mode CPU cost.
+// Sharing ONE material object across tiles that render identically is pixel-identical and
+// lets the renderer's material sort group them (huge per-draw CPU saving). The key is
+// checked BEFORE any texture is generated, so it also removes redundant texture work/VRAM.
+// Cleared at the start of every buildLevel/buildLevelAsync — a fresh cache per level build.
+// Clearing the Map only drops references; it never disposes (live meshes still own their
+// materials until level teardown disposes them per-mesh, exactly as before).
+export const tileMaterialCache = new Map();
+export function clearTileMaterialCache() { tileMaterialCache.clear(); }
+function cachedTileMaterial(key, build) {
+  if (key != null) {
+    const hit = tileMaterialCache.get(key);
+    if (hit) return hit;
+  }
+  const mat = build();
+  if (key != null && mat) tileMaterialCache.set(key, mat);
+  return mat;
+}
+// Determinant key for the neon-world (standard/xmas) tile materials. drawNeonRoad depends
+// only on (set→tag, behaviorKey, isGrate, seed) + span; colIndex/rowIndex enter solely via
+// isGrate/seed. Matches getNeonWorldTexture, so sharing on this key is pixel-identical.
+function neonMatKey(tag, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ) {
+  const isDefault = behaviorKey === 'default';
+  const c = typeof colIndex === 'number' ? colIndex : 3;
+  const r = typeof rowIndex === 'number' ? rowIndex : 0;
+  const isGrate = isDefault && ((c + r) % 2 === 1);
+  const seed = isDefault ? (((c * 13 + r * 7) % 97) + 1) : 0;
+  return `neon|${tag}|${behaviorKey}|${colorIndex}|${spanX}|${spanZ}|${isGrate ? 'g' : 'b'}|s${seed}`;
+}
+
 /**
  * Load a premium color-divided seamless abstract pattern texture from the user's
  * downloaded folder, mapping it organically to Level 2's color palette (and all other levels).
@@ -2677,33 +2711,42 @@ function getNeonWorldTexture(cacheTag, set, behavior, colorIndex, colIndex, rowI
  * visualizer (per segment, anchored at `opts.zStart`).
  */
 function createDemoNeonMaterial(behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ, opts = {}) {
-  const isObstacle = behaviorKey === 'obstacle';
-  const isSpecial = behaviorKey && behaviorKey !== 'default' && behaviorKey !== 'obstacle';
+  const voidViz = !!(opts && opts.voidViz);
+  // Pixels depend only on (behavior, colorIndex, isGrate, span) — see getDemoNeonTexture.
+  // voidViz variants carry a per-segment zStart uniform, so they are never shareable.
+  const rVal = typeof rowIndex === 'number' ? rowIndex : 0;
+  const cVal = typeof colIndex === 'number' ? colIndex : 3;
+  const isGrate = (!behaviorKey || behaviorKey === 'default') ? ((cVal + rVal) % 2 === 1) : false;
+  const matKey = voidViz ? null : `demo|${behaviorKey}|${colorIndex}|${spanX}|${spanZ}|${isGrate ? 'g' : 'b'}`;
+  return cachedTileMaterial(matKey, () => {
+    const isObstacle = behaviorKey === 'obstacle';
+    const isSpecial = behaviorKey && behaviorKey !== 'default' && behaviorKey !== 'obstacle';
 
-  let neonColorHex = DEMO_NEON_COLORS[colorIndex] || '#00ffff';
-  if (behaviorKey === 'boost' || behaviorKey === 'super_boost') neonColorHex = '#39ff14';
-  else if (behaviorKey === 'burning') neonColorHex = '#ff073a';
-  else if (behaviorKey === 'sticky') neonColorHex = '#ff00ff';
-  else if (behaviorKey === 'refill') neonColorHex = '#00ffff';
-  else if (behaviorKey === 'slippery') neonColorHex = '#00f0ff';
-  else if (isObstacle) neonColorHex = colorIndex === 0 ? '#ffff00' : (DEMO_NEON_COLORS[colorIndex] || '#ff007f');
+    let neonColorHex = DEMO_NEON_COLORS[colorIndex] || '#00ffff';
+    if (behaviorKey === 'boost' || behaviorKey === 'super_boost') neonColorHex = '#39ff14';
+    else if (behaviorKey === 'burning') neonColorHex = '#ff073a';
+    else if (behaviorKey === 'sticky') neonColorHex = '#ff00ff';
+    else if (behaviorKey === 'refill') neonColorHex = '#00ffff';
+    else if (behaviorKey === 'slippery') neonColorHex = '#00f0ff';
+    else if (isObstacle) neonColorHex = colorIndex === 0 ? '#ffff00' : (DEMO_NEON_COLORS[colorIndex] || '#ff007f');
 
-  const matColor = new THREE.Color(neonColorHex);
-  const texture = getDemoNeonTexture(behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
+    const matColor = new THREE.Color(neonColorHex);
+    const texture = getDemoNeonTexture(behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
 
-  const matParams = { color: matColor, roughness: 0.45, metalness: 0.15 };
-  if (texture) matParams.map = texture;
-  if (isSpecial) {
-    matParams.emissive = matColor;
-    matParams.emissiveIntensity = behaviorKey === 'burning' ? 1.5 : 0.85;
-  } else {
-    matParams.emissive = new THREE.Color(0, 0, 0);
-    matParams.emissiveIntensity = 0.0;
-  }
-  if (isObstacle) matParams.side = THREE.DoubleSide;
+    const matParams = { color: matColor, roughness: 0.45, metalness: 0.15 };
+    if (texture) matParams.map = texture;
+    if (isSpecial) {
+      matParams.emissive = matColor;
+      matParams.emissiveIntensity = behaviorKey === 'burning' ? 1.5 : 0.85;
+    } else {
+      matParams.emissive = new THREE.Color(0, 0, 0);
+      matParams.emissiveIntensity = 0.0;
+    }
+    if (isObstacle) matParams.side = THREE.DoubleSide;
 
-  const shaderOpts = opts.voidViz ? { voidViz: true, zStart: opts.zStart || 0 } : undefined;
-  return applyCurvatureShader(new THREE.MeshStandardMaterial(matParams), shaderOpts);
+    const shaderOpts = voidViz ? { voidViz: true, zStart: opts.zStart || 0 } : undefined;
+    return applyCurvatureShader(new THREE.MeshStandardMaterial(matParams), shaderOpts);
+  });
 }
 
 /**
@@ -2801,6 +2844,18 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
     const railColor = new THREE.Color(nset.primary);
     const accentColor = new THREE.Color(nset.accent);
 
+    // Share one material across tiles that render identically. Pixels depend only on the
+    // determinants below (drawNeonRoad takes seed+isGrate, not raw col/row; colorIndex is
+    // unused by the biome draw but kept in the key conservatively). Checked before the
+    // texture is generated, so identical tiles cost one texture + one material, not N.
+    const bIsDefault = behaviorKey === 'default';
+    const bCol = typeof colIndex === 'number' ? colIndex : 3;
+    const bRow = typeof rowIndex === 'number' ? rowIndex : 0;
+    const bIsGrate = bIsDefault && ((bCol + bRow) % 2 === 1);
+    const bSeed = bIsDefault ? (((bCol * 13 + bRow * 7) % 97) + 1) : 0;
+    const bMatKey = `biome|${biomeKey}|${behaviorKey}|${colorIndex}|${spanX}|${spanZ}|${lvlInBiome}|${bIsGrate ? 'g' : 'b'}|s${bSeed}`;
+    if (tileMaterialCache.has(bMatKey)) return tileMaterialCache.get(bMatKey);
+
     const texture = getBiomeProceduralTexture(biomeKey, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ, levelIndex);
 
     let matColor;
@@ -2863,7 +2918,9 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
       matParams.emissiveIntensity = 0.12;
     }
 
-    return applyCurvatureShader(new THREE.MeshStandardMaterial(matParams));
+    const bMat = applyCurvatureShader(new THREE.MeshStandardMaterial(matParams));
+    tileMaterialCache.set(bMatKey, bMat);
+    return bMat;
   }
 
   if (levelIndex === 0 && !isTestEnv) {
@@ -2876,8 +2933,11 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   const stdWorld = !isTestEnv ? getStandardWorld(levelData) : null;
   if (stdWorld) {
     const set = tintNeonSet(WORLD_NEON_SETS[stdWorld.worldIdx] || WORLD_NEON_SETS[0], stdWorld.roadInWorld);
-    const texture = getNeonWorldTexture(`world_${stdWorld.worldIdx}_${stdWorld.roadInWorld}`, set, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
-    return createWorldNeonMaterial(set, behaviorKey, texture);
+    const tag = `world_${stdWorld.worldIdx}_${stdWorld.roadInWorld}`;
+    return cachedTileMaterial(neonMatKey(tag, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ), () => {
+      const texture = getNeonWorldTexture(tag, set, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
+      return createWorldNeonMaterial(set, behaviorKey, texture);
+    });
   }
 
   // Xmas-pack worlds (SNOWBOUND … THE EVE): per-world festive neon skin. Resolves in both the
@@ -2885,8 +2945,11 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   const xmasWorld = !isTestEnv ? getXmasWorld(levelData) : null;
   if (xmasWorld) {
     const set = tintNeonSet(XMAS_NEON_SETS[xmasWorld.worldIdx] || XMAS_NEON_SETS[0], xmasWorld.roadInWorld);
-    const texture = getNeonWorldTexture(`xmas_${xmasWorld.worldIdx}_${xmasWorld.roadInWorld}`, set, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
-    return createWorldNeonMaterial(set, behaviorKey, texture);
+    const tag = `xmas_${xmasWorld.worldIdx}_${xmasWorld.roadInWorld}`;
+    return cachedTileMaterial(neonMatKey(tag, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ), () => {
+      const texture = getNeonWorldTexture(tag, set, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
+      return createWorldNeonMaterial(set, behaviorKey, texture);
+    });
   }
 
   let activeMap = themeBehavior.map;
@@ -4497,6 +4560,7 @@ function buildMergedBlocks(levelData, scene, collidables, specialTiles, roadMesh
  * Used for small levels and unit tests.
  */
 export function buildLevel(levelData, scene, zOffset = 0, isInfiniteMode = false) {
+  clearTileMaterialCache(); // fresh material cache per level build (see tileMaterialCache)
   if (scene && scene.userData) {
     scene.userData.animatedDecals = [];
     scene.userData.tunnelRibs = [];
@@ -4561,6 +4625,7 @@ export function buildLevel(levelData, scene, zOffset = 0, isInfiniteMode = false
  * @returns {Promise<object>} Level info object (same shape as buildLevel return).
  */
 export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInfiniteMode = false) {
+  clearTileMaterialCache(); // fresh material cache per level build (see tileMaterialCache)
   if (scene && scene.userData) {
     scene.userData.animatedDecals = [];
     scene.userData.tunnelRibs = [];
