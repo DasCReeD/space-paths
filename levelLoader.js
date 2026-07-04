@@ -788,14 +788,15 @@ function cachedTileMaterial(key, build) {
 }
 // Determinant key for the neon-world (standard/xmas) tile materials. drawNeonRoad depends
 // only on (set→tag, behaviorKey, isGrate, seed) + span; colIndex/rowIndex enter solely via
-// isGrate/seed. Matches getNeonWorldTexture, so sharing on this key is pixel-identical.
-function neonMatKey(tag, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ) {
+// isGrate/seed, and colorIndex does not affect the pixels at all (createWorldNeonMaterial
+// and getNeonWorldTexture never use it). Matches those, so sharing on this key is pixel-identical.
+function neonMatKey(tag, behaviorKey, colIndex, rowIndex, spanX, spanZ) {
   const isDefault = behaviorKey === 'default';
   const c = typeof colIndex === 'number' ? colIndex : 3;
   const r = typeof rowIndex === 'number' ? rowIndex : 0;
   const isGrate = isDefault && ((c + r) % 2 === 1);
   const seed = isDefault ? (((c * 13 + r * 7) % 97) + 1) : 0;
-  return `neon|${tag}|${behaviorKey}|${colorIndex}|${spanX}|${spanZ}|${isGrate ? 'g' : 'b'}|s${seed}`;
+  return `neon|${tag}|${behaviorKey}|${spanX}|${spanZ}|${isGrate ? 'g' : 'b'}|s${seed}`;
 }
 
 /**
@@ -2853,7 +2854,10 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
     const bRow = typeof rowIndex === 'number' ? rowIndex : 0;
     const bIsGrate = bIsDefault && ((bCol + bRow) % 2 === 1);
     const bSeed = bIsDefault ? (((bCol * 13 + bRow * 7) % 97) + 1) : 0;
-    const bMatKey = `biome|${biomeKey}|${behaviorKey}|${colorIndex}|${spanX}|${spanZ}|${lvlInBiome}|${bIsGrate ? 'g' : 'b'}|s${bSeed}`;
+    // colorIndex is intentionally NOT in the key: the biome draw (drawNeonRoad) and material
+    // colours derive from the biome palette + level, never colorIndex, so tiles that differ
+    // only in colorIndex render identically and must share one material.
+    const bMatKey = `biome|${biomeKey}|${behaviorKey}|${spanX}|${spanZ}|${lvlInBiome}|${bIsGrate ? 'g' : 'b'}|s${bSeed}`;
     if (tileMaterialCache.has(bMatKey)) return tileMaterialCache.get(bMatKey);
 
     const texture = getBiomeProceduralTexture(biomeKey, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ, levelIndex);
@@ -2934,7 +2938,7 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   if (stdWorld) {
     const set = tintNeonSet(WORLD_NEON_SETS[stdWorld.worldIdx] || WORLD_NEON_SETS[0], stdWorld.roadInWorld);
     const tag = `world_${stdWorld.worldIdx}_${stdWorld.roadInWorld}`;
-    return cachedTileMaterial(neonMatKey(tag, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ), () => {
+    return cachedTileMaterial(neonMatKey(tag, behaviorKey, colIndex, rowIndex, spanX, spanZ), () => {
       const texture = getNeonWorldTexture(tag, set, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
       return createWorldNeonMaterial(set, behaviorKey, texture);
     });
@@ -2946,7 +2950,7 @@ function createTileMaterial(baseColor, emissiveGlow, glowColor, behavior, colorI
   if (xmasWorld) {
     const set = tintNeonSet(XMAS_NEON_SETS[xmasWorld.worldIdx] || XMAS_NEON_SETS[0], xmasWorld.roadInWorld);
     const tag = `xmas_${xmasWorld.worldIdx}_${xmasWorld.roadInWorld}`;
-    return cachedTileMaterial(neonMatKey(tag, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ), () => {
+    return cachedTileMaterial(neonMatKey(tag, behaviorKey, colIndex, rowIndex, spanX, spanZ), () => {
       const texture = getNeonWorldTexture(tag, set, behaviorKey, colorIndex, colIndex, rowIndex, spanX, spanZ);
       return createWorldNeonMaterial(set, behaviorKey, texture);
     });
