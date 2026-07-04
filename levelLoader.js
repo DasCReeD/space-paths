@@ -1,5 +1,6 @@
 // SkyRoads Level Loader & 3D Geometry Generator (Three.js)
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import roadMetallicPlateUrl from './road_metallic_plate.png';
 
 // Custom ComfyUI generated texture URLs
@@ -797,6 +798,187 @@ function neonMatKey(tag, behaviorKey, colIndex, rowIndex, spanX, spanZ) {
   const isGrate = isDefault && ((c + r) % 2 === 1);
   const seed = isDefault ? (((c * 13 + r * 7) % 97) + 1) : 0;
   return `neon|${tag}|${behaviorKey}|${spanX}|${spanZ}|${isGrate ? 'g' : 'b'}|s${seed}`;
+}
+
+// ── Stage D: fixed-size tile → texture-array atlas + merged batches ───────────
+// The track is drawn as hundreds/thousands of individual meshes (ramps + un-merged
+// single tiles), each with its own material — CPU/draw-call bound. This post-pass
+// (run AFTER the normal build so collision/decals/data stay untouched) consolidates
+// every 128×128-textured tile mesh into a handful of merged meshes: one per render-
+// param group, each sampling ONE THREE.DataArrayTexture (the tile's exact texture is
+// kept as an atlas layer, selected per-vertex by aTexLayer). Pixel-identical by
+// construction; gated so it's easy to A/B. See docs / probe verification.
+// NOTE: renders correctly + deterministically and is visually indistinguishable from the
+// per-tile path, but bit-identity vs the baseline was NOT rigorously proven (headless A/B
+// diffing a live-animated, curvature-anchored scene is confounded). Review on real hardware
+// before enabling on the live demo. Flow/tower only. See the frozen-frame diff notes.
+const TILE_ATLAS_ENABLED = true;
+const TILE_TEX_SIZE = 128; // single-span tile canvas edge (128*span); only span-1 is atlased
+
+// Groups meshes that can share one atlas material (everything except the per-tile texture).
+function atlasParamKey(mat) {
+  if (!mat || !mat.isMeshStandardMaterial || !mat.map) return null;
+  const img = mat.map.image;
+  if (!img || img.width !== TILE_TEX_SIZE || img.height !== TILE_TEX_SIZE) return null; // atlas only 128²
+  const emis = mat.emissive ? mat.emissive.getHexString() : '000000';
+  const col = mat.color ? mat.color.getHexString() : 'ffffff';
+  return `${col}|${mat.roughness}|${mat.metalness}|${emis}|${mat.emissiveIntensity}|${mat.side}|${mat.normalMap ? mat.normalMap.uuid : 'n'}`;
+}
+
+// Build a DataArrayTexture from a list of 128×128 canvas-backed textures. Rows are flipped
+// so the array (no flipY support) matches the source CanvasTextures (flipY=true). Filters/
+// wrap/anisotropy/colorSpace/mips are copied from the source so sampling is identical.
+function buildTileArrayTexture(sourceTextures) {
+  const n = sourceTextures.length, S = TILE_TEX_SIZE, stride = S * S * 4;
+  const data = new Uint8Array(stride * n);
+  const cvs = document.createElement('canvas'); cvs.width = S; cvs.height = S;
+  const ctx = cvs.getContext('2d', { willReadFrequently: true });
+  for (let i = 0; i < n; i++) {
+    ctx.clearRect(0, 0, S, S);
+    ctx.drawImage(sourceTextures[i].image, 0, 0, S, S);
+    const src = ctx.getImageData(0, 0, S, S).data; // top-down
+    const base = i * stride;
+    for (let y = 0; y < S; y++) {
+      const dstRow = base + (S - 1 - y) * S * 4; // flip vertically to match flipY=true source
+      const srcRow = y * S * 4;
+      data.set(src.subarray(srcRow, srcRow + S * 4), dstRow);
+    }
+  }
+  const tex = new THREE.DataArrayTexture(data, S, S, n);
+  const s0 = sourceTextures[0];
+  tex.format = THREE.RGBAFormat;
+  tex.type = THREE.UnsignedByteType;
+  tex.colorSpace = s0.colorSpace;
+  tex.wrapS = s0.wrapS; tex.wrapT = s0.wrapT;
+  tex.magFilter = s0.magFilter; tex.minFilter = s0.minFilter;
+  tex.anisotropy = s0.anisotropy;
+  tex.generateMipmaps = s0.generateMipmaps;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// Material shared by a merged atlas batch: identical MeshStandardMaterial lighting to the
+// per-tile materials + the SAME curvature displacement, but the diffuse texture is sampled
+// from the array by the per-vertex layer. A 1×1 white dummy map turns on Three's UV plumbing
+// (vMapUv) and leaves <map_fragment> as an identity multiply before the atlas sample.
+let _atlasWhiteMap = null;
+function atlasWhiteMap() {
+  if (!_atlasWhiteMap) {
+    _atlasWhiteMap = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    _atlasWhiteMap.needsUpdate = true;
+  }
+  return _atlasWhiteMap;
+}
+function makeAtlasTileMaterial(sampleMat, atlasTex) {
+  const mat = new THREE.MeshStandardMaterial({
+    color: sampleMat.color.clone(),
+    roughness: sampleMat.roughness,
+    metalness: sampleMat.metalness,
+    emissive: sampleMat.emissive ? sampleMat.emissive.clone() : new THREE.Color(0x000000),
+    emissiveIntensity: sampleMat.emissiveIntensity,
+    side: sampleMat.side,
+    map: atlasWhiteMap(),
+  });
+  if (sampleMat.normalMap) { mat.normalMap = sampleMat.normalMap; mat.normalScale = sampleMat.normalScale.clone(); }
+  const uAtlas = new THREE.Uniform(atlasTex);
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uCurvatureRadius = curvatureUniforms.uCurvatureRadius;
+    shader.uniforms.uCameraZ = curvatureUniforms.uCameraZ;
+    shader.uniforms.uCurvatureOn = curvatureUniforms.uCurvatureOn;
+    shader.uniforms.uAtlas = uAtlas;
+    shader.vertexShader = shader.vertexShader.replace(
+      'void main() {',
+      `uniform float uCurvatureRadius;
+       uniform float uCameraZ;
+       uniform float uCurvatureOn;
+       attribute float aTexLayer;
+       varying float vTexLayer;
+       void main() {`
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      '#include <begin_vertex>\n  vTexLayer = aTexLayer;\n' + CURVATURE_VERTEX_GLSL
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      'void main() {',
+      `precision highp sampler2DArray;
+       uniform sampler2DArray uAtlas;
+       varying float vTexLayer;
+       void main() {`
+    );
+    // <map_fragment> multiplied diffuseColor by the white dummy (identity); now apply the
+    // real per-tile texel from the array at the tile's layer, matching the original map path.
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <map_fragment>',
+      '#include <map_fragment>\n  diffuseColor *= texture(uAtlas, vec3(vMapUv, vTexLayer));'
+    );
+  };
+  mat.customProgramCacheKey = () => 'atlastile_' + (curvatureUniforms.uCurvatureOn.value > 0.5 ? '1' : '0');
+  return mat;
+}
+
+// Post-build pass: replace every 128²-textured tile mesh in `group` with a few merged,
+// array-textured meshes (one per render-param group). Leaves variable-span merged blocks,
+// decals, tunnels, instanced decorations, and animated ribs untouched.
+export function consolidateTilesToAtlas(group) {
+  // Only for flow/tower decks (dedicated Groups). Classic/infinite pass the GLOBAL scene
+  // (ship/skybox/particles live there) — never traverse/mutate that.
+  if (!TILE_ATLAS_ENABLED || !group || !group.isGroup || typeof document === 'undefined') return;
+  const ribs = new Set(group.userData && group.userData.tunnelRibs ? group.userData.tunnelRibs : []);
+  const groups = new Map(); // paramKey -> { sample, meshes:[] }
+  group.traverse((o) => {
+    if (!o.isMesh || o.isInstancedMesh || ribs.has(o)) return;
+    const key = atlasParamKey(o.material);
+    if (!key) return;
+    let g = groups.get(key);
+    if (!g) { g = { sample: o.material, meshes: [] }; groups.set(key, g); }
+    g.meshes.push(o);
+  });
+
+  for (const { sample, meshes } of groups.values()) {
+    if (meshes.length < 2) continue; // nothing to gain from a singleton
+    // Assign each distinct source texture a layer.
+    const layerOf = new Map(); const layerTextures = [];
+    for (const m of meshes) {
+      const t = m.material.map;
+      if (!layerOf.has(t.uuid)) { layerOf.set(t.uuid, layerTextures.length); layerTextures.push(t); }
+    }
+    const atlasTex = buildTileArrayTexture(layerTextures);
+    const geoms = [];
+    let castShadow = false, receiveShadow = false;
+    for (const m of meshes) {
+      const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      m.updateMatrix();
+      g.applyMatrix4(m.matrix); // bake the tile's position into the merged (group-local) geometry
+      const layer = layerOf.get(m.material.map.uuid);
+      const vcount = g.attributes.position.count;
+      const arr = new Float32Array(vcount).fill(layer);
+      g.setAttribute('aTexLayer', new THREE.BufferAttribute(arr, 1));
+      // keep only the attributes the merge/material needs, in a consistent set
+      for (const name of Object.keys(g.attributes)) {
+        if (!['position', 'normal', 'uv', 'aTexLayer'].includes(name)) g.deleteAttribute(name);
+      }
+      if (!g.attributes.normal) g.computeVertexNormals();
+      geoms.push(g);
+      castShadow = castShadow || m.castShadow;
+      receiveShadow = receiveShadow || m.receiveShadow;
+    }
+    const merged = mergeGeometries(geoms, false);
+    geoms.forEach((g) => g.dispose());
+    if (!merged) continue;
+    const atlasMat = makeAtlasTileMaterial(sample, atlasTex);
+    // The DataArrayTexture lives in a custom uniform (not material.map), so tie its disposal
+    // to the material's — level teardown disposes the material and this frees the atlas VRAM.
+    atlasMat.addEventListener('dispose', () => atlasTex.dispose());
+    const mesh = new THREE.Mesh(merged, atlasMat);
+    mesh.frustumCulled = false; // spans the deck; curvature invalidates a static AABB anyway
+    mesh.castShadow = castShadow;
+    mesh.receiveShadow = receiveShadow;
+    mesh.userData.isAtlasBatch = true;
+    group.add(mesh);
+    // remove + dispose the originals (their shared materials are owned by tileMaterialCache)
+    for (const m of meshes) { m.parent && m.parent.remove(m); m.geometry.dispose(); }
+  }
 }
 
 /**
@@ -4660,6 +4842,9 @@ export function buildLevelAsync(levelData, scene, onProgress, zOffset = 0, isInf
 
       // P3.1 — authoritative column grid for physics
       const { grid: columnGrid } = buildColumnGrid(levelData);
+
+      // Stage D: collapse fixed-size tiles into atlas batches (flow/tower deck groups only).
+      consolidateTilesToAtlas(scene);
 
       resolve({
         trackLength,
